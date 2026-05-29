@@ -188,8 +188,11 @@ namespace BlockShooter
             Vector3 dir = (_lockedTarget.transform.position - spawnPos).normalized;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
-            // Pass locked target so the projectile homes in — no misses due to block movement
             proj.Launch(targetColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, _lockedTarget);
+
+            // Mark targeted BEFORE clearing lock — projectile will home in and destroy it
+            _lockedTarget.SetTargeted(true);
+            _lockedTarget = null; // immediately free lock so next shot picks next block
 
             if (muzzleFlash != null) muzzleFlash.Play();
             transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);

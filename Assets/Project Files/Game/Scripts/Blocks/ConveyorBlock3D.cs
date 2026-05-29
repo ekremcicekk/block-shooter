@@ -20,6 +20,9 @@ namespace BlockShooter
 
         public BlockColorType ColorType => _colorType;
         public bool IsDestroyed => _isDestroyed;
+        public bool IsTargeted  { get; private set; }
+
+        public void SetTargeted(bool v) => IsTargeted = v;
 
         // Position within the BlockGroup — used by FireRange to target in row/lane order
         public int RowIndex  { get; private set; }

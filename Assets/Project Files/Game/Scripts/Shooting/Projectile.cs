@@ -58,9 +58,18 @@ namespace BlockShooter
         {
             if (!_active || _target == null || _target.IsDestroyed) return;
 
-            // Steer toward moving target each frame — guarantees hit regardless of conveyor speed
-            Vector3 dir = (_target.transform.position - transform.position).normalized;
-            _rb.linearVelocity = dir * _speed;
+            Vector3 dir = (_target.transform.position - transform.position);
+            float dist = dir.magnitude;
+
+            // Close enough — guaranteed hit, no collision dependency
+            if (dist < 0.25f)
+            {
+                _target.TakeHit();
+                ReturnToPool();
+                return;
+            }
+
+            _rb.linearVelocity = dir.normalized * _speed;
         }
 
         private void OnTriggerEnter(Collider other)
@@ -86,6 +95,9 @@ namespace BlockShooter
         private void ReturnToPool()
         {
             _active = false;
+            // If target survived (shouldn't happen with homing), free it so another shot can claim it
+            if (_target != null && !_target.IsDestroyed)
+                _target.SetTargeted(false);
             _target = null;
             _rb.linearVelocity = Vector3.zero;
             _pool?.Return(this);
