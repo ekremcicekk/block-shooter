@@ -188,20 +188,10 @@ namespace BlockShooter.Editor
         // ── Boosters ──────────────────────────────────────────────────────────
         static void SetupBoosters()
         {
-            var root = new GameObject("[Boosters]");
+            // BoosterManager is self-contained — no child objects needed.
+            // Bomb/Rainbow/Freeze logic lives directly inside BoosterManager.
+            var root = new GameObject("[Managers_Boosters]");
             root.AddComponent<BoosterManager>();
-
-            var bomb = new GameObject("BombBooster");
-            bomb.transform.SetParent(root.transform);
-            bomb.AddComponent<BombBooster>();
-
-            var rainbow = new GameObject("RainbowBooster");
-            rainbow.transform.SetParent(root.transform);
-            rainbow.AddComponent<RainbowBooster>();
-
-            var freeze = new GameObject("FreezeBooster");
-            freeze.transform.SetParent(root.transform);
-            freeze.AddComponent<FreezeBooster>();
         }
 
         // ── UI ────────────────────────────────────────────────────────────────
