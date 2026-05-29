@@ -250,8 +250,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   segmentPrefab: {fileID: 0}
-  arrowPrefab: {fileID: 0}
-  arrowCount: 3
+  arrowPrefab: {fileID: 5382590712880826785, guid: 67e4f67177226804cb7a5efb43e82c93, type: 3}
+  arrowCount: 6
   blockSpeed: 1.5
 --- !u!114 &3671645959574192092
 MonoBehaviour:
