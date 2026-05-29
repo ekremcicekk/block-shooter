@@ -58,7 +58,7 @@ namespace BlockShooter
         public bool HasTargetFor(BlockColorType colorType)
         {
             foreach (var b in _blocksInRange)
-                if (!b.IsDestroyed && !b.IsTargeted && b.ColorType == colorType) return true;
+                if (!b.IsDestroyed && b.ColorType == colorType) return true;
             return false;
         }
 
@@ -75,7 +75,7 @@ namespace BlockShooter
             ConveyorBlock3D best = null;
             foreach (var b in _blocksInRange)
             {
-                if (b.IsDestroyed || b.IsTargeted || b.ColorType != colorType) continue;
+                if (b.IsDestroyed || b.ColorType != colorType) continue;
                 if (best == null
                     || b.RowIndex > best.RowIndex
                     || (b.RowIndex == best.RowIndex && b.LaneIndex < best.LaneIndex))
@@ -89,7 +89,7 @@ namespace BlockShooter
             ConveyorBlock3D best = null;
             foreach (var b in _blocksInRange)
             {
-                if (b.IsDestroyed || b.IsTargeted) continue;
+                if (b.IsDestroyed) continue;
                 if (best == null
                     || b.RowIndex > best.RowIndex
                     || (b.RowIndex == best.RowIndex && b.LaneIndex < best.LaneIndex))

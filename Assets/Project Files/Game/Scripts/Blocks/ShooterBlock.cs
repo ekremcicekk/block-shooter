@@ -44,7 +44,7 @@ namespace BlockShooter
         private bool _isAccessible;
         private bool _isShooting;
         private Coroutine _shootCoroutine;
-        private ConveyorBlock3D _lockedTarget; // held until destroyed — never switch mid-block
+        private Queue<ConveyorBlock3D> _targetQueue = new();
 
         private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
@@ -120,6 +120,17 @@ namespace BlockShooter
         public void OnArrivedInSlot()
         {
             State = BlockState.InSlot;
+            BuildTargetQueue();
+            if (_targetQueue.Count > 0) StartShooting();
+        }
+
+        private void BuildTargetQueue()
+        {
+            _targetQueue.Clear();
+            if (ConveyorPathController.Instance == null) return;
+            var blocks = ConveyorPathController.Instance.GetOrderedBlocks(_colorType, _isRainbowMode);
+            foreach (var b in blocks)
+                _targetQueue.Enqueue(b);
         }
 
         // ── Shooting (only active while InSlot) ───────────────────────────────
@@ -129,12 +140,8 @@ namespace BlockShooter
             if (!GameManager.Instance.IsPlaying) return;
             if (State != BlockState.InSlot || IsDepleted) return;
 
-            bool hasTarget = _isRainbowMode
-                ? FireRange.Instance != null && FireRange.Instance.BlocksInRange.Count > 0
-                : FireRange.Instance != null && FireRange.Instance.HasTargetFor(_colorType);
-
-            if (hasTarget  && !_isShooting) StartShooting();
-            else if (!hasTarget && _isShooting) StopShooting();
+            // Restart if queue got new blocks (e.g. after rainbow mode toggle)
+            if (_targetQueue.Count > 0 && !_isShooting) StartShooting();
         }
 
         private void StartShooting()
@@ -146,53 +153,54 @@ namespace BlockShooter
         private void StopShooting()
         {
             _isShooting = false;
-            _lockedTarget = null; // release lock so next group starts fresh
             if (_shootCoroutine != null) { StopCoroutine(_shootCoroutine); _shootCoroutine = null; }
         }
 
         private IEnumerator ShootRoutine()
         {
             float fireRate = GameManager.Instance.config.fireRate;
-            while (_isShooting && !IsDepleted)
+
+            while (!IsDepleted)
             {
-                FireProjectile();
+                // Skip destroyed/inactive blocks at front of queue
+                while (_targetQueue.Count > 0)
+                {
+                    var front = _targetQueue.Peek();
+                    if (front == null || front.IsDestroyed || !front.gameObject.activeSelf)
+                        _targetQueue.Dequeue();
+                    else
+                        break;
+                }
+
+                if (_targetQueue.Count == 0) break; // all blocks done
+
+                ConveyorBlock3D target = _targetQueue.Dequeue();
+                FireAt(target);
                 yield return new WaitForSeconds(fireRate);
             }
+
+            _isShooting = false;
+            _shootCoroutine = null;
         }
 
-        public void FireProjectile()
+        private void FireAt(ConveyorBlock3D target)
         {
-            if (ProjectilePool.Instance == null) return;
+            if (ProjectilePool.Instance == null || target == null) return;
 
-            BlockColorType targetColor = _isRainbowMode ? GetAnyActiveColor() : _colorType;
+            BlockColorType projColor = _isRainbowMode ? target.ColorType : _colorType;
 
-            // Refresh lock only when current target is gone — never switch mid-block
-            if (_lockedTarget == null || _lockedTarget.IsDestroyed || !_lockedTarget.gameObject.activeSelf)
-            {
-                _lockedTarget = _isRainbowMode
-                    ? FireRange.Instance?.GetFirstTarget()
-                    : FireRange.Instance?.GetFirstTarget(targetColor);
-            }
-
-            if (_lockedTarget == null) return; // nothing in range yet
-
-            // Rotate body mesh to face locked target
             if (bodyMesh != null)
             {
-                Vector3 lookDir = _lockedTarget.transform.position - bodyMesh.position;
+                Vector3 lookDir = target.transform.position - bodyMesh.position;
                 if (lookDir.sqrMagnitude > 0.001f)
                     bodyMesh.rotation = Quaternion.LookRotation(lookDir.normalized);
             }
 
             Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
-            Vector3 dir = (_lockedTarget.transform.position - spawnPos).normalized;
+            Vector3 dir = (target.transform.position - spawnPos).normalized;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
-            proj.Launch(targetColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, _lockedTarget);
-
-            // Mark targeted BEFORE clearing lock — projectile will home in and destroy it
-            _lockedTarget.SetTargeted(true);
-            _lockedTarget = null; // immediately free lock so next shot picks next block
+            proj.Launch(projColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, target);
 
             if (muzzleFlash != null) muzzleFlash.Play();
             transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);
@@ -200,6 +208,15 @@ namespace BlockShooter
             _shotCount--;
             UpdateShotCountUI();
             if (_shotCount <= 0) Deplete();
+        }
+
+        // kept for external callers (e.g. ColorBlast)
+        public void FireProjectile()
+        {
+            var target = _isRainbowMode
+                ? FireRange.Instance?.GetFirstTarget()
+                : FireRange.Instance?.GetFirstTarget(_colorType);
+            if (target != null) FireAt(target);
         }
 
         // ── ColorBlast: fire at ALL matching blocks simultaneously ─────────────
@@ -255,7 +272,7 @@ namespace BlockShooter
 
             if (depletedParticle != null) depletedParticle.Play();
 
-            _lockedTarget = null;
+            _targetQueue.Clear();
 
             // Notify systems immediately so slot/grid update right away
             SlotSystem.Instance?.ReleaseSlot(this);
@@ -310,8 +327,10 @@ namespace BlockShooter
 
         private BlockColorType GetAnyActiveColor()
         {
-            foreach (var b in FireRange.Instance.BlocksInRange)
-                return b.ColorType;
+            if (_targetQueue.Count > 0) return _targetQueue.Peek().ColorType;
+            if (FireRange.Instance != null)
+                foreach (var b in FireRange.Instance.BlocksInRange)
+                    return b.ColorType;
             return _colorType;
         }
 

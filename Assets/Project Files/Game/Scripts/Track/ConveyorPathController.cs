@@ -24,6 +24,8 @@ namespace BlockShooter
         public float speed = 1.5f;
         public bool loop = true;
 
+        public static ConveyorPathController Instance { get; private set; }
+
         private SplineContainer _splineContainer;
         private float _splineWorldLength;
         private bool _isFrozen;
@@ -43,7 +45,31 @@ namespace BlockShooter
 
         private void Awake()
         {
+            Instance = this;
             _splineContainer = GetComponent<SplineContainer>();
+        }
+
+        /// <summary>
+        /// Returns all blocks of the given color in conveyor order (row N-1 first = leading edge first).
+        /// Pass anyColor=true for rainbow mode.
+        /// </summary>
+        public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType, bool anyColor = false)
+        {
+            var result = new List<ConveyorBlock3D>();
+            foreach (var entry in _groups)
+            {
+                if (entry.Group == null || entry.Group.IsEmpty) continue;
+                if (!anyColor && entry.Group.colorType != colorType) continue;
+
+                for (int row = entry.Group.rowCount - 1; row >= 0; row--)
+                    for (int lane = 0; lane < entry.Group.laneCount; lane++)
+                    {
+                        var block = entry.Group.GetBlock(row, lane);
+                        if (block != null && !block.IsDestroyed && block.gameObject.activeSelf)
+                            result.Add(block);
+                    }
+            }
+            return result;
         }
 
         private void Start()
