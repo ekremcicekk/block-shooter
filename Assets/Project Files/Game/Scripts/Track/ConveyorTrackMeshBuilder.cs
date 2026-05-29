@@ -25,13 +25,15 @@ namespace BlockShooter
     {
         [Header("Cross-Section Profile")]
         [Tooltip("Half-width of the flat belt surface")]
-        public float beltHalfWidth  = 1.2f;
+        public float beltHalfWidth  = 0.5f;
         [Tooltip("Thickness of the belt plate")]
         public float beltThickness  = 0.05f;
         [Tooltip("Height of the side rails (how far they hang down)")]
-        public float railHeight     = 0.28f;
+        public float railHeight     = 1.0f;
         [Tooltip("Width / thickness of each side rail")]
-        public float railWidth      = 0.10f;
+        public float railWidth      = 0.05f;
+        [Tooltip("Bevel size at top edges (0 = sharp, 0.04 = soft chamfer)")]
+        public float bevelSize      = 0.04f;
 
         [Header("Quality")]
         [Range(60, 800)] public int resolution = 240;
@@ -60,29 +62,29 @@ namespace BlockShooter
             float rw = railWidth;
             float rh = railHeight;
             float bt = beltThickness;
+            float bv = Mathf.Clamp(bevelSize, 0f, Mathf.Min(rw, bt) * 0.9f);
 
-            //  P0 ─ P1          P6 ─ P7
-            //  |     P2 ──── P5     |
-            //        P3 ──── P4         <- belt top (Y = bt)
+            // Cross-section (Y=up, X=right). Viewed from front:
             //
-            //  Left outer wall : P0(bottom) → P1(top)
-            //  Left inner wall : P1 → P2(top, inner)
-            //  Belt bottom edge: P2 → P3 (left belt side)
-            //  Belt top surface: P3 → P4
-            //  Belt bottom edge: P4 → P5 (right belt side)
-            //  Right inner wall: P5 → P6
-            //  Right outer wall: P6(top) → P7(bottom)
+            //  P0                        P5      <- wall bottom
+            //  |                          |
+            //  P1  bevel→P2────────P3←bevel  P4  <- belt top + chamfer
+            //
+            //  Edges:
+            //   P0→P1  left outer wall (vertical)
+            //   P1→P2  left chamfer (diagonal bevel to belt top)
+            //   P2→P3  belt top surface (flat, faces up)
+            //   P3→P4  right chamfer (diagonal)
+            //   P4→P5  right outer wall (vertical)
 
             return new Vector2[]
             {
-                new(-hw - rw, -rh),   // P0  left outer wall bottom
-                new(-hw - rw,  0f),   // P1  left outer wall top
-                new(-hw,       0f),   // P2  left rail–belt junction (bottom)
-                new(-hw,       bt),   // P3  left belt top edge
-                new( hw,       bt),   // P4  right belt top edge  ← belt surface
-                new( hw,       0f),   // P5  right rail–belt junction (bottom)
-                new( hw + rw,  0f),   // P6  right outer wall top
-                new( hw + rw, -rh),   // P7  right outer wall bottom
+                new(-hw - rw,      -rh),     // P0  left wall bottom
+                new(-hw - rw,       bv),     // P1  left wall top (bevel start)
+                new(-hw,            bt),     // P2  left belt top edge (bevel end)
+                new( hw,            bt),     // P3  right belt top edge  ← belt surface
+                new( hw + rw,       bv),     // P4  right wall top (bevel start)
+                new( hw + rw,      -rh),     // P5  right wall bottom
             };
         }
 
