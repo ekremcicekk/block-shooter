@@ -26,7 +26,7 @@ namespace BlockShooter.Editor
         private string _trackPrefabName = "Track_Level01";
         private GameObject _segmentPrefab;
         private GameObject _arrowPrefab;
-        private int _arrowCount = 3;
+        private float _arrowSpacing = 2.0f;
         private float _blockSpeed = 1.5f;
         private ConveyorTrackRenderer _activeTrack;
 
@@ -97,7 +97,7 @@ namespace BlockShooter.Editor
             _trackPrefabName = EditorGUILayout.TextField("Prefab Name", _trackPrefabName);
             _segmentPrefab   = (GameObject)EditorGUILayout.ObjectField("Segment Prefab", _segmentPrefab, typeof(GameObject), false);
             _arrowPrefab     = (GameObject)EditorGUILayout.ObjectField("Arrow Prefab",   _arrowPrefab,   typeof(GameObject), false);
-            _arrowCount      = EditorGUILayout.IntSlider("Arrow Count", _arrowCount, 0, 8);
+            _arrowSpacing    = EditorGUILayout.FloatField("Arrow Spacing (m)", _arrowSpacing);
             _blockSpeed      = EditorGUILayout.FloatField("Block Speed", _blockSpeed);
 
             EditorGUILayout.Space(4);
@@ -171,7 +171,7 @@ namespace BlockShooter.Editor
             var renderer = go.AddComponent<ConveyorTrackRenderer>();
             renderer.segmentPrefab = _segmentPrefab;
             renderer.arrowPrefab   = _arrowPrefab;
-            renderer.arrowCount    = _arrowCount;
+            renderer.arrowSpacing  = _arrowSpacing;
             renderer.blockSpeed    = _blockSpeed;
 
             var pathCtrl = go.AddComponent<ConveyorPathController>();
@@ -282,7 +282,7 @@ namespace BlockShooter.Editor
             var feederRenderer = go.AddComponent<ConveyorTrackRenderer>();
             feederRenderer.segmentPrefab = entry.feederSegmentPrefab != null
                 ? entry.feederSegmentPrefab : _segmentPrefab;
-            feederRenderer.arrowCount = 0; // feeders don't need arrows
+            feederRenderer.arrowSpacing = 0f; // feeders don't need arrows
 
             Selection.activeGameObject = go;
             Undo.RegisterCreatedObjectUndo(go, "Create Feeder Path");
