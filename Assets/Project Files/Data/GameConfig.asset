@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: GameConfig
   m_EditorClassIdentifier: 
   defaultShotCount: 100
-  fireRate: 0.15
+  fireRate: 0.1
   projectileSpeed: 12
   conveyorSpeed: 2
   columnCount: 5

@@ -27,10 +27,11 @@ Transform:
   m_GameObject: {fileID: 1394936033213387327}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.9, y: 0.75, z: 0.9}
+  m_LocalPosition: {x: 0, y: 0.119, z: 0}
+  m_LocalScale: {x: 0.4175635, y: 0.4175635, z: 0.4175635}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 5655684702468073853}
   m_Father: {fileID: 8891650280715535815}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &6918127924396999908
@@ -40,7 +41,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1394936033213387327}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: -3262789968867269347, guid: 4234327055fbc4e4580eed193cbf97bd, type: 3}
 --- !u!23 &2979231550936303734
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -215,8 +216,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 42
-  m_fontSizeBase: 42
+  m_fontSize: 30.41
+  m_fontSizeBase: 30.41
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -286,12 +287,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2755183677879777169}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.5, z: 0.3}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 8891650280715535815}
+  m_Father: {fileID: 3107719286104500061}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5856518754137615233
 GameObject:
@@ -319,7 +320,7 @@ RectTransform:
   m_GameObject: {fileID: 5856518754137615233}
   m_LocalRotation: {x: 0.5150381, y: 0, z: 0, w: 0.8571673}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.012, y: 0.012, z: 0.012}
+  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7618341226535303873}
@@ -472,7 +473,6 @@ Transform:
   m_Children:
   - {fileID: 3107719286104500061}
   - {fileID: 2436278596372428878}
-  - {fileID: 5655684702468073853}
   - {fileID: 4478901241456141771}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -494,6 +494,7 @@ MonoBehaviour:
   muzzleFlash: {fileID: 0}
   depletedParticle: {fileID: 0}
   accessibleIndicator: {fileID: 0}
+  bodyMesh: {fileID: 3107719286104500061}
   shootPoint: {fileID: 5655684702468073853}
 --- !u!65 &5002273185421219673
 BoxCollider:

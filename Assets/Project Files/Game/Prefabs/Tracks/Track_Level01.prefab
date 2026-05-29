@@ -66,33 +66,15 @@ MonoBehaviour:
   - m_EditModeType: 1
     m_Knots:
     - Position:
-        x: -1.8
+        x: 0
         y: 0
-        z: 4
+        z: 1.75
       TangentIn:
-        x: -0.66276
+        x: -1.0134705
         y: 0
         z: 0
       TangentOut:
-        x: 0.66276
-        y: 0
-        z: 0
-      Rotation:
-        value:
-          x: 0
-          y: 0
-          z: 0
-          w: 1
-    - Position:
-        x: 1.8
-        y: 0
-        z: 4
-      TangentIn:
-        x: -0.66276
-        y: 0
-        z: 0
-      TangentOut:
-        x: 0.66276
+        x: 1.0134705
         y: 0
         z: 0
       Rotation:
@@ -102,17 +84,17 @@ MonoBehaviour:
           z: 0
           w: 1
     - Position:
-        x: 3
+        x: 1.835
         y: 0
-        z: 2.8
+        z: 0
       TangentIn:
         x: 0
         y: 0
-        z: 0.66276
+        z: 0.96652496
       TangentOut:
         x: 0
         y: 0
-        z: -0.66276
+        z: -0.96652496
       Rotation:
         value:
           x: 0
@@ -120,33 +102,15 @@ MonoBehaviour:
           z: 0
           w: 1
     - Position:
-        x: 3
-        y: 0
-        z: -2.8
-      TangentIn:
         x: 0
         y: 0
-        z: 0.66276
-      TangentOut:
-        x: 0
-        y: 0
-        z: -0.66276
-      Rotation:
-        value:
-          x: 0
-          y: 0
-          z: 0
-          w: 1
-    - Position:
-        x: 1.8
-        y: 0
-        z: -4
+        z: -1.75
       TangentIn:
-        x: 0.66276
+        x: 1.0134705
         y: 0
         z: 0
       TangentOut:
-        x: -0.66276
+        x: -1.0134705
         y: 0
         z: 0
       Rotation:
@@ -156,53 +120,17 @@ MonoBehaviour:
           z: 0
           w: 1
     - Position:
-        x: -1.8
-        y: 0
-        z: -4
-      TangentIn:
-        x: 0.66276
+        x: -1.835
         y: 0
         z: 0
-      TangentOut:
-        x: -0.66276
-        y: 0
-        z: 0
-      Rotation:
-        value:
-          x: 0
-          y: 0
-          z: 0
-          w: 1
-    - Position:
-        x: -3
-        y: 0
-        z: -2.8
       TangentIn:
         x: 0
         y: 0
-        z: -0.66276
+        z: -0.96652496
       TangentOut:
         x: 0
         y: 0
-        z: 0.66276
-      Rotation:
-        value:
-          x: 0
-          y: 0
-          z: 0
-          w: 1
-    - Position:
-        x: -3
-        y: 0
-        z: 2.8
-      TangentIn:
-        x: 0
-        y: 0
-        z: -0.66276
-      TangentOut:
-        x: 0
-        y: 0
-        z: 0.66276
+        z: 0.96652496
       Rotation:
         value:
           x: 0
@@ -210,14 +138,6 @@ MonoBehaviour:
           z: 0
           w: 1
     m_MetaData:
-    - Mode: 4
-      Tension: 0.5
-    - Mode: 4
-      Tension: 0.5
-    - Mode: 4
-      Tension: 0.5
-    - Mode: 4
-      Tension: 0.5
     - Mode: 4
       Tension: 0.5
     - Mode: 4
@@ -251,7 +171,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   segmentPrefab: {fileID: 0}
   arrowPrefab: {fileID: 5382590712880826785, guid: 67e4f67177226804cb7a5efb43e82c93, type: 3}
-  arrowCount: 6
+  arrowSpacing: 2
   blockSpeed: 1.5
 --- !u!114 &3671645959574192092
 MonoBehaviour:
@@ -268,8 +188,10 @@ MonoBehaviour:
   blockPrefab: {fileID: 8825819024565648515, guid: 12fe760b4c1250b49834abbac9208222, type: 3}
   lanesPerGroup: 5
   rowsPerGroup: 20
+  laneSpacing: 0.18
+  rowSpacing: 0.18
   groupColors: 0100000002000000
-  speed: 1.5
+  speed: 1
   loop: 1
 --- !u!33 &6075694745439415910
 MeshFilter:
@@ -337,10 +259,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 031fda3f7ffce9743a5a6ad259cff505, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  beltHalfWidth: 0.5
-  wallAboveBelt: 0.12
+  beltHalfWidth: 0.45
+  wallAboveBelt: 0.18
   railHeight: 1
-  railWidth: 0.05
-  bevelSize: 0.04
+  railWidth: 0.1
+  bevelSize: 0.02
   resolution: 180
   vTiling: 8
