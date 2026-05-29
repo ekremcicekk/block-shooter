@@ -5,7 +5,7 @@ using UnityEngine;
 namespace BlockShooter
 {
     [CustomEditor(typeof(ConveyorTrackMesh))]
-    public class ConveyorTrackMeshEditor : Editor
+    public class ConveyorTrackMeshEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {
