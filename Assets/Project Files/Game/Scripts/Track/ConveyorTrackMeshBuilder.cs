@@ -16,12 +16,13 @@ namespace BlockShooter
     ///
     /// Profile cross-section (Y = up, X = right, viewed from front):
     ///
-    ///        P1──────────────P4
-    ///       ╱  P2──────────P3  ╲     ← belt top surface
-    ///      ╱                    ╲
-    ///  P0 ╱                      ╲ P5
-    ///  |  P7──────────────P6      |  ← underside
-    ///  └──────────────────────────┘
+    ///   P2────P3         P6────P7
+    ///  ╱        ╲       ╱        ╲    ← chamfered top-outer corners
+    /// P1          P4───P5          P8 ← wall tops / belt surface at Y=0
+    /// |                             |
+    /// P0                            P9
+    /// |  P11──────────────────P10   |  ← underside
+    /// └──────────────────────────────┘
     /// </summary>
     [RequireComponent(typeof(SplineContainer))]
     [RequireComponent(typeof(MeshFilter))]
@@ -30,16 +31,16 @@ namespace BlockShooter
     {
         // ── Profile Parameters ────────────────────────────────────────────────
         [Header("Cross-Section Profile")]
-        [Tooltip("Half-width of the flat belt top surface")]
-        public float beltHalfWidth = 0.5f;
-        [Tooltip("Thickness of the belt plate above the rail top")]
-        public float beltThickness = 0.05f;
-        [Tooltip("How far the side rails hang below the belt")]
-        public float railHeight    = 1.0f;
-        [Tooltip("Thickness of each side rail")]
-        public float railWidth     = 0.05f;
-        [Tooltip("Bevel chamfer height at the top outer corners (0 = sharp 90°)")]
-        public float bevelSize     = 0.04f;
+        [Tooltip("Half-width of the flat belt surface (inner groove width = 2 × this)")]
+        public float beltHalfWidth  = 0.5f;
+        [Tooltip("How far the outer walls rise ABOVE the belt surface")]
+        public float wallAboveBelt  = 0.12f;
+        [Tooltip("How far the outer walls hang DOWN below the belt surface")]
+        public float railHeight     = 1.0f;
+        [Tooltip("Thickness of each outer wall")]
+        public float railWidth      = 0.05f;
+        [Tooltip("Chamfer size on the top-OUTER corner of each wall (clamped to railWidth)")]
+        public float bevelSize      = 0.04f;
 
         // ── Sweep Parameters ──────────────────────────────────────────────────
         [Header("Sweep Quality")]
@@ -86,36 +87,55 @@ namespace BlockShooter
         /// Returns the closed 2D polygon. Vertices are listed counter-clockwise
         /// when viewed from the sweep direction (+Z local), so outward normals
         /// are generated automatically with the (A, C, B) winding below.
+        ///
+        /// 12-point profile (Y=up, X=right):
+        ///
+        ///   P2────P3         P6────P7
+        ///  ╱        ╲       ╱        ╲
+        /// P1          P4───P5          P8
+        /// |    belt groove (Y=0)        |
+        /// P0                            P9
+        /// |  P11──────────────────P10   |
+        /// └──────────────────────────────┘
+        ///
+        /// Outer walls stand wallAboveBelt above belt surface (Y=0).
+        /// Top-outer corner of each wall is chamfered by bevelSize.
+        /// Belt surface sits at Y=0, recessed inside the walls.
         /// </summary>
         private Vector2[] BuildProfile()
         {
             float hw = beltHalfWidth;
             float rw = railWidth;
             float rh = railHeight;
-            float bt = beltThickness;
-            float bv = Mathf.Max(0f, bevelSize);
+            float wa = wallAboveBelt;
+            float bv = Mathf.Clamp(bevelSize, 0f, Mathf.Min(rw, wa));
 
-            // Index  Position          Description
-            // P0  (-hw-rw, -rh)        left outer wall bottom
-            // P1  (-hw-rw,  bv)        left outer wall top  (bevel start)
-            // P2  (-hw,     bt)        left inner edge      (bevel end / belt left)
-            // P3  ( hw,     bt)        right inner edge     (belt right)
-            // P4  ( hw+rw,  bv)        right outer wall top (bevel start)
-            // P5  ( hw+rw, -rh)        right outer wall bottom
-            // P6  ( hw,    -rh)        underside right
-            // P7  (-hw,    -rh)        underside left
-            // (closed: P7 → P0)
-
+            // P0:  left  outer wall bottom
+            // P1:  left  outer wall top, bevel start
+            // P2:  left  bevel end (chamfered top-outer corner)
+            // P3:  left  wall inner top (horizontal wall-top face right edge)
+            // P4:  left  belt edge (inner step down to belt surface)
+            // P5:  right belt edge
+            // P6:  right wall inner top
+            // P7:  right bevel end
+            // P8:  right outer wall top, bevel start
+            // P9:  right outer wall bottom
+            // P10: underside right
+            // P11: underside left
             return new Vector2[]
             {
-                new Vector2(-hw - rw, -rh),   // P0
-                new Vector2(-hw - rw,  bv),   // P1
-                new Vector2(-hw,       bt),   // P2
-                new Vector2( hw,       bt),   // P3
-                new Vector2( hw + rw,  bv),   // P4
-                new Vector2( hw + rw, -rh),   // P5
-                new Vector2( hw,      -rh),   // P6
-                new Vector2(-hw,      -rh),   // P7
+                new Vector2(-hw - rw,        -rh),    // P0
+                new Vector2(-hw - rw,         wa - bv), // P1
+                new Vector2(-hw - rw + bv,    wa),    // P2
+                new Vector2(-hw,              wa),    // P3
+                new Vector2(-hw,              0f),    // P4
+                new Vector2( hw,              0f),    // P5
+                new Vector2( hw,              wa),    // P6
+                new Vector2( hw + rw - bv,    wa),    // P7
+                new Vector2( hw + rw,         wa - bv), // P8
+                new Vector2( hw + rw,        -rh),    // P9
+                new Vector2( hw,             -rh),    // P10
+                new Vector2(-hw,             -rh),    // P11
             };
         }
 
