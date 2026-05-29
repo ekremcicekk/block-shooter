@@ -162,13 +162,15 @@ namespace BlockShooter
 
             BlockColorType targetColor = _isRainbowMode ? GetAnyActiveColor() : _colorType;
 
-            ConveyorBlock3D target = FireRange.Instance?.GetClosestTarget(targetColor,
-                shootPoint != null ? shootPoint.position : transform.position);
+            // Always target in conveyor arrival order — no random targeting
+            ConveyorBlock3D target = _isRainbowMode
+                ? FireRange.Instance?.GetFirstTarget()
+                : FireRange.Instance?.GetFirstTarget(targetColor);
+
+            if (target == null) return; // no valid target yet, skip this shot
 
             Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
-            Vector3 dir = target != null
-                ? (target.transform.position - spawnPos).normalized
-                : Vector3.forward;
+            Vector3 dir = (target.transform.position - spawnPos).normalized;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
             proj.Launch(targetColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir);
@@ -234,18 +236,14 @@ namespace BlockShooter
 
             if (depletedParticle != null) depletedParticle.Play();
 
-            if (blockRenderer != null)
-            {
-                var mpb = new MaterialPropertyBlock();
-                mpb.SetColor(ColorProp, Color.gray);
-                blockRenderer.SetPropertyBlock(mpb);
-            }
-            if (glowRenderer != null) glowRenderer.gameObject.SetActive(false);
-            if (shotCountText != null) shotCountText.text = "0";
-
+            // Notify systems immediately so slot/grid update right away
             SlotSystem.Instance?.ReleaseSlot(this);
             ShooterGrid.Instance?.OnBlockDepleted(this);
             OnDepleted?.Invoke(this);
+
+            // Animate out then hide — slot indicator reappears via ReleaseSlot above
+            transform.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack)
+                .OnComplete(() => gameObject.SetActive(false));
         }
 
         // ── Rainbow mode ──────────────────────────────────────────────────────

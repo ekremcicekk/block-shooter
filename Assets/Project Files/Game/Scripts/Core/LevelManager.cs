@@ -16,6 +16,8 @@ namespace BlockShooter
         [Header("Track Spawn Point")]
         [Tooltip("Where the level track prefab is instantiated")]
         public Transform trackSpawnParent;
+        [Tooltip("Local position offset applied to the instantiated track")]
+        public Vector3 trackSpawnOffset = new Vector3(0f, 0f, 6f);
 
         private LevelData _currentLevel;
         private GameObject _activeTrackInstance;
@@ -53,6 +55,7 @@ namespace BlockShooter
             {
                 Transform parent = trackSpawnParent != null ? trackSpawnParent : transform;
                 _activeTrackInstance = Instantiate(data.trackPrefab, parent);
+                _activeTrackInstance.transform.localPosition = trackSpawnOffset;
 
                 // Apply speed multiplier
                 var pathCtrl = _activeTrackInstance.GetComponent<ConveyorPathController>();

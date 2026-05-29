@@ -9,12 +9,13 @@ namespace BlockShooter
     {
         public static FireRange Instance { get; private set; }
 
-        private readonly HashSet<ConveyorBlock3D> _blocksInRange = new();
+        // List preserves insertion order = conveyor arrival order (blocks enter in path sequence)
+        private readonly List<ConveyorBlock3D> _blocksInRange = new();
 
         public event Action<ConveyorBlock3D> OnBlockEntered;
         public event Action<ConveyorBlock3D> OnBlockExited;
 
-        public IReadOnlyCollection<ConveyorBlock3D> BlocksInRange => _blocksInRange;
+        public IReadOnlyList<ConveyorBlock3D> BlocksInRange => _blocksInRange;
 
         private void Awake()
         {
@@ -28,6 +29,7 @@ namespace BlockShooter
         private void OnTriggerEnter(Collider other)
         {
             if (!other.TryGetComponent<ConveyorBlock3D>(out var block)) return;
+            if (_blocksInRange.Contains(block)) return;
             _blocksInRange.Add(block);
             OnBlockEntered?.Invoke(block);
             block.OnDestroyed += HandleBlockDestroyed;
@@ -56,21 +58,24 @@ namespace BlockShooter
         public bool HasTargetFor(BlockColorType colorType)
         {
             foreach (var b in _blocksInRange)
-                if (b.ColorType == colorType) return true;
+                if (!b.IsDestroyed && b.ColorType == colorType) return true;
             return false;
         }
 
-        public ConveyorBlock3D GetClosestTarget(BlockColorType colorType, Vector3 from)
+        /// <summary>Returns the first block in conveyor arrival order that matches the color.</summary>
+        public ConveyorBlock3D GetFirstTarget(BlockColorType colorType)
         {
-            ConveyorBlock3D closest = null;
-            float minDist = float.MaxValue;
             foreach (var b in _blocksInRange)
-            {
-                if (b.ColorType != colorType) continue;
-                float d = Vector3.Distance(from, b.transform.position);
-                if (d < minDist) { minDist = d; closest = b; }
-            }
-            return closest;
+                if (!b.IsDestroyed && b.ColorType == colorType) return b;
+            return null;
+        }
+
+        /// <summary>Returns the first non-destroyed block in conveyor arrival order (any color).</summary>
+        public ConveyorBlock3D GetFirstTarget()
+        {
+            foreach (var b in _blocksInRange)
+                if (!b.IsDestroyed) return b;
+            return null;
         }
     }
 }
