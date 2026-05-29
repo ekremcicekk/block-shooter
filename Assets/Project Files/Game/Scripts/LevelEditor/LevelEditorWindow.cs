@@ -342,6 +342,19 @@ namespace BlockShooter.Editor
             Repaint();
         }
 
+        private static void EnsureDirectory(string path)
+        {
+            string[] parts = path.Split('/');
+            string current = parts[0];
+            for (int i = 1; i < parts.Length; i++)
+            {
+                string next = current + "/" + parts[i];
+                if (!AssetDatabase.IsValidFolder(next))
+                    AssetDatabase.CreateFolder(current, parts[i]);
+                current = next;
+            }
+        }
+
         private void ExportLevel()
         {
             LevelData asset = CreateInstance<LevelData>();
@@ -388,6 +401,7 @@ namespace BlockShooter.Editor
                     asset.availableColors.Add(cell.color);
 
             string path = $"Assets/Project Files/Game/ScriptableObjects/Levels/{_levelName}.asset";
+            EnsureDirectory("Assets/Project Files/Game/ScriptableObjects/Levels");
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
             EditorUtility.FocusProjectWindow();
