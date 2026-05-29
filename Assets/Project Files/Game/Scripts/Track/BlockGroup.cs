@@ -14,9 +14,9 @@ namespace BlockShooter
         public BlockColorType colorType;
         public int laneCount = 5;
         public int rowCount = 20;
-        public float blockSize = 0.48f;
-        public float laneSpacing = 0.5f;
-        public float rowSpacing = 0.5f;
+        public float blockSize = 0.38f;
+        public float laneSpacing = 0.42f;
+        public float rowSpacing = 0.42f;
 
         [Header("Prefab")]
         public ConveyorBlock3D blockPrefab;
@@ -50,9 +50,6 @@ namespace BlockShooter
                 for (int lane = 0; lane < laneCount; lane++)
                 {
                     ConveyorBlock3D block = Instantiate(blockPrefab, transform);
-                    float x = (lane - (laneCount - 1) * 0.5f) * laneSpacing;
-                    float z = row * rowSpacing;
-                    block.transform.localPosition = new Vector3(x, 0, z);
                     block.Initialize(colorType, c);
                     block.OnDestroyed += HandleBlockDestroyed;
                     _blocks.Add(block);
@@ -60,6 +57,13 @@ namespace BlockShooter
             }
 
             _aliveCount = _blocks.Count;
+        }
+
+        // Returns the block at (row, lane), or null if destroyed/missing.
+        public ConveyorBlock3D GetBlock(int row, int lane)
+        {
+            int idx = row * laneCount + lane;
+            return (idx >= 0 && idx < _blocks.Count) ? _blocks[idx] : null;
         }
 
         private void HandleBlockDestroyed(ConveyorBlock3D block)

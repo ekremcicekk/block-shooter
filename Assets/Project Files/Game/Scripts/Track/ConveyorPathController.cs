@@ -60,9 +60,6 @@ namespace BlockShooter
 
                 var groupGo = new GameObject($"BlockGroup_{groupColors[i]}");
                 var group = groupGo.AddComponent<BlockGroup>();
-                group.blockPrefab = blockPrefab;
-                group.laneCount   = lanesPerGroup;
-                group.rowCount    = rowsPerGroup;
                 group.Initialize(groupColors[i], blockPrefab, lanesPerGroup, rowsPerGroup);
 
                 AddGroup(group, startT);
@@ -114,15 +111,34 @@ namespace BlockShooter
 
         private void PlaceGroupAtT(BlockGroup group, float headT)
         {
-            _splineContainer.Spline.Evaluate(headT, out var pos, out var tangent, out var up);
+            if (_splineWorldLength <= 0f) return;
 
-            group.transform.position = transform.TransformPoint(pos);
+            float groupTLength = group.SplineLength / _splineWorldLength;
 
-            Vector3 fwd = transform.TransformDirection((Vector3)tangent).normalized;
-            Vector3 upDir = transform.TransformDirection((Vector3)up).normalized;
-            if (upDir == Vector3.zero) upDir = Vector3.up;
-            if (fwd != Vector3.zero)
-                group.transform.rotation = Quaternion.LookRotation(fwd, upDir);
+            for (int row = 0; row < group.rowCount; row++)
+            {
+                float rowT = (headT + (float)row / group.rowCount * groupTLength) % 1f;
+                _splineContainer.Spline.Evaluate(rowT, out var pos, out var tangent, out var up);
+
+                Vector3 worldPos = transform.TransformPoint(pos);
+                Vector3 fwd     = transform.TransformDirection((Vector3)tangent).normalized;
+                Vector3 upDir   = transform.TransformDirection((Vector3)up).normalized;
+                if (upDir == Vector3.zero) upDir = Vector3.up;
+                Vector3 right   = Vector3.Cross(upDir, fwd).normalized;
+                Quaternion rot  = fwd != Vector3.zero ? Quaternion.LookRotation(fwd, upDir) : Quaternion.identity;
+
+                for (int lane = 0; lane < group.laneCount; lane++)
+                {
+                    var block = group.GetBlock(row, lane);
+                    if (block == null || !block.gameObject.activeSelf) continue;
+                    float xOff = (lane - (group.laneCount - 1) * 0.5f) * group.laneSpacing;
+                    block.transform.SetPositionAndRotation(worldPos + right * xOff, rot);
+                }
+            }
+
+            // Keep group transform at head for reference/debugging
+            _splineContainer.Spline.Evaluate(headT, out var hPos, out _, out _);
+            group.transform.position = transform.TransformPoint(hPos);
         }
 
         private bool IsTrackEmptyAt(float t)
