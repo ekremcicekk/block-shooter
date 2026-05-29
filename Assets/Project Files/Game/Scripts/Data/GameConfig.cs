@@ -29,9 +29,9 @@ namespace BlockShooter
         public Color orangeColor = new Color(1f, 0.55f, 0.1f);
 
         [Header("Booster Unlock Levels")]
-        public int bombBoosterUnlockLevel = 5;
-        public int rainbowBoosterUnlockLevel = 10;
-        public int freezeBoosterUnlockLevel = 15;
+        public int bombBoosterUnlockLevel    = 1;   // ExtraSlot (reused field name for BoosterData fallback)
+        public int rainbowBoosterUnlockLevel = 3;   // FreePick
+        public int freezeBoosterUnlockLevel  = 5;   // ColorBlast
 
         [Header("Scoring")]
         public int scorePerBlock = 10;

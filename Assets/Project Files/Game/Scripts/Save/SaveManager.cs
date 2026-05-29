@@ -4,11 +4,11 @@ namespace BlockShooter
 {
     public static class SaveManager
     {
-        private const string KEY_LEVEL = "CurrentLevel";
-        private const string KEY_COINS = "Coins";
-        private const string KEY_BOOSTER_BOMB = "Booster_Bomb";
-        private const string KEY_BOOSTER_RAINBOW = "Booster_Rainbow";
-        private const string KEY_BOOSTER_FREEZE = "Booster_Freeze";
+        private const string KEY_LEVEL          = "CurrentLevel";
+        private const string KEY_COINS          = "Coins";
+        private const string KEY_BOOSTER_SLOT   = "Booster_ExtraSlot";
+        private const string KEY_BOOSTER_PICK   = "Booster_FreePick";
+        private const string KEY_BOOSTER_BLAST  = "Booster_ColorBlast";
 
         public static int CurrentLevel
         {
@@ -24,25 +24,13 @@ namespace BlockShooter
 
         public static int GetBoosterCount(BoosterType type)
         {
-            string key = type switch
-            {
-                BoosterType.Bomb => KEY_BOOSTER_BOMB,
-                BoosterType.Rainbow => KEY_BOOSTER_RAINBOW,
-                BoosterType.Freeze => KEY_BOOSTER_FREEZE,
-                _ => ""
-            };
+            string key = KeyFor(type);
             return string.IsNullOrEmpty(key) ? 0 : PlayerPrefs.GetInt(key, 0);
         }
 
         public static void SetBoosterCount(BoosterType type, int count)
         {
-            string key = type switch
-            {
-                BoosterType.Bomb => KEY_BOOSTER_BOMB,
-                BoosterType.Rainbow => KEY_BOOSTER_RAINBOW,
-                BoosterType.Freeze => KEY_BOOSTER_FREEZE,
-                _ => ""
-            };
+            string key = KeyFor(type);
             if (!string.IsNullOrEmpty(key))
             {
                 PlayerPrefs.SetInt(key, Mathf.Max(0, count));
@@ -50,10 +38,8 @@ namespace BlockShooter
             }
         }
 
-        public static void AddBooster(BoosterType type, int amount = 1)
-        {
+        public static void AddBooster(BoosterType type, int amount = 1) =>
             SetBoosterCount(type, GetBoosterCount(type) + amount);
-        }
 
         public static bool UseBooster(BoosterType type)
         {
@@ -63,9 +49,14 @@ namespace BlockShooter
             return true;
         }
 
-        public static void ClearAll()
+        public static void ClearAll() => PlayerPrefs.DeleteAll();
+
+        private static string KeyFor(BoosterType type) => type switch
         {
-            PlayerPrefs.DeleteAll();
-        }
+            BoosterType.ExtraSlot  => KEY_BOOSTER_SLOT,
+            BoosterType.FreePick   => KEY_BOOSTER_PICK,
+            BoosterType.ColorBlast => KEY_BOOSTER_BLAST,
+            _ => ""
+        };
     }
 }

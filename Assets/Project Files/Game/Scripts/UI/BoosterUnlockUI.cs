@@ -16,9 +16,9 @@ namespace BlockShooter
         public Button closeButton;
 
         [Header("Booster Data")]
-        public BoosterData bombData;
-        public BoosterData rainbowData;
-        public BoosterData freezeData;
+        public BoosterData extraSlotData;
+        public BoosterData freePickData;
+        public BoosterData colorBlastData;
 
         private void Awake()
         {
@@ -36,9 +36,9 @@ namespace BlockShooter
         {
             BoosterData data = type switch
             {
-                BoosterType.Bomb => bombData,
-                BoosterType.Rainbow => rainbowData,
-                BoosterType.Freeze => freezeData,
+                BoosterType.ExtraSlot  => extraSlotData,
+                BoosterType.FreePick   => freePickData,
+                BoosterType.ColorBlast => colorBlastData,
                 _ => null
             };
 

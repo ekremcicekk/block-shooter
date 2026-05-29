@@ -5,36 +5,31 @@ using DG.Tweening;
 namespace BlockShooter
 {
     /// <summary>
-    /// Self-contained booster manager.
-    /// No child objects needed — all three booster types are handled here.
-    /// Attach this to the [Managers] GameObject alongside GameManager.
+    /// Manages the three boosters. No child objects needed — attach to [Managers].
     ///
-    /// Each booster is configured via a BoosterData ScriptableObject (Assets/Data/).
-    /// Optional VFX ParticleSystems can be assigned; if null they are silently skipped.
+    /// ExtraSlot  — adds one more firing slot for the rest of the level.
+    /// FreePick   — for `freePickData.duration` seconds, ALL grid blocks become selectable.
+    /// ColorBlast — enters selection mode; player taps a slotted block;
+    ///              that block fires instantly at every matching-color block in FireRange.
     /// </summary>
     public class BoosterManager : MonoBehaviour
     {
         public static BoosterManager Instance { get; private set; }
 
-        [Header("Booster Config (ScriptableObjects)")]
-        public BoosterData bombData;
-        public BoosterData rainbowData;
-        public BoosterData freezeData;
-
-        [Header("VFX (optional)")]
-        public ParticleSystem explosionPrefab;
-        public ParticleSystem freezeParticlePrefab;
+        [Header("Booster Config (ScriptableObjects — optional)")]
+        public BoosterData extraSlotData;
+        public BoosterData freePickData;
+        public BoosterData colorBlastData;
 
         [Header("Initial unlock reward")]
-        [Tooltip("How many uses the player receives the first time a booster unlocks")]
         public int initialBoosterCount = 2;
 
-        private bool _rainbowActive;
-        private bool _freezeActive;
-        private Coroutine _rainbowCoroutine;
-        private Coroutine _freezeCoroutine;
+        // ColorBlast awaits a tap on a slotted block
+        public bool IsAwaitingColorBlastTarget { get; private set; }
 
-        // ── Unity lifecycle ────────────────────────────────────────────────────
+        private Coroutine _freePickCoroutine;
+
+        // ── Unity ─────────────────────────────────────────────────────────────
 
         private void Awake()
         {
@@ -44,15 +39,15 @@ namespace BlockShooter
 
         private void Start() => CheckUnlocks();
 
-        // ── Public API (used by BoosterButtonUI) ───────────────────────────────
+        // ── Public API ────────────────────────────────────────────────────────
 
         public bool IsBoosterUnlocked(BoosterType type)
         {
             int unlockLevel = type switch
             {
-                BoosterType.Bomb    => bombData   != null ? bombData.unlockLevel   : GameManager.Instance.config.bombBoosterUnlockLevel,
-                BoosterType.Rainbow => rainbowData != null ? rainbowData.unlockLevel : GameManager.Instance.config.rainbowBoosterUnlockLevel,
-                BoosterType.Freeze  => freezeData  != null ? freezeData.unlockLevel  : GameManager.Instance.config.freezeBoosterUnlockLevel,
+                BoosterType.ExtraSlot  => extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.bombBoosterUnlockLevel,
+                BoosterType.FreePick   => freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.rainbowBoosterUnlockLevel,
+                BoosterType.ColorBlast => colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.freezeBoosterUnlockLevel,
                 _ => 999
             };
             return SaveManager.CurrentLevel >= unlockLevel;
@@ -65,112 +60,121 @@ namespace BlockShooter
 
             switch (type)
             {
-                case BoosterType.Bomb:    ActivateBomb();    break;
-                case BoosterType.Rainbow: ActivateRainbow(); break;
-                case BoosterType.Freeze:  ActivateFreeze();  break;
+                case BoosterType.ExtraSlot:  ActivateExtraSlot();  break;
+                case BoosterType.FreePick:   ActivateFreePick();   break;
+                case BoosterType.ColorBlast: ActivateColorBlast(); break;
             }
             return true;
         }
 
-        // ── Bomb ───────────────────────────────────────────────────────────────
+        // ── ExtraSlot ─────────────────────────────────────────────────────────
+        // Adds one more firing slot. Permanent for the level.
 
-        private void ActivateBomb()
+        private void ActivateExtraSlot()
         {
-            // Destroy all conveyor blocks currently in the fire range
-            foreach (var ctrl in FindObjectsByType<ConveyorPathController>(FindObjectsSortMode.None))
-                ctrl.DestroyBlocksInFireRange();
+            SlotSystem.Instance?.AddExtraSlot();
+            Camera.main?.DOShakePosition(0.15f, 0.08f, 5, 90);
+        }
 
-            // Legacy 2D belt support
-            ConveyorBelt.Instance?.DestroyAllInRange();
+        // ── FreePick ──────────────────────────────────────────────────────────
+        // For a limited time, all grid blocks become selectable regardless of row.
+        // After the player picks a block (or time runs out), normal rules resume.
 
-            // VFX
-            if (explosionPrefab != null)
+        private void ActivateFreePick()
+        {
+            if (_freePickCoroutine != null)
             {
-                var pos = FireRange.Instance != null ? FireRange.Instance.transform.position : Vector3.zero;
-                var fx = Instantiate(explosionPrefab, pos, Quaternion.identity);
-                fx.Play();
-                Destroy(fx.gameObject, 2f);
+                StopCoroutine(_freePickCoroutine);
+                ShooterGrid.Instance?.SetFreePickMode(false);
             }
 
-            Camera.main?.DOShakePosition(0.3f, 0.2f, 10, 90);
+            float duration = freePickData != null ? freePickData.duration : 8f;
+            _freePickCoroutine = StartCoroutine(FreePickRoutine(duration));
         }
 
-        // ── Rainbow ────────────────────────────────────────────────────────────
-
-        private void ActivateRainbow()
+        private IEnumerator FreePickRoutine(float duration)
         {
-            if (_rainbowActive)
+            ShooterGrid.Instance?.SetFreePickMode(true);
+
+            // End early if the player picks a block (watch for a slotted event)
+            float elapsed = 0f;
+            int slotCountBefore = SlotSystem.Instance != null ? SlotSystem.Instance.GetSlottedBlocks().Count : 0;
+
+            while (elapsed < duration)
             {
-                if (_rainbowCoroutine != null) StopCoroutine(_rainbowCoroutine);
-                ShooterGrid.Instance?.SetRainbowMode(false);
-            }
-            _rainbowActive = true;
-            ShooterGrid.Instance?.SetRainbowMode(true);
-            float duration = rainbowData != null ? rainbowData.duration : 5f;
-            _rainbowCoroutine = StartCoroutine(RainbowTimer(duration));
-        }
+                elapsed += Time.deltaTime;
 
-        private IEnumerator RainbowTimer(float duration)
-        {
-            yield return new WaitForSeconds(duration);
-            _rainbowActive = false;
-            ShooterGrid.Instance?.SetRainbowMode(false);
-        }
+                // If a new block was slotted, the pick was made — end early
+                int slotCountNow = SlotSystem.Instance != null ? SlotSystem.Instance.GetSlottedBlocks().Count : 0;
+                if (slotCountNow > slotCountBefore) break;
 
-        // ── Freeze ─────────────────────────────────────────────────────────────
-
-        private void ActivateFreeze()
-        {
-            if (_freezeActive)
-            {
-                if (_freezeCoroutine != null) StopCoroutine(_freezeCoroutine);
-                EndFreeze();
+                yield return null;
             }
 
-            _freezeActive = true;
-            SetConveyorsFrozen(true);
+            ShooterGrid.Instance?.SetFreePickMode(false);
+            _freePickCoroutine = null;
+        }
 
-            if (freezeParticlePrefab != null)
+        // ── ColorBlast ────────────────────────────────────────────────────────
+        // Enters selection mode. Player must tap a slotted block.
+        // That block fires at every matching-color block in FireRange simultaneously.
+
+        private void ActivateColorBlast()
+        {
+            if (SlotSystem.Instance == null) return;
+            var slotted = SlotSystem.Instance.GetSlottedBlocks();
+            if (slotted.Count == 0) return;
+
+            IsAwaitingColorBlastTarget = true;
+
+            // Highlight slotted blocks so player knows to tap one
+            foreach (var b in slotted)
+                b.transform.DOPunchScale(Vector3.one * 0.2f, 0.4f, 4, 0.5f);
+
+            StartCoroutine(WaitForColorBlastTarget(slotted));
+        }
+
+        private IEnumerator WaitForColorBlastTarget(System.Collections.Generic.List<ShooterBlock> candidates)
+        {
+            float timeout = colorBlastData != null ? colorBlastData.duration : 8f;
+            float elapsed = 0f;
+
+            while (elapsed < timeout && IsAwaitingColorBlastTarget)
             {
-                var fx = Instantiate(freezeParticlePrefab, transform.position, Quaternion.identity);
-                fx.Play();
-                Destroy(fx.gameObject, (freezeData != null ? freezeData.duration : 5f) + 1f);
+                elapsed += Time.deltaTime;
+
+                if (Input.GetMouseButtonDown(0))
+                {
+                    var hit = RaycastBlock();
+                    if (hit != null && candidates.Contains(hit))
+                    {
+                        IsAwaitingColorBlastTarget = false;
+                        hit.FireColorBlast();
+                        yield break;
+                    }
+                }
+                yield return null;
             }
 
-            DOTween.To(() => Time.timeScale, x => Time.timeScale = x, 0.2f, 0.2f).SetUpdate(true);
-
-            float dur = freezeData != null ? freezeData.duration : 5f;
-            _freezeCoroutine = StartCoroutine(FreezeTimer(dur));
+            IsAwaitingColorBlastTarget = false;
         }
 
-        private IEnumerator FreezeTimer(float duration)
+        private ShooterBlock RaycastBlock()
         {
-            yield return new WaitForSecondsRealtime(duration);
-            EndFreeze();
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+                return hit.collider.GetComponent<ShooterBlock>();
+            return null;
         }
 
-        private void EndFreeze()
-        {
-            _freezeActive = false;
-            SetConveyorsFrozen(false);
-            DOTween.To(() => Time.timeScale, x => Time.timeScale = x, 1f, 0.3f).SetUpdate(true);
-        }
-
-        private static void SetConveyorsFrozen(bool frozen)
-        {
-            ConveyorBelt.Instance?.SetFrozen(frozen);
-            foreach (var ctrl in FindObjectsByType<ConveyorPathController>(FindObjectsSortMode.None))
-                ctrl.IsFrozen = frozen;
-        }
-
-        // ── Unlock rewards ─────────────────────────────────────────────────────
+        // ── Unlock rewards ────────────────────────────────────────────────────
 
         private void CheckUnlocks()
         {
             int level = SaveManager.CurrentLevel;
-            TryGiveInitial(BoosterType.Bomb,    bombData    != null ? bombData.unlockLevel    : GameManager.Instance.config.bombBoosterUnlockLevel,    level);
-            TryGiveInitial(BoosterType.Rainbow, rainbowData != null ? rainbowData.unlockLevel : GameManager.Instance.config.rainbowBoosterUnlockLevel, level);
-            TryGiveInitial(BoosterType.Freeze,  freezeData  != null ? freezeData.unlockLevel  : GameManager.Instance.config.freezeBoosterUnlockLevel,  level);
+            TryGiveInitial(BoosterType.ExtraSlot,  extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.bombBoosterUnlockLevel,    level);
+            TryGiveInitial(BoosterType.FreePick,   freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.rainbowBoosterUnlockLevel, level);
+            TryGiveInitial(BoosterType.ColorBlast, colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.freezeBoosterUnlockLevel,  level);
         }
 
         private void TryGiveInitial(BoosterType type, int unlockLevel, int currentLevel)
@@ -189,9 +193,9 @@ namespace BlockShooter
         [ContextMenu("Give All Boosters (Debug)")]
         private void GiveAllBoosters()
         {
-            SaveManager.AddBooster(BoosterType.Bomb, 3);
-            SaveManager.AddBooster(BoosterType.Rainbow, 3);
-            SaveManager.AddBooster(BoosterType.Freeze, 3);
+            SaveManager.AddBooster(BoosterType.ExtraSlot, 3);
+            SaveManager.AddBooster(BoosterType.FreePick, 3);
+            SaveManager.AddBooster(BoosterType.ColorBlast, 3);
         }
 #endif
     }

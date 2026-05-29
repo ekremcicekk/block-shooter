@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using TMPro;
@@ -5,73 +6,131 @@ using DG.Tweening;
 
 namespace BlockShooter
 {
+    /// <summary>
+    /// A single shooter block in the grid or in a firing slot.
+    ///
+    /// Lifecycle:
+    ///   InGrid (not shooting) → player taps → MovingToSlot → InSlot (auto-shoots) → Depleted
+    ///
+    /// Accessibility:
+    ///   Controlled by ShooterGrid. A block is accessible when no un-slotted,
+    ///   non-depleted block exists in front of it in the same column.
+    ///   FreePick booster temporarily makes ALL blocks accessible.
+    /// </summary>
     public class ShooterBlock : MonoBehaviour
     {
+        // ── Visuals ────────────────────────────────────────────────────────────
         [Header("Visuals")]
         public MeshRenderer blockRenderer;
         public MeshRenderer glowRenderer;
-        public TextMeshPro shotCountText;
+        public TextMeshPro  shotCountText;
         public ParticleSystem muzzleFlash;
         public ParticleSystem depletedParticle;
+        public GameObject accessibleIndicator;   // optional highlight ring shown when selectable
 
         [Header("Shoot Point")]
         public Transform shootPoint;
 
+        // ── State ──────────────────────────────────────────────────────────────
         private BlockColorType _colorType;
-        private int _shotCount;
-        private bool _isShooting;
-        private bool _isDepleted;
-        private Coroutine _shootCoroutine;
-        private bool _isRainbowMode;
+        private int   _shotCount;
+        private bool  _isRainbowMode;
 
-        private static readonly int ColorProp = Shader.PropertyToID("_BaseColor");
+        public enum BlockState { InGrid, MovingToSlot, InSlot, Depleted }
+        public BlockState State { get; private set; } = BlockState.InGrid;
+
+        private bool _isAccessible;
+        private bool _isShooting;
+        private Coroutine _shootCoroutine;
+
+        private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
 
-        public BlockColorType ColorType => _colorType;
-        public bool IsDepleted => _isDepleted;
-        public int GridColumn { get; private set; }
-        public int GridRow { get; private set; }
+        // ── Properties ────────────────────────────────────────────────────────
+        public BlockColorType ColorType  => _colorType;
+        public bool IsDepleted           => State == BlockState.Depleted;
+        public bool IsInSlot             => State == BlockState.InSlot;
+        public int  GridColumn           { get; private set; }
+        public int  GridRow              { get; private set; }
+
+        // Events
+        public event Action<ShooterBlock> OnSlotted;
+        public event Action<ShooterBlock> OnDepleted;
+
+        // ── Init ──────────────────────────────────────────────────────────────
 
         public void Initialize(BlockColorType colorType, int shotCount, int col, int row)
         {
             _colorType = colorType;
             _shotCount = shotCount;
-            _isDepleted = false;
-            _isShooting = false;
             GridColumn = col;
-            GridRow = row;
+            GridRow    = row;
+            State      = BlockState.InGrid;
+            _isAccessible = false;
 
             ApplyColor();
             UpdateShotCountUI();
+            SetAccessible(false);
         }
 
-        private void ApplyColor()
+        // ── Tap handling ──────────────────────────────────────────────────────
+
+        private void OnMouseDown()
         {
-            Color c = GameManager.Instance.config.GetColor(_colorType);
-            if (blockRenderer != null)
+            if (!GameManager.Instance.IsPlaying) return;
+            if (State != BlockState.InGrid) return;
+
+            // ColorBlast selection mode: pick a slotted block
+            if (BoosterManager.Instance != null && BoosterManager.Instance.IsAwaitingColorBlastTarget)
             {
-                var mpb = new MaterialPropertyBlock();
-                mpb.SetColor(ColorProp, c);
-                blockRenderer.SetPropertyBlock(mpb);
+                // Only slotted blocks can be selected for ColorBlast
+                // (InGrid blocks shouldn't be selectable in this mode)
+                return;
             }
-            if (glowRenderer != null)
+
+            if (!_isAccessible)
             {
-                var mpb = new MaterialPropertyBlock();
-                mpb.SetColor(ColorProp, new Color(c.r, c.g, c.b, 0.4f));
-                mpb.SetColor(EmissionProp, c * 0.6f);
-                glowRenderer.SetPropertyBlock(mpb);
+                transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                return;
             }
+
+            if (SlotSystem.Instance == null || !SlotSystem.Instance.HasEmptySlot)
+            {
+                transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                return;
+            }
+
+            MoveToSlot();
         }
+
+        private void MoveToSlot()
+        {
+            State = BlockState.MovingToSlot;
+            SetAccessible(false);
+
+            ShooterGrid.Instance?.OnBlockLeftGrid(this);
+            SlotSystem.Instance.TrySlotBlock(this);
+            OnSlotted?.Invoke(this);
+        }
+
+        /// <summary>Called by SlotSystem when the block arrives at its slot position.</summary>
+        public void OnArrivedInSlot()
+        {
+            State = BlockState.InSlot;
+        }
+
+        // ── Shooting (only active while InSlot) ───────────────────────────────
 
         private void Update()
         {
-            if (!GameManager.Instance.IsPlaying || _isDepleted) return;
+            if (!GameManager.Instance.IsPlaying) return;
+            if (State != BlockState.InSlot || IsDepleted) return;
 
             bool hasTarget = _isRainbowMode
                 ? FireRange.Instance != null && FireRange.Instance.BlocksInRange.Count > 0
                 : FireRange.Instance != null && FireRange.Instance.HasTargetFor(_colorType);
 
-            if (hasTarget && !_isShooting) StartShooting();
+            if (hasTarget  && !_isShooting) StartShooting();
             else if (!hasTarget && _isShooting) StopShooting();
         }
 
@@ -90,20 +149,19 @@ namespace BlockShooter
         private IEnumerator ShootRoutine()
         {
             float fireRate = GameManager.Instance.config.fireRate;
-            while (_isShooting && !_isDepleted)
+            while (_isShooting && !IsDepleted)
             {
                 FireProjectile();
                 yield return new WaitForSeconds(fireRate);
             }
         }
 
-        private void FireProjectile()
+        public void FireProjectile()
         {
             if (ProjectilePool.Instance == null) return;
 
             BlockColorType targetColor = _isRainbowMode ? GetAnyActiveColor() : _colorType;
 
-            // Find closest target for direction
             ConveyorBlock3D target = FireRange.Instance?.GetClosestTarget(targetColor,
                 shootPoint != null ? shootPoint.position : transform.position);
 
@@ -123,17 +181,57 @@ namespace BlockShooter
             if (_shotCount <= 0) Deplete();
         }
 
-        private BlockColorType GetAnyActiveColor()
+        // ── ColorBlast: fire at ALL matching blocks simultaneously ─────────────
+
+        public void FireColorBlast()
         {
-            foreach (var b in FireRange.Instance.BlocksInRange)
-                return b.ColorType;
-            return _colorType;
+            if (State != BlockState.InSlot || IsDepleted) return;
+            StartCoroutine(ColorBlastRoutine());
         }
+
+        private IEnumerator ColorBlastRoutine()
+        {
+            StopShooting();
+
+            // Fire one projectile per matching block in range
+            var targets = new System.Collections.Generic.List<ConveyorBlock3D>(
+                FireRange.Instance != null ? FireRange.Instance.BlocksInRange : System.Array.Empty<ConveyorBlock3D>());
+
+            Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
+
+            foreach (var t in targets)
+            {
+                if (t == null || t.IsDestroyed) continue;
+                if (!_isRainbowMode && t.ColorType != _colorType) continue;
+
+                Vector3 dir = (t.transform.position - spawnPos).normalized;
+                Projectile proj = ProjectilePool.Instance?.Get(spawnPos);
+                proj?.Launch(_colorType, GameManager.Instance.config.projectileSpeed * 1.5f,
+                    ProjectilePool.Instance, dir);
+
+                if (muzzleFlash != null) muzzleFlash.Play();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            Deplete();
+        }
+
+        // ── Accessibility ─────────────────────────────────────────────────────
+
+        public void SetAccessible(bool accessible)
+        {
+            _isAccessible = accessible;
+            if (accessibleIndicator != null)
+                accessibleIndicator.SetActive(accessible && State == BlockState.InGrid);
+        }
+
+        // ── Deplete ───────────────────────────────────────────────────────────
 
         private void Deplete()
         {
-            _isDepleted = true;
+            State = BlockState.Depleted;
             StopShooting();
+
             if (depletedParticle != null) depletedParticle.Play();
 
             if (blockRenderer != null)
@@ -145,14 +243,12 @@ namespace BlockShooter
             if (glowRenderer != null) glowRenderer.gameObject.SetActive(false);
             if (shotCountText != null) shotCountText.text = "0";
 
+            SlotSystem.Instance?.ReleaseSlot(this);
             ShooterGrid.Instance?.OnBlockDepleted(this);
+            OnDepleted?.Invoke(this);
         }
 
-        private void UpdateShotCountUI()
-        {
-            if (shotCountText != null)
-                shotCountText.text = _shotCount.ToString();
-        }
+        // ── Rainbow mode ──────────────────────────────────────────────────────
 
         public void SetRainbowMode(bool active)
         {
@@ -169,8 +265,40 @@ namespace BlockShooter
         public void RefillShots(int amount)
         {
             _shotCount += amount;
-            if (_isDepleted && _shotCount > 0) { _isDepleted = false; ApplyColor(); }
+            if (IsDepleted && _shotCount > 0) { State = BlockState.InGrid; ApplyColor(); }
             UpdateShotCountUI();
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+
+        private void ApplyColor()
+        {
+            Color c = GameManager.Instance.config.GetColor(_colorType);
+            if (blockRenderer != null)
+            {
+                var mpb = new MaterialPropertyBlock();
+                mpb.SetColor(ColorProp, c);
+                blockRenderer.SetPropertyBlock(mpb);
+            }
+            if (glowRenderer != null)
+            {
+                var mpb = new MaterialPropertyBlock();
+                mpb.SetColor(ColorProp, new Color(c.r, c.g, c.b, 0.4f));
+                mpb.SetColor(EmissionProp, c * 0.6f);
+                glowRenderer.SetPropertyBlock(mpb);
+            }
+        }
+
+        private BlockColorType GetAnyActiveColor()
+        {
+            foreach (var b in FireRange.Instance.BlocksInRange)
+                return b.ColorType;
+            return _colorType;
+        }
+
+        private void UpdateShotCountUI()
+        {
+            if (shotCountText != null) shotCountText.text = _shotCount.ToString();
         }
 
         private void OnDisable()

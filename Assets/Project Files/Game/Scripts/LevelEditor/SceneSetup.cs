@@ -266,13 +266,13 @@ namespace BlockShooter.Editor
             hlg.spacing = 20f;
             hlg.childAlignment = TextAnchor.MiddleCenter;
 
-            string[] boosterNames = { "BOMB", "RAINBOW", "FREEZE" };
-            BoosterType[] boosterTypes = { BoosterType.Bomb, BoosterType.Rainbow, BoosterType.Freeze };
+            string[] boosterNames = { "+SLOT", "FREE PICK", "BLAST" };
+            BoosterType[] boosterTypes = { BoosterType.ExtraSlot, BoosterType.FreePick, BoosterType.ColorBlast };
             Color[] boosterColors =
             {
-                new Color(1f, 0.3f, 0.3f),
-                new Color(1f, 0.9f, 0.2f),
-                new Color(0.3f, 0.7f, 1f)
+                new Color(0.3f, 0.8f, 0.4f),
+                new Color(1f, 0.75f, 0.1f),
+                new Color(0.3f, 0.6f, 1f)
             };
 
             for (int i = 0; i < 3; i++)
