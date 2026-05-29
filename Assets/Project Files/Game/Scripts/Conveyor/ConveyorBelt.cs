@@ -90,7 +90,7 @@ namespace BlockShooter
                 ConveyorBlock3D block = GetPooledBlock();
                 block.transform.position = spawnPos;
                 block.gameObject.SetActive(true);
-                block.Initialize(color);
+                block.Initialize(color, GameManager.Instance.config.GetColor(color));
                 block.OnDestroyed += HandleBlockDestroyed;
                 _activeBlocks.Add(block);
             }
