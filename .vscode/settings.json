@@ -56,5 +56,5 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "EKStudio_Template.slnx"
+    "dotnet.defaultSolution": "block-shooter.slnx"
 }
