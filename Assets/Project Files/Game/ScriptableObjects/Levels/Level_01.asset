@@ -60,40 +60,58 @@ MonoBehaviour:
   - columns: 0200000002000000020000000200000002000000
   gridCells:
   - column: 0
-    row: 0
+    row: 2
     cellType: 1
     color: 1
-    customShotCount: 100
+    customShotCount: -1
     doorBlockCount: 3
   - column: 1
-    row: 0
+    row: 2
     cellType: 1
     color: 2
-    customShotCount: 100
+    customShotCount: -1
     doorBlockCount: 3
   - column: 2
-    row: 0
+    row: 2
     cellType: 1
-    color: 1
-    customShotCount: 100
+    color: 3
+    customShotCount: -1
     doorBlockCount: 3
   - column: 3
-    row: 0
+    row: 2
+    cellType: 1
+    color: 1
+    customShotCount: -1
+    doorBlockCount: 3
+  - column: 4
+    row: 2
     cellType: 1
     color: 2
-    customShotCount: 100
+    customShotCount: -1
     doorBlockCount: 3
   - column: 1
     row: 1
     cellType: 1
     color: 3
-    customShotCount: 100
+    customShotCount: -1
     doorBlockCount: 3
   - column: 2
     row: 1
     cellType: 1
+    color: 1
+    customShotCount: -1
+    doorBlockCount: 3
+  - column: 3
+    row: 1
+    cellType: 1
+    color: 2
+    customShotCount: -1
+    doorBlockCount: 3
+  - column: 2
+    row: 0
+    cellType: 1
     color: 3
-    customShotCount: 100
+    customShotCount: -1
     doorBlockCount: 3
   goalType: 0
   goalAmount: 0

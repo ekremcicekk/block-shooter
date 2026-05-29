@@ -210,7 +210,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -449,6 +449,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8891650280715535815}
   - component: {fileID: 4430930358108203425}
+  - component: {fileID: 5002273185421219673}
   m_Layer: 0
   m_Name: ShooterBlock
   m_TagString: Untagged
@@ -492,4 +493,26 @@ MonoBehaviour:
   shotCountText: {fileID: 291678120616329798}
   muzzleFlash: {fileID: 0}
   depletedParticle: {fileID: 0}
+  accessibleIndicator: {fileID: 0}
   shootPoint: {fileID: 5655684702468073853}
+--- !u!65 &5002273185421219673
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9104099848893320791}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
