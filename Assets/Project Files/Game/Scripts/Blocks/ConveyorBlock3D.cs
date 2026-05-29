@@ -42,6 +42,13 @@ namespace BlockShooter
             DestroyBlock();
         }
 
+        /// <summary>Externally triggered destruction (e.g. Bomb booster).</summary>
+        public void TriggerDestroy()
+        {
+            if (_isDestroyed) return;
+            DestroyBlock();
+        }
+
         private void DestroyBlock()
         {
             _isDestroyed = true;

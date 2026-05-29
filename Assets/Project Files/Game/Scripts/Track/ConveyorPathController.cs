@@ -109,6 +109,20 @@ namespace BlockShooter
             block.transform.SetParent(transform, true);
         }
 
+        /// <summary>
+        /// Destroys all conveyor blocks currently inside the FireRange bounds (used by BombBooster).
+        /// </summary>
+        public void DestroyBlocksInFireRange()
+        {
+            if (FireRange.Instance == null) return;
+            var fr = FireRange.Instance;
+            foreach (var entry in _groups)
+            {
+                if (entry.Group == null || entry.Group.IsEmpty) continue;
+                entry.Group.DestroyBlocksInBounds(fr.GetBounds());
+            }
+        }
+
         private void PlaceGroupAtT(BlockGroup group, float headT)
         {
             if (_splineWorldLength <= 0f) return;

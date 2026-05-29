@@ -14,9 +14,11 @@ namespace BlockShooter
         public BlockColorType colorType;
         public int laneCount = 5;
         public int rowCount = 20;
-        public float blockSize = 0.38f;
-        public float laneSpacing = 0.42f;
-        public float rowSpacing = 0.42f;
+        // Belt half-width = 0.5 → full belt = 1.0.
+        // 5 lanes at 0.22 spacing → outer lanes at ±0.44 → fits inside ±0.5 wall.
+        public float blockSize    = 0.20f;
+        public float laneSpacing  = 0.22f;
+        public float rowSpacing   = 0.22f;
 
         [Header("Prefab")]
         public ConveyorBlock3D blockPrefab;
@@ -87,6 +89,17 @@ namespace BlockShooter
         {
             foreach (var b in _blocks)
                 if (b != null) b.gameObject.SetActive(visible);
+        }
+
+        /// <summary>Destroys every active block whose world position is inside the given bounds.</summary>
+        public void DestroyBlocksInBounds(Bounds bounds)
+        {
+            foreach (var b in _blocks)
+            {
+                if (b == null || !b.gameObject.activeSelf) continue;
+                if (bounds.Contains(b.transform.position))
+                    b.TriggerDestroy();
+            }
         }
 
         private void OnDestroy() => ClearBlocks();
