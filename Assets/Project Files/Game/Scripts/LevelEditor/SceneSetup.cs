@@ -33,7 +33,7 @@ namespace BlockShooter.Editor
             SetupCamera();
             SetupBackground();
             var managers = SetupManagers();
-            SetupTrack();
+            // Track created per-level via LevelData.trackPrefab (see Track Level Editor)
             SetupFireRange();
             SetupShooterGrid();
             SetupProjectilePool();
@@ -129,76 +129,8 @@ namespace BlockShooter.Editor
             return root;
         }
 
-        // ── Conveyor Track ────────────────────────────────────────────────────
-        static void SetupTrack()
-        {
-            var trackRoot = new GameObject("[ConveyorTrack]");
-            trackRoot.transform.position = new Vector3(0f, 0.15f, 3f);
-
-            // SplineContainer
-            var splineContainer = trackRoot.AddComponent<SplineContainer>();
-
-            // Mesh components
-            trackRoot.AddComponent<MeshFilter>();
-            var mr = trackRoot.AddComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-            var mc = trackRoot.AddComponent<MeshCollider>();
-
-            // TrackMesh
-            var trackMesh = trackRoot.AddComponent<ConveyorTrackMesh>();
-            trackMesh.trackWidth = 2.5f;
-            trackMesh.wallHeight = 0.28f;
-            trackMesh.wallThickness = 0.08f;
-            trackMesh.segments = 120;
-
-            // PathController
-            var pathCtrl = trackRoot.AddComponent<ConveyorPathController>();
-            pathCtrl.speed = 1.5f;
-            pathCtrl.loop = true;
-
-            // Build default Rounded-Rect spline shape
-            BuildDefaultSpline(splineContainer);
-            trackMesh.Rebuild();
-
-            EditorUtility.SetDirty(trackRoot);
-        }
-
-        static void BuildDefaultSpline(SplineContainer container)
-        {
-            var spline = container.Spline;
-            spline.Clear();
-            spline.Closed = true;
-
-            // Rounded rect: width=4, height=6, corner=1.2
-            float w = 2f, h = 3f, r = 1.2f;
-            float kappa = r * 0.5523f;
-
-            // 8 knots (4 corners × 2 control points each, approximated with 8 knots)
-            var knots = new[]
-            {
-                // Top-left → Top-right (top edge)
-                MakeKnot(new Vector3(-w, 0,  h + r), new Vector3(-kappa, 0, 0), new Vector3( kappa, 0, 0)),
-                MakeKnot(new Vector3( w, 0,  h + r), new Vector3(-kappa, 0, 0), new Vector3( kappa, 0, 0)),
-                // Top-right corner
-                MakeKnot(new Vector3( w + r, 0,  h), new Vector3(0, 0, kappa),  new Vector3(0, 0, -kappa)),
-                // Right edge
-                MakeKnot(new Vector3( w + r, 0, -h), new Vector3(0, 0, kappa),  new Vector3(0, 0, -kappa)),
-                // Bottom-right → Bottom-left
-                MakeKnot(new Vector3( w, 0, -h - r), new Vector3( kappa, 0, 0), new Vector3(-kappa, 0, 0)),
-                MakeKnot(new Vector3(-w, 0, -h - r), new Vector3( kappa, 0, 0), new Vector3(-kappa, 0, 0)),
-                // Bottom-left corner
-                MakeKnot(new Vector3(-w - r, 0, -h), new Vector3(0, 0, -kappa), new Vector3(0, 0,  kappa)),
-                // Left edge
-                MakeKnot(new Vector3(-w - r, 0,  h), new Vector3(0, 0, -kappa), new Vector3(0, 0,  kappa)),
-            };
-
-            foreach (var k in knots)
-                spline.Add(k, TangentMode.Broken);
-        }
-
-        static BezierKnot MakeKnot(Vector3 pos, Vector3 tanIn, Vector3 tanOut)
-            => new BezierKnot(pos, tanIn, tanOut, Quaternion.identity);
+        // Track is NOT created in scene — it's instantiated per-level from LevelData.trackPrefab
+        // Use: BlockShooter > Track Level Editor to create track prefabs
 
         // ── FireRange ─────────────────────────────────────────────────────────
         static void SetupFireRange()

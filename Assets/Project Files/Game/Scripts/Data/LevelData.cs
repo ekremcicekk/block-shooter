@@ -12,7 +12,9 @@ namespace BlockShooter
         public string levelName;
         public LevelDifficulty difficulty = LevelDifficulty.Normal;
 
-        [Header("Conveyor Config")]
+        [Header("Conveyor Track")]
+        [Tooltip("Prefab containing SplineContainer + ConveyorTrackRenderer + ConveyorPathController")]
+        public GameObject trackPrefab;
         public float conveyorSpeedMultiplier = 1f;
         public List<ConveyorRowData> conveyorRows = new();
 

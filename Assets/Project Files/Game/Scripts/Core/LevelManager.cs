@@ -10,11 +10,15 @@ namespace BlockShooter
         [Header("Levels")]
         public LevelData[] levels;
 
-        [Header("References")]
-        public ConveyorBelt conveyorBelt;
+        [Header("Scene References")]
         public ShooterGrid shooterGrid;
 
+        [Header("Track Spawn Point")]
+        [Tooltip("Where the level track prefab is instantiated")]
+        public Transform trackSpawnParent;
+
         private LevelData _currentLevel;
+        private GameObject _activeTrackInstance;
 
         public LevelData CurrentLevel => _currentLevel;
         public int CurrentLevelIndex => SaveManager.CurrentLevel;
@@ -32,20 +36,41 @@ namespace BlockShooter
 
         public void LoadCurrentLevel()
         {
-            int index = Mathf.Clamp(SaveManager.CurrentLevel - 1, 0, levels.Length - 1);
-
-            // Loop levels after last
-            if (SaveManager.CurrentLevel > levels.Length)
-                index = (SaveManager.CurrentLevel - 1) % levels.Length;
-
-            _currentLevel = levels[index];
+            int raw = SaveManager.CurrentLevel - 1;
+            int index = levels.Length > 0 ? raw % levels.Length : 0;
+            _currentLevel = levels[Mathf.Clamp(index, 0, levels.Length - 1)];
             ApplyLevel(_currentLevel);
         }
 
         private void ApplyLevel(LevelData data)
         {
-            if (conveyorBelt != null) conveyorBelt.Initialize(data);
-            if (shooterGrid != null) shooterGrid.Initialize(data);
+            // Destroy previous track
+            if (_activeTrackInstance != null)
+                Destroy(_activeTrackInstance);
+
+            // Instantiate this level's track prefab
+            if (data.trackPrefab != null)
+            {
+                Transform parent = trackSpawnParent != null ? trackSpawnParent : transform;
+                _activeTrackInstance = Instantiate(data.trackPrefab, parent);
+
+                // Apply speed multiplier
+                var pathCtrl = _activeTrackInstance.GetComponent<ConveyorPathController>();
+                if (pathCtrl != null)
+                    pathCtrl.speed *= data.conveyorSpeedMultiplier;
+
+                var trackRenderer = _activeTrackInstance.GetComponent<ConveyorTrackRenderer>();
+                if (trackRenderer != null && pathCtrl != null)
+                    trackRenderer.SetSpeed(pathCtrl.speed);
+            }
+            else
+            {
+                Debug.LogWarning($"[LevelManager] Level '{data.levelName}' has no trackPrefab assigned!");
+            }
+
+            // Setup shooter grid
+            if (shooterGrid != null)
+                shooterGrid.Initialize(data);
         }
 
         public void RestartLevel()
