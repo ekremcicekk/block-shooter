@@ -1,0 +1,95 @@
+using System.Collections.Generic;
+using UnityEngine;
+using TMPro;
+using DG.Tweening;
+
+namespace BlockShooter
+{
+    public class BlockDoor : MonoBehaviour
+    {
+        [Header("Visuals")]
+        public SpriteRenderer doorRenderer;
+        public SpriteRenderer questionMarkRenderer;
+        public TextMeshPro countText;
+        public ParticleSystem spawnParticle;
+
+        [Header("Exit Point")]
+        public Transform exitPoint;
+
+        private int _remainingBlocks;
+        private List<BlockColorType> _availableColors;
+        private GameConfig _config;
+        private Vector3 _targetPosition;
+        private bool _isOpen = true;
+
+        public void Initialize(int blockCount, List<BlockColorType> colors, GameConfig config, Vector3 gridPosition)
+        {
+            _remainingBlocks = blockCount;
+            _availableColors = colors;
+            _config = config;
+            _targetPosition = gridPosition;
+
+            UpdateCountText();
+            CheckFrontPositionLoop();
+        }
+
+        private void CheckFrontPositionLoop()
+        {
+            InvokeRepeating(nameof(TrySpawnBlock), 0.5f, 0.8f);
+        }
+
+        private void TrySpawnBlock()
+        {
+            if (!_isOpen || _remainingBlocks <= 0 || !GameManager.Instance.IsPlaying) return;
+            if (!IsFrontPositionEmpty()) return;
+
+            SpawnBlock();
+        }
+
+        private bool IsFrontPositionEmpty()
+        {
+            // Check if exit point position has no ShooterBlock
+            Collider2D hit = Physics2D.OverlapCircle(exitPoint.position, 0.4f, LayerMask.GetMask("ShooterBlock"));
+            return hit == null;
+        }
+
+        private void SpawnBlock()
+        {
+            if (_availableColors == null || _availableColors.Count == 0) return;
+
+            BlockColorType randomColor = _availableColors[Random.Range(0, _availableColors.Count)];
+            ShooterGrid.Instance?.AddBlock(exitPoint.position, randomColor);
+
+            if (spawnParticle != null) spawnParticle.Play();
+
+            _remainingBlocks--;
+            UpdateCountText();
+
+            transform.DOPunchScale(Vector3.one * 0.1f, 0.2f, 3, 0.5f);
+
+            if (_remainingBlocks <= 0)
+                CloseDoor();
+        }
+
+        private void CloseDoor()
+        {
+            _isOpen = false;
+            CancelInvoke(nameof(TrySpawnBlock));
+
+            transform.DOScale(Vector3.zero, 0.3f).SetEase(Ease.InBack).OnComplete(() =>
+                gameObject.SetActive(false));
+        }
+
+        private void UpdateCountText()
+        {
+            if (countText != null)
+                countText.text = $"x{_remainingBlocks}";
+        }
+
+        private void OnDisable()
+        {
+            DOTween.Kill(transform);
+            CancelInvoke(nameof(TrySpawnBlock));
+        }
+    }
+}
