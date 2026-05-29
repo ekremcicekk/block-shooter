@@ -239,7 +239,7 @@ namespace BlockShooter.Editor
         private void AddRoundedRectKnot(Spline spline, Vector3 pos, Vector3 tangentIn, Vector3 tangentOut)
         {
             var knot = new BezierKnot(pos, tangentIn - pos, tangentOut - pos, Quaternion.identity);
-            spline.Add(knot, TangentMode.Explicit);
+            spline.Add(knot, TangentMode.Broken);
         }
 
         private void BuildEllipseSpline(Spline spline, float rx, float ry)
@@ -248,13 +248,13 @@ namespace BlockShooter.Editor
             float kappa = 0.5523f;
 
             spline.Add(new BezierKnot(new Vector3(0, 0, ry * 0.5f),
-                new float3(-rx * 0.5f * kappa, 0, 0), new float3(rx * 0.5f * kappa, 0, 0)), TangentMode.Explicit);
+                new float3(-rx * 0.5f * kappa, 0, 0), new float3(rx * 0.5f * kappa, 0, 0)), TangentMode.Broken);
             spline.Add(new BezierKnot(new Vector3(rx * 0.5f, 0, 0),
-                new float3(0, 0, ry * 0.5f * kappa), new float3(0, 0, -ry * 0.5f * kappa)), TangentMode.Explicit);
+                new float3(0, 0, ry * 0.5f * kappa), new float3(0, 0, -ry * 0.5f * kappa)), TangentMode.Broken);
             spline.Add(new BezierKnot(new Vector3(0, 0, -ry * 0.5f),
-                new float3(rx * 0.5f * kappa, 0, 0), new float3(-rx * 0.5f * kappa, 0, 0)), TangentMode.Explicit);
+                new float3(rx * 0.5f * kappa, 0, 0), new float3(-rx * 0.5f * kappa, 0, 0)), TangentMode.Broken);
             spline.Add(new BezierKnot(new Vector3(-rx * 0.5f, 0, 0),
-                new float3(0, 0, -ry * 0.5f * kappa), new float3(0, 0, ry * 0.5f * kappa)), TangentMode.Explicit);
+                new float3(0, 0, -ry * 0.5f * kappa), new float3(0, 0, ry * 0.5f * kappa)), TangentMode.Broken);
         }
 
         private void DrawShapePreview()
@@ -390,7 +390,7 @@ namespace BlockShooter.Editor
             go.AddComponent<MeshRenderer>();
             go.AddComponent<MeshCollider>();
 
-            feeder.colors = new List<BlockColorType>(entry.colors);
+            feeder.groupColors = new List<BlockColorType>(entry.colors);
 
             // Create ConnectionPoint
             var cpGo = new GameObject("ConnectionPoint");

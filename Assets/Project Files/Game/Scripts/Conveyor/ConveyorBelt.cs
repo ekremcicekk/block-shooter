@@ -7,7 +7,7 @@ namespace BlockShooter
     public class ConveyorBelt : MonoBehaviour
     {
         [Header("References")]
-        public ConveyorBlock conveyorBlockPrefab;
+        public ConveyorBlock3D conveyorBlockPrefab;
         public Transform blockParent;
 
         [Header("Layout")]
@@ -25,8 +25,8 @@ namespace BlockShooter
         private float _spawnTimer;
         private float _spawnInterval;
 
-        private readonly List<ConveyorBlock> _activeBlocks = new();
-        private readonly List<ConveyorBlock> _blockPool = new();
+        private readonly List<ConveyorBlock3D> _activeBlocks = new();
+        private readonly List<ConveyorBlock3D> _blockPool = new();
 
         private int _totalBlocksToSpawn;
         private int _blocksDestroyed;
@@ -87,7 +87,7 @@ namespace BlockShooter
                 float xOffset = (i - (_config.columnCount - 1) * 0.5f) * laneSpacing;
                 Vector3 spawnPos = spawnPoint.position + new Vector3(xOffset, 0, 0);
 
-                ConveyorBlock block = GetPooledBlock();
+                ConveyorBlock3D block = GetPooledBlock();
                 block.transform.position = spawnPos;
                 block.gameObject.SetActive(true);
                 block.Initialize(color);
@@ -96,7 +96,7 @@ namespace BlockShooter
             }
         }
 
-        private ConveyorBlock GetPooledBlock()
+        private ConveyorBlock3D GetPooledBlock()
         {
             foreach (var b in _blockPool)
             {
@@ -106,7 +106,7 @@ namespace BlockShooter
                     return b;
                 }
             }
-            ConveyorBlock newBlock = Instantiate(conveyorBlockPrefab, blockParent);
+            ConveyorBlock3D newBlock = Instantiate(conveyorBlockPrefab, blockParent);
             return newBlock;
         }
 
@@ -146,7 +146,7 @@ namespace BlockShooter
             }
         }
 
-        private void HandleBlockDestroyed(ConveyorBlock block)
+        private void HandleBlockDestroyed(ConveyorBlock3D block)
         {
             block.OnDestroyed -= HandleBlockDestroyed;
             _activeBlocks.Remove(block);
@@ -202,7 +202,7 @@ namespace BlockShooter
         {
             var blocks = FireRange.Instance?.BlocksInRange;
             if (blocks == null) return;
-            var toDestroy = new List<ConveyorBlock>(blocks);
+            var toDestroy = new List<ConveyorBlock3D>(blocks);
             foreach (var b in toDestroy)
                 b.TakeHit();
         }

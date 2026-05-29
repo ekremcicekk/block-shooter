@@ -140,7 +140,7 @@ namespace BlockShooter.Editor
             textRect.anchorMax = Vector2.one;
             textRect.offsetMin = textRect.offsetMax = Vector2.zero;
 
-            var tmp = textGo.AddComponent<TextMeshProUGUI>();
+            var tmp = textGo.AddComponent<TextMeshPro>();
             tmp.text = "100";
             tmp.fontSize = 42f;
             tmp.fontStyle = FontStyles.Bold;

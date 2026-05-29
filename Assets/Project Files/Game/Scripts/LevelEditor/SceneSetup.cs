@@ -194,7 +194,7 @@ namespace BlockShooter.Editor
             };
 
             foreach (var k in knots)
-                spline.Add(k, TangentMode.Explicit);
+                spline.Add(k, TangentMode.Broken);
         }
 
         static BezierKnot MakeKnot(Vector3 pos, Vector3 tanIn, Vector3 tanOut)
