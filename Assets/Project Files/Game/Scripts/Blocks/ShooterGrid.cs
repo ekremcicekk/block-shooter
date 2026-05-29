@@ -30,6 +30,7 @@ namespace BlockShooter
         {
             _levelData = data;
             _config = GameManager.Instance.config;
+            if (gridParent == null) gridParent = transform;
             ClearGrid();
             BuildGrid(data);
         }
@@ -68,8 +69,8 @@ namespace BlockShooter
         private Vector3 GetWorldPosition(int col, int row)
         {
             float x = gridOrigin.x + col * _config.gridCellSize;
-            float y = gridOrigin.y + row * _config.gridCellSize;
-            return new Vector3(x, y, 0);
+            float z = gridOrigin.y + row * _config.gridCellSize;
+            return new Vector3(x, 0f, z);
         }
 
         public void OnBlockDepleted(ShooterBlock block)
@@ -103,7 +104,7 @@ namespace BlockShooter
             ShooterBlock block = Instantiate(shooterBlockPrefab, position, Quaternion.identity, gridParent);
             int shots = _config.defaultShotCount;
             int col = Mathf.RoundToInt((position.x - gridOrigin.x) / _config.gridCellSize);
-            int row = Mathf.RoundToInt((position.y - gridOrigin.y) / _config.gridCellSize);
+            int row = Mathf.RoundToInt((position.z - gridOrigin.y) / _config.gridCellSize);
             block.Initialize(colorType, shots, col, row);
             _activeBlocks.Add(block);
 

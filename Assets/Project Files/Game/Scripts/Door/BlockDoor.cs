@@ -48,9 +48,11 @@ namespace BlockShooter
 
         private bool IsFrontPositionEmpty()
         {
-            // Check if exit point position has no ShooterBlock
-            Collider2D hit = Physics2D.OverlapCircle(exitPoint.position, 0.4f, LayerMask.GetMask("ShooterBlock"));
-            return hit == null;
+            // Check if exit point position has no ShooterBlock (3D physics)
+            var hits = Physics.OverlapSphere(exitPoint != null ? exitPoint.position : transform.position, 0.4f);
+            foreach (var h in hits)
+                if (h.GetComponent<ShooterBlock>() != null) return false;
+            return true;
         }
 
         private void SpawnBlock()

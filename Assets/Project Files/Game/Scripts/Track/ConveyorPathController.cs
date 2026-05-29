@@ -12,6 +12,10 @@ namespace BlockShooter
         public int lanesPerGroup = 5;
         public int rowsPerGroup = 20;
 
+        [Header("Initial Groups (spawned on Start)")]
+        [Tooltip("One entry per color group — spawned evenly around the spline at startup")]
+        public BlockColorType[] groupColors = { BlockColorType.Red, BlockColorType.Blue };
+
         [Header("Movement")]
         public float speed = 1.5f;
         public bool loop = true;
@@ -42,6 +46,27 @@ namespace BlockShooter
         {
             _splineWorldLength = SplineUtility.CalculateLength(
                 _splineContainer.Spline, transform.localToWorldMatrix);
+
+            SpawnInitialGroups();
+        }
+
+        private void SpawnInitialGroups()
+        {
+            if (blockPrefab == null || groupColors == null || groupColors.Length == 0) return;
+
+            for (int i = 0; i < groupColors.Length; i++)
+            {
+                float startT = (float)i / groupColors.Length;
+
+                var groupGo = new GameObject($"BlockGroup_{groupColors[i]}");
+                var group = groupGo.AddComponent<BlockGroup>();
+                group.blockPrefab = blockPrefab;
+                group.laneCount   = lanesPerGroup;
+                group.rowCount    = rowsPerGroup;
+                group.Initialize(groupColors[i], blockPrefab, lanesPerGroup, rowsPerGroup);
+
+                AddGroup(group, startT);
+            }
         }
 
         private void Update()

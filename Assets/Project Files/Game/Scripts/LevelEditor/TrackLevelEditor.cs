@@ -30,6 +30,10 @@ namespace BlockShooter.Editor
         private float _blockSpeed = 1.5f;
         private ConveyorTrackRenderer _activeTrack;
 
+        // Block prefab & group colors shown in CreateTrack tab
+        private ConveyorBlock3D _blockPrefab;
+        private readonly List<BlockColorType> _groupColors = new() { BlockColorType.Red, BlockColorType.Blue };
+
         // ── Feeders ───────────────────────────────────────────────────────────
         private readonly List<FeederEntry> _feeders = new();
         private Vector2 _feederScroll;
@@ -96,9 +100,24 @@ namespace BlockShooter.Editor
             _arrowCount      = EditorGUILayout.IntSlider("Arrow Count", _arrowCount, 0, 8);
             _blockSpeed      = EditorGUILayout.FloatField("Block Speed", _blockSpeed);
 
+            EditorGUILayout.Space(4);
+            _blockPrefab = (ConveyorBlock3D)EditorGUILayout.ObjectField("Block Prefab", _blockPrefab, typeof(ConveyorBlock3D), false);
+            EditorGUILayout.LabelField("Block Group Colors:", EditorStyles.boldLabel);
+            for (int i = 0; i < _groupColors.Count; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                _groupColors[i] = (BlockColorType)EditorGUILayout.EnumPopup($"  Group {i + 1}", _groupColors[i]);
+                GUI.backgroundColor = Color.red;
+                if (GUILayout.Button("X", GUILayout.Width(22))) { _groupColors.RemoveAt(i); i--; }
+                GUI.backgroundColor = Color.white;
+                EditorGUILayout.EndHorizontal();
+            }
+            if (GUILayout.Button("+ Renk Grubu Ekle")) _groupColors.Add(BlockColorType.Green);
+
             EditorGUILayout.HelpBox(
                 "Segment Prefab: kısa, düz track parçası. +Z eksenine bakmalı, origin'de ortalanmalı.\n" +
-                "Arrow Prefab: track üzerinde hareket eden yön oku.",
+                "Block Prefab: ConveyorBlock3D prefabı — track üzerindeki bloklar.\n" +
+                "Block Group Colors: her renk için 5×20=100 blok grubu oluşturulur.",
                 MessageType.Info);
 
             EditorGUILayout.Space(6);
@@ -156,8 +175,10 @@ namespace BlockShooter.Editor
             renderer.blockSpeed    = _blockSpeed;
 
             var pathCtrl = go.AddComponent<ConveyorPathController>();
-            pathCtrl.speed = _blockSpeed;
-            pathCtrl.loop  = true;
+            pathCtrl.speed       = _blockSpeed;
+            pathCtrl.loop        = true;
+            pathCtrl.blockPrefab = _blockPrefab;
+            pathCtrl.groupColors = _groupColors.ToArray();
 
             // Apply default rounded-rect shape so it's not empty
             ApplyRoundedRect(splineContainer, _shapeW, _shapeH, _shapeR);

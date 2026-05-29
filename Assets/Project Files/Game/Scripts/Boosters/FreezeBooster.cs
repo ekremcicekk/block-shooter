@@ -11,12 +11,11 @@ namespace BlockShooter
 
         protected override void OnActivate()
         {
-            ConveyorBelt.Instance?.SetFrozen(true);
+            SetConveyorsFrozen(true);
 
             if (freezeParticle != null)
                 freezeParticle.Play();
 
-            // Slow time scale effect
             DOTween.To(() => Time.timeScale, x => Time.timeScale = x, 0.2f, 0.2f)
                 .SetUpdate(true);
 
@@ -26,7 +25,7 @@ namespace BlockShooter
         private IEnumerator FreezeTimer()
         {
             yield return new WaitForSecondsRealtime(data.duration);
-            ConveyorBelt.Instance?.SetFrozen(false);
+            SetConveyorsFrozen(false);
 
             DOTween.To(() => Time.timeScale, x => Time.timeScale = x, 1f, 0.3f)
                 .SetUpdate(true);
@@ -39,8 +38,15 @@ namespace BlockShooter
 
         protected override void OnDeactivate()
         {
-            ConveyorBelt.Instance?.SetFrozen(false);
+            SetConveyorsFrozen(false);
             Time.timeScale = 1f;
+        }
+
+        private static void SetConveyorsFrozen(bool frozen)
+        {
+            ConveyorBelt.Instance?.SetFrozen(frozen);
+            foreach (var ctrl in Object.FindObjectsByType<ConveyorPathController>(FindObjectsSortMode.None))
+                ctrl.IsFrozen = frozen;
         }
     }
 }
