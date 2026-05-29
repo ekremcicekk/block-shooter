@@ -11,8 +11,6 @@ namespace BlockShooter
         public ConveyorBlock3D blockPrefab;
         public int   lanesPerGroup = 5;
         public int   rowsPerGroup  = 20;
-        [Tooltip("Scale of each block cube")]
-        public float blockSize     = 0.20f;
         [Tooltip("Side-by-side gap between lanes (world units)")]
         public float laneSpacing   = 0.22f;
         [Tooltip("Front-to-back gap between rows (world units) — also drives SplineLength")]
@@ -60,16 +58,17 @@ namespace BlockShooter
         {
             if (blockPrefab == null || groupColors == null || groupColors.Length == 0) return;
 
+            // Place groups back-to-back starting at T=0 — no gap between them
+            float currentT = 0f;
             for (int i = 0; i < groupColors.Length; i++)
             {
-                float startT = (float)i / groupColors.Length;
-
                 var groupGo = new GameObject($"BlockGroup_{groupColors[i]}");
                 var group = groupGo.AddComponent<BlockGroup>();
                 group.Initialize(groupColors[i], blockPrefab, lanesPerGroup, rowsPerGroup,
-                    blockSize, laneSpacing, rowSpacing);
+                    laneSpacing, rowSpacing);
 
-                AddGroup(group, startT);
+                AddGroup(group, currentT);
+                currentT += WorldLengthToT(group.SplineLength);
             }
         }
 
@@ -154,7 +153,6 @@ namespace BlockShooter
                     if (block == null || !block.gameObject.activeSelf) continue;
                     float xOff = (lane - (group.laneCount - 1) * 0.5f) * group.laneSpacing;
                     block.transform.SetPositionAndRotation(worldPos + right * xOff, rot);
-                    block.transform.localScale = Vector3.one * group.blockSize;
                 }
             }
 

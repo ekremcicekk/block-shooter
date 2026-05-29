@@ -66,6 +66,10 @@ namespace BlockShooter
         /// Returns the block in range with the lowest RowIndex (then LaneIndex) matching the color.
         /// This targets blocks in BlockGroup spawn order: row 0 first, left lane first.
         /// </summary>
+        /// <summary>
+        /// Row N-1 is placed at headT+groupTLength (leading edge) and enters FireRange first.
+        /// Targeting highest RowIndex first destroys them in physical arrival order.
+        /// </summary>
         public ConveyorBlock3D GetFirstTarget(BlockColorType colorType)
         {
             ConveyorBlock3D best = null;
@@ -73,14 +77,13 @@ namespace BlockShooter
             {
                 if (b.IsDestroyed || b.ColorType != colorType) continue;
                 if (best == null
-                    || b.RowIndex < best.RowIndex
+                    || b.RowIndex > best.RowIndex
                     || (b.RowIndex == best.RowIndex && b.LaneIndex < best.LaneIndex))
                     best = b;
             }
             return best;
         }
 
-        /// <summary>Returns the block with the lowest RowIndex/LaneIndex (any color).</summary>
         public ConveyorBlock3D GetFirstTarget()
         {
             ConveyorBlock3D best = null;
@@ -88,7 +91,7 @@ namespace BlockShooter
             {
                 if (b.IsDestroyed) continue;
                 if (best == null
-                    || b.RowIndex < best.RowIndex
+                    || b.RowIndex > best.RowIndex
                     || (b.RowIndex == best.RowIndex && b.LaneIndex < best.LaneIndex))
                     best = b;
             }

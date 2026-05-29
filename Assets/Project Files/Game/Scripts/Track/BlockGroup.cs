@@ -16,7 +16,6 @@ namespace BlockShooter
         public int rowCount = 20;
         // Belt half-width = 0.5 → full belt = 1.0.
         // 5 lanes at 0.22 spacing → outer lanes at ±0.44 → fits inside ±0.5 wall.
-        public float blockSize    = 0.20f;
         public float laneSpacing  = 0.22f;
         public float rowSpacing   = 0.22f;
 
@@ -33,13 +32,12 @@ namespace BlockShooter
         public event Action<BlockGroup> OnGroupCleared;
 
         public void Initialize(BlockColorType color, ConveyorBlock3D prefab, int lanes, int rows,
-            float bSize = 0.20f, float lSpacing = 0.22f, float rSpacing = 0.22f)
+            float lSpacing = 0.22f, float rSpacing = 0.22f)
         {
             colorType   = color;
             blockPrefab = prefab;
             laneCount   = lanes;
             rowCount    = rows;
-            blockSize   = bSize;
             laneSpacing = lSpacing;
             rowSpacing  = rSpacing;
 

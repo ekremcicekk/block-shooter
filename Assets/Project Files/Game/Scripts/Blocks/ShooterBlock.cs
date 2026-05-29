@@ -29,6 +29,8 @@ namespace BlockShooter
         public GameObject accessibleIndicator;   // optional highlight ring shown when selectable
 
         [Header("Shoot Point")]
+        [Tooltip("The body mesh transform that rotates to face the target before firing")]
+        public Transform bodyMesh;
         public Transform shootPoint;
 
         // ── State ──────────────────────────────────────────────────────────────
@@ -167,7 +169,15 @@ namespace BlockShooter
                 ? FireRange.Instance?.GetFirstTarget()
                 : FireRange.Instance?.GetFirstTarget(targetColor);
 
-            if (target == null) return; // no valid target yet, skip this shot
+            if (target == null) return; // no valid target, skip shot
+
+            // Rotate body mesh to face the target before firing
+            if (bodyMesh != null)
+            {
+                Vector3 lookDir = target.transform.position - bodyMesh.position;
+                if (lookDir.sqrMagnitude > 0.001f)
+                    bodyMesh.rotation = Quaternion.LookRotation(lookDir.normalized);
+            }
 
             Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
             Vector3 dir = (target.transform.position - spawnPos).normalized;
