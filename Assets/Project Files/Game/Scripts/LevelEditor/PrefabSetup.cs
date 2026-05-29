@@ -31,25 +31,30 @@ namespace BlockShooter.Editor
         {
             var go = new GameObject("Projectile");
 
-            // Sphere mesh
+            // Add Projectile first — RequireComponent auto-adds Rigidbody + SphereCollider
+            var proj = go.AddComponent<Projectile>();
+
+            // Configure Rigidbody (already added via RequireComponent)
+            var rb = go.GetComponent<Rigidbody>();
+            rb.useGravity = false;
+            rb.isKinematic = false;
+            rb.constraints = RigidbodyConstraints.FreezeRotation;
+
+            // Configure SphereCollider (already added via RequireComponent)
+            var col = go.GetComponent<SphereCollider>();
+            col.isTrigger = true;
+            col.radius = 0.12f;
+
+            // Sphere mesh child
             var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             sphere.transform.SetParent(go.transform, false);
             sphere.transform.localScale = Vector3.one * 0.22f;
             sphere.name = "BallMesh";
             Object.DestroyImmediate(sphere.GetComponent<SphereCollider>());
 
-            var proj = go.AddComponent<Projectile>();
-            proj.ballRenderer = sphere.GetComponent<MeshRenderer>();
-
-            // Rigidbody & Collider
-            var rb = go.AddComponent<Rigidbody>();
-            rb.useGravity = false;
-            rb.isKinematic = false;
-            rb.constraints = RigidbodyConstraints.FreezeRotation;
-
-            var col = go.AddComponent<SphereCollider>();
-            col.isTrigger = true;
-            col.radius = 0.12f;
+            var mr = sphere.GetComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            proj.ballRenderer = mr;
 
             // Trail
             var trail = go.AddComponent<TrailRenderer>();
@@ -58,10 +63,6 @@ namespace BlockShooter.Editor
             trail.endWidth = 0f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             proj.trail = trail;
-
-            // Assign material from project or use default
-            var mr = sphere.GetComponent<MeshRenderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             SavePrefab(go, "Projectile");
             Object.DestroyImmediate(go);
