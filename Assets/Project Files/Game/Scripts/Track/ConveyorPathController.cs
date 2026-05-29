@@ -148,6 +148,21 @@ namespace BlockShooter
             AddGroup(group, t);
         }
 
+        /// <summary>Returns true if the track has no active block group covering position t.</summary>
+        public bool IsGapAt(float t)
+        {
+            return IsTrackEmptyAt(t);
+        }
+
+        /// <summary>Called by FlyingBlockFeeder when a block lands on the track.</summary>
+        public void RegisterExternalBlock(ConveyorBlock3D block, float connectionT)
+        {
+            // The block is now physically on the track; the BlockGroup system
+            // will pick it up on next spawn cycle. For now it just sits and
+            // moves with the track — we parent it and drive it manually.
+            block.transform.SetParent(transform, true);
+        }
+
         private float WorldLengthToT(float worldLen)
         {
             if (_splineWorldLength <= 0) return 0f;
