@@ -21,6 +21,12 @@ namespace BlockShooter
         public BlockColorType ColorType => _colorType;
         public bool IsDestroyed => _isDestroyed;
 
+        // Position within the BlockGroup — used by FireRange to target in row/lane order
+        public int RowIndex  { get; private set; }
+        public int LaneIndex { get; private set; }
+
+        public void SetGroupIndex(int row, int lane) { RowIndex = row; LaneIndex = lane; }
+
         public event Action<ConveyorBlock3D> OnDestroyed;
 
         private void Awake()

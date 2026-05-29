@@ -9,8 +9,14 @@ namespace BlockShooter
     {
         [Header("Block Group Settings")]
         public ConveyorBlock3D blockPrefab;
-        public int lanesPerGroup = 5;
-        public int rowsPerGroup = 20;
+        public int   lanesPerGroup = 5;
+        public int   rowsPerGroup  = 20;
+        [Tooltip("Scale of each block cube")]
+        public float blockSize     = 0.20f;
+        [Tooltip("Side-by-side gap between lanes (world units)")]
+        public float laneSpacing   = 0.22f;
+        [Tooltip("Front-to-back gap between rows (world units) — also drives SplineLength")]
+        public float rowSpacing    = 0.22f;
 
         [Header("Initial Groups (spawned on Start)")]
         [Tooltip("One entry per color group — spawned evenly around the spline at startup")]
@@ -60,7 +66,8 @@ namespace BlockShooter
 
                 var groupGo = new GameObject($"BlockGroup_{groupColors[i]}");
                 var group = groupGo.AddComponent<BlockGroup>();
-                group.Initialize(groupColors[i], blockPrefab, lanesPerGroup, rowsPerGroup);
+                group.Initialize(groupColors[i], blockPrefab, lanesPerGroup, rowsPerGroup,
+                    blockSize, laneSpacing, rowSpacing);
 
                 AddGroup(group, startT);
             }

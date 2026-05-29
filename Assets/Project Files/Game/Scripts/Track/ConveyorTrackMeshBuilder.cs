@@ -238,24 +238,26 @@ namespace BlockShooter
             Vector3[] wPos, Vector3[] wRight, Vector3[] wUp)
             => wPos[s] + wRight[s] * p.x + wUp[s] * p.y;
 
-        /// <summary>Samples position + right + up for every ring along the spline.</summary>
+        /// <summary>
+        /// Samples position + right + up for every ring along the spline.
+        /// All values are in LOCAL space — mesh vertices are stored in local coordinates.
+        /// Do NOT convert to world space here; that would double-apply the transform offset.
+        /// </summary>
         private void SampleFrames(int sCount, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp)
         {
             for (int s = 0; s < sCount; s++)
             {
-                // t=0 at ring 0, t=1 at ring[resolution] (wraps for closed splines)
                 float t = (float)s / resolution;
-
                 _spline.Spline.Evaluate(t, out var pos, out var tan, out var up);
 
-                Vector3 fwd = transform.TransformDirection((Vector3)tan).normalized;
-                Vector3 upW = transform.TransformDirection((Vector3)up);
-                if (upW.sqrMagnitude < 0.001f) upW = transform.up;
-                upW = upW.normalized;
+                // Spline.Evaluate returns local-space values — use them directly for mesh verts
+                Vector3 fwd = ((Vector3)tan).normalized;
+                Vector3 upL = ((Vector3)up).normalized;
+                if (upL.sqrMagnitude < 0.001f) upL = Vector3.up;
 
-                wPos[s]   = transform.TransformPoint(pos);
-                wRight[s] = Vector3.Cross(upW, fwd).normalized;
-                wUp[s]    = upW;
+                wPos[s]   = (Vector3)pos;
+                wRight[s] = Vector3.Cross(upL, fwd).normalized;
+                wUp[s]    = upL;
             }
         }
 

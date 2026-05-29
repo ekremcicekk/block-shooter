@@ -20,7 +20,8 @@ namespace BlockShooter
         [Header("Direction Arrows")]
         [Tooltip("Arrow sprite/mesh prefab that moves along the track")]
         public GameObject arrowPrefab;
-        [Range(1, 8)] public int arrowCount = 3;
+        [Tooltip("World-unit distance between consecutive arrows")]
+        public float arrowSpacing = 2.0f;
 
         [Header("Speed Sync")]
         [Tooltip("Must match ConveyorPathController.speed")]
@@ -34,7 +35,8 @@ namespace BlockShooter
         private struct ArrowMarker
         {
             public Transform Transform;
-            public float T; // normalized 0-1 position on spline
+            public float T;
+            public Quaternion PrefabLocalRot; // applied on top of spline tangent
         }
 
         private void Awake()
@@ -99,14 +101,19 @@ namespace BlockShooter
                 if (a.Transform != null) Destroy(a.Transform.gameObject);
             _arrows.Clear();
 
-            if (arrowPrefab == null) return;
+            if (arrowPrefab == null || arrowSpacing <= 0f || _splineWorldLength <= 0f) return;
 
-            for (int i = 0; i < arrowCount; i++)
+            // Derive count from spacing so arrows are evenly distributed at the desired interval
+            int count = Mathf.Max(1, Mathf.RoundToInt(_splineWorldLength / arrowSpacing));
+            Quaternion prefabRot = arrowPrefab.transform.localRotation;
+
+            for (int i = 0; i < count; i++)
             {
-                float t = (float)i / arrowCount;
+                float t = (float)i / count;
                 var go = Instantiate(arrowPrefab, transform);
-                PlaceObjectOnSpline(go.transform, t);
-                _arrows.Add(new ArrowMarker { Transform = go.transform, T = t });
+                var marker = new ArrowMarker { Transform = go.transform, T = t, PrefabLocalRot = prefabRot };
+                PlaceArrow(go.transform, t, prefabRot);
+                _arrows.Add(marker);
             }
         }
 
@@ -124,12 +131,13 @@ namespace BlockShooter
 
                 a.T = (a.T + delta) % 1f;
                 _arrows[i] = a;
-                PlaceObjectOnSpline(a.Transform, a.T);
+                PlaceArrow(a.Transform, a.T, a.PrefabLocalRot);
             }
         }
 
         // ── Spline Placement ──────────────────────────────────────────────────
 
+        // Used for track segments — no rotation offset needed
         private void PlaceObjectOnSpline(Transform obj, float t)
         {
             _splineContainer.Spline.Evaluate(t, out var pos, out var tangent, out var up);
@@ -141,6 +149,20 @@ namespace BlockShooter
             if (upDir == Vector3.zero) upDir = Vector3.up;
             if (fwd != Vector3.zero)
                 obj.rotation = Quaternion.LookRotation(fwd, upDir);
+        }
+
+        // Used for arrows — preserves the prefab's local rotation on top of spline orientation
+        private void PlaceArrow(Transform obj, float t, Quaternion prefabLocalRot)
+        {
+            _splineContainer.Spline.Evaluate(t, out var pos, out var tangent, out var up);
+
+            obj.position = transform.TransformPoint(pos);
+
+            Vector3 fwd = transform.TransformDirection((Vector3)tangent).normalized;
+            Vector3 upDir = transform.TransformDirection((Vector3)up).normalized;
+            if (upDir == Vector3.zero) upDir = Vector3.up;
+            if (fwd != Vector3.zero)
+                obj.rotation = Quaternion.LookRotation(fwd, upDir) * prefabLocalRot;
         }
 
         // ── Public API ────────────────────────────────────────────────────────

@@ -32,12 +32,16 @@ namespace BlockShooter
 
         public event Action<BlockGroup> OnGroupCleared;
 
-        public void Initialize(BlockColorType color, ConveyorBlock3D prefab, int lanes, int rows)
+        public void Initialize(BlockColorType color, ConveyorBlock3D prefab, int lanes, int rows,
+            float bSize = 0.20f, float lSpacing = 0.22f, float rSpacing = 0.22f)
         {
-            colorType = color;
+            colorType   = color;
             blockPrefab = prefab;
-            laneCount = lanes;
-            rowCount = rows;
+            laneCount   = lanes;
+            rowCount    = rows;
+            blockSize   = bSize;
+            laneSpacing = lSpacing;
+            rowSpacing  = rSpacing;
 
             SpawnBlocks();
         }
@@ -53,6 +57,7 @@ namespace BlockShooter
                 {
                     ConveyorBlock3D block = Instantiate(blockPrefab, transform);
                     block.Initialize(colorType, c);
+                    block.SetGroupIndex(row, lane);
                     block.OnDestroyed += HandleBlockDestroyed;
                     _blocks.Add(block);
                 }
