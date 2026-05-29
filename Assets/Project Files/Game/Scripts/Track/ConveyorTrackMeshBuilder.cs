@@ -1,46 +1,63 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Splines;
 
 namespace BlockShooter
 {
     /// <summary>
-    /// Sweeps a 2D cross-section profile along the spline to produce a smooth track mesh.
-    /// The profile matches a U-channel: flat belt surface + two side rails hanging down.
+    /// Closed-profile spline sweep — equivalent to Blender curve bevel extrusion.
     ///
-    ///  Cross-section (viewed from front, Y = up, X = right):
+    /// Architecture:
+    ///   1. Build a closed 2D polygon (profile ring).
+    ///   2. Sample the spline → array of (position, right, up) frames.
+    ///   3. Project each profile vertex into every frame → 3D ring.
+    ///   4. Connect ring[s] to ring[s+1] with quads for every profile edge.
+    ///   5. Each profile edge is its own isolated vertex strip → automatic hard edges
+    ///      between strips (chamfer bevels are crisp, belt top is smooth).
     ///
-    ///   P0──P1        P6──P7
-    ///   |    \        /    |
-    ///   |     P2────P5     |     <- belt bottom
-    ///   |     P3────P4     |     <- belt top surface  (facing up)
-    ///  wall            wall
+    /// Profile cross-section (Y = up, X = right, viewed from front):
     ///
-    /// Adjust Belt Half Width, Rail Height, Rail Width, Belt Thickness in the Inspector.
+    ///        P1──────────────P4
+    ///       ╱  P2──────────P3  ╲     ← belt top surface
+    ///      ╱                    ╲
+    ///  P0 ╱                      ╲ P5
+    ///  |  P7──────────────P6      |  ← underside
+    ///  └──────────────────────────┘
     /// </summary>
     [RequireComponent(typeof(SplineContainer))]
     [RequireComponent(typeof(MeshFilter))]
     [RequireComponent(typeof(MeshRenderer))]
     public class ConveyorTrackMeshBuilder : MonoBehaviour
     {
+        // ── Profile Parameters ────────────────────────────────────────────────
         [Header("Cross-Section Profile")]
-        [Tooltip("Half-width of the flat belt surface")]
-        public float beltHalfWidth  = 0.5f;
-        [Tooltip("Thickness of the belt plate")]
-        public float beltThickness  = 0.05f;
-        [Tooltip("Height of the side rails (how far they hang down)")]
-        public float railHeight     = 1.0f;
-        [Tooltip("Width / thickness of each side rail")]
-        public float railWidth      = 0.05f;
-        [Tooltip("Bevel size at top edges (0 = sharp, 0.04 = soft chamfer)")]
-        public float bevelSize      = 0.04f;
+        [Tooltip("Half-width of the flat belt top surface")]
+        public float beltHalfWidth = 0.5f;
+        [Tooltip("Thickness of the belt plate above the rail top")]
+        public float beltThickness = 0.05f;
+        [Tooltip("How far the side rails hang below the belt")]
+        public float railHeight    = 1.0f;
+        [Tooltip("Thickness of each side rail")]
+        public float railWidth     = 0.05f;
+        [Tooltip("Bevel chamfer height at the top outer corners (0 = sharp 90°)")]
+        public float bevelSize     = 0.04f;
 
-        [Header("Quality")]
-        [Range(60, 800)] public int resolution = 240;
+        // ── Sweep Parameters ──────────────────────────────────────────────────
+        [Header("Sweep Quality")]
+        [Range(60, 800)]
+        [Tooltip("Number of cross-section rings along the spline")]
+        public int resolution = 180;
 
-        // ── Runtime ───────────────────────────────────────────────────────────
+        [Header("UV Tiling")]
+        [Tooltip("How many times the texture tiles along the spline length")]
+        public float vTiling = 8f;
+
+        // ── Private ───────────────────────────────────────────────────────────
         private SplineContainer _spline;
         private MeshFilter      _meshFilter;
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Unity lifecycle
+        // ─────────────────────────────────────────────────────────────────────
 
         private void Awake()
         {
@@ -50,142 +67,227 @@ namespace BlockShooter
 
         private void Start() => BuildMesh();
 
-        // ── Profile Definition ────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────
+        //  Public API
+        // ─────────────────────────────────────────────────────────────────────
 
-        // Returns the 2D cross-section profile.
-        // X = track-right direction, Y = track-up direction.
-        // Belt top surface sits at Y = 0 → beltThickness.
-        // Rails hang from Y = 0 downward.
+        public void BuildMesh()
+        {
+            if (_spline     == null) _spline     = GetComponent<SplineContainer>();
+            if (_meshFilter == null) _meshFilter = GetComponent<MeshFilter>();
+            _meshFilter.mesh = Sweep();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Profile definition
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns the closed 2D polygon. Vertices are listed counter-clockwise
+        /// when viewed from the sweep direction (+Z local), so outward normals
+        /// are generated automatically with the (A, C, B) winding below.
+        /// </summary>
         private Vector2[] BuildProfile()
         {
             float hw = beltHalfWidth;
             float rw = railWidth;
             float rh = railHeight;
             float bt = beltThickness;
-            float bv = Mathf.Clamp(bevelSize, 0f, Mathf.Min(rw, bt) * 0.9f);
+            float bv = Mathf.Max(0f, bevelSize);
 
-            // Cross-section (Y=up, X=right). Viewed from front:
-            //
-            //  P0                        P5      <- wall bottom
-            //  |                          |
-            //  P1  bevel→P2────────P3←bevel  P4  <- belt top + chamfer
-            //
-            //  Edges:
-            //   P0→P1  left outer wall (vertical)
-            //   P1→P2  left chamfer (diagonal bevel to belt top)
-            //   P2→P3  belt top surface (flat, faces up)
-            //   P3→P4  right chamfer (diagonal)
-            //   P4→P5  right outer wall (vertical)
+            // Index  Position          Description
+            // P0  (-hw-rw, -rh)        left outer wall bottom
+            // P1  (-hw-rw,  bv)        left outer wall top  (bevel start)
+            // P2  (-hw,     bt)        left inner edge      (bevel end / belt left)
+            // P3  ( hw,     bt)        right inner edge     (belt right)
+            // P4  ( hw+rw,  bv)        right outer wall top (bevel start)
+            // P5  ( hw+rw, -rh)        right outer wall bottom
+            // P6  ( hw,    -rh)        underside right
+            // P7  (-hw,    -rh)        underside left
+            // (closed: P7 → P0)
 
             return new Vector2[]
             {
-                new(-hw - rw,      -rh),     // P0  left wall bottom
-                new(-hw - rw,       bv),     // P1  left wall top (bevel start)
-                new(-hw,            bt),     // P2  left belt top edge (bevel end)
-                new( hw,            bt),     // P3  right belt top edge  ← belt surface
-                new( hw + rw,       bv),     // P4  right wall top (bevel start)
-                new( hw + rw,      -rh),     // P5  right wall bottom
+                new Vector2(-hw - rw, -rh),   // P0
+                new Vector2(-hw - rw,  bv),   // P1
+                new Vector2(-hw,       bt),   // P2
+                new Vector2( hw,       bt),   // P3
+                new Vector2( hw + rw,  bv),   // P4
+                new Vector2( hw + rw, -rh),   // P5
+                new Vector2( hw,      -rh),   // P6
+                new Vector2(-hw,      -rh),   // P7
             };
         }
 
-        // ── Mesh Generation ───────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────
+        //  Core sweep algorithm
+        // ─────────────────────────────────────────────────────────────────────
 
-        public void BuildMesh()
-        {
-            if (_spline     == null) _spline     = GetComponent<SplineContainer>();
-            if (_meshFilter == null) _meshFilter = GetComponent<MeshFilter>();
-
-            _meshFilter.mesh = GenerateMesh();
-        }
-
-        private Mesh GenerateMesh()
+        private Mesh Sweep()
         {
             Vector2[] profile = BuildProfile();
-            int       pCount  = profile.Length;          // 8
-            int       sCount  = resolution + 1;          // spline samples
+            int pCount  = profile.Length;    // 8 vertices in closed polygon
+            int sCount  = resolution + 1;    // rings along spline (last = first for closed)
 
-            // Pre-compute world-space frame at every spline sample
+            // ── Step 1: sample spline frames ──────────────────────────────────
             var wPos   = new Vector3[sCount];
             var wRight = new Vector3[sCount];
             var wUp    = new Vector3[sCount];
+            SampleFrames(sCount, wPos, wRight, wUp);
 
+            // ── Step 2: compute UV coordinates ───────────────────────────────
+            // U  — normalized perimeter around the profile (0 at P0, 1 back at P0)
+            float[] perimU  = ComputeProfilePerimU(profile);   // length = pCount + 1
+
+            // V  — arc-length along spline, tiled by vTiling
+            float[] splineV = ComputeSplineV(wPos, sCount);    // length = sCount
+
+            // ── Step 3: allocate buffers ──────────────────────────────────────
+            // Each of the pCount edges gets its own isolated vertex strip.
+            // This produces hard normals at every profile vertex (chamfer bevels,
+            // wall-to-floor transitions, etc.) — no unintended smoothing across corners.
+            //
+            // Per edge strip:  2 verts/ring × sCount rings  →  2·sCount verts
+            // Total:           pCount × 2 × sCount  verts
+            //                  pCount × resolution × 6  indices
+            int totalVerts = pCount * 2 * sCount;
+            int totalTris  = pCount * resolution * 6;
+
+            var verts = new Vector3[totalVerts];
+            var uvs   = new Vector2[totalVerts];
+            var tris  = new int[totalTris];
+
+            // ── Step 4: fill vertices + UVs, build triangles ──────────────────
+            int ti = 0;
+
+            for (int e = 0; e < pCount; e++)
+            {
+                Vector2 pa = profile[e];
+                Vector2 pb = profile[(e + 1) % pCount];
+
+                float uA = perimU[e];
+                float uB = perimU[e + 1];   // perimU has pCount+1 entries; last = 1.0
+
+                int stripBase = e * 2 * sCount;
+
+                // Write vertices for every ring in this edge's strip
+                for (int s = 0; s < sCount; s++)
+                {
+                    int vi = stripBase + s * 2;
+
+                    verts[vi    ] = ToWorld(pa, s, wPos, wRight, wUp);
+                    verts[vi + 1] = ToWorld(pb, s, wPos, wRight, wUp);
+
+                    float v = splineV[s];
+                    uvs[vi    ] = new Vector2(uA, v);
+                    uvs[vi + 1] = new Vector2(uB, v);
+                }
+
+                // Build quads connecting ring[s] → ring[s+1]
+                for (int s = 0; s < resolution; s++)
+                {
+                    int b  = stripBase + s * 2;
+                    int v0 = b;         // ring s,   profile[e]
+                    int v1 = b + 1;     // ring s,   profile[e+1]
+                    int v2 = b + 2;     // ring s+1, profile[e]
+                    int v3 = b + 3;     // ring s+1, profile[e+1]
+
+                    // Winding: (A, C, B) + (B, C, D)
+                    // For a CCW profile, this produces outward-facing normals.
+                    tris[ti++] = v0; tris[ti++] = v2; tris[ti++] = v1;
+                    tris[ti++] = v1; tris[ti++] = v2; tris[ti++] = v3;
+                }
+            }
+
+            // ── Step 5: assemble mesh ─────────────────────────────────────────
+            var mesh = new Mesh
+            {
+                name        = "ConveyorTrack_Swept",
+                indexFormat = UnityEngine.Rendering.IndexFormat.UInt32,
+            };
+            mesh.vertices  = verts;
+            mesh.uv        = uvs;
+            mesh.triangles = tris;
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Helpers
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>Projects a 2D profile point into the 3D spline frame at sample s.</summary>
+        private static Vector3 ToWorld(Vector2 p, int s,
+            Vector3[] wPos, Vector3[] wRight, Vector3[] wUp)
+            => wPos[s] + wRight[s] * p.x + wUp[s] * p.y;
+
+        /// <summary>Samples position + right + up for every ring along the spline.</summary>
+        private void SampleFrames(int sCount, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp)
+        {
             for (int s = 0; s < sCount; s++)
             {
+                // t=0 at ring 0, t=1 at ring[resolution] (wraps for closed splines)
                 float t = (float)s / resolution;
+
                 _spline.Spline.Evaluate(t, out var pos, out var tan, out var up);
 
                 Vector3 fwd = transform.TransformDirection((Vector3)tan).normalized;
                 Vector3 upW = transform.TransformDirection((Vector3)up);
-                if (upW.sqrMagnitude < 0.001f) upW = Vector3.up;
+                if (upW.sqrMagnitude < 0.001f) upW = transform.up;
                 upW = upW.normalized;
 
                 wPos[s]   = transform.TransformPoint(pos);
                 wRight[s] = Vector3.Cross(upW, fwd).normalized;
                 wUp[s]    = upW;
             }
+        }
 
-            // Each profile edge (pCount-1 edges) × (resolution quads)
-            int edgeCount = pCount - 1;
-            int quadCount = edgeCount * resolution;
-            int vertCount = quadCount * 4;
-            int triCount  = quadCount * 6;
+        /// <summary>
+        /// Normalised perimeter U for each profile vertex + the closing edge.
+        /// Returns array of length pCount + 1 where result[0]=0, result[pCount]=1.
+        /// </summary>
+        private static float[] ComputeProfilePerimU(Vector2[] profile)
+        {
+            int n   = profile.Length;
+            var acc = new float[n + 1];
+            acc[0]  = 0f;
+            for (int i = 1; i < n; i++)
+                acc[i] = acc[i - 1] + Vector2.Distance(profile[i], profile[i - 1]);
+            acc[n] = acc[n - 1] + Vector2.Distance(profile[n - 1], profile[0]);
 
-            var verts = new Vector3[vertCount];
-            var norms = new Vector3[vertCount];
-            var uvs   = new Vector2[vertCount];
-            var tris  = new int[triCount];
+            float total = acc[n];
+            if (total > 0f)
+                for (int i = 0; i <= n; i++) acc[i] /= total;
 
-            int vi = 0, ti = 0;
+            return acc;
+        }
 
-            for (int e = 0; e < edgeCount; e++)
+        /// <summary>
+        /// Arc-length V coordinate for each ring, tiled by vTiling.
+        /// Returns array of length sCount.
+        /// </summary>
+        private float[] ComputeSplineV(Vector3[] wPos, int sCount)
+        {
+            var   dist  = new float[sCount];
+            float total = 0f;
+
+            for (int s = 1; s < sCount; s++)
             {
-                Vector2 pa = profile[e];
-                Vector2 pb = profile[e + 1];
-
-                // UV: u spans the edge (0→1), v tiles along the path
-                float uA = (float)e       / edgeCount;
-                float uB = (float)(e + 1) / edgeCount;
-
-                for (int s = 0; s < resolution; s++)
-                {
-                    Vector3 v0 = ProfileToWorld(pa, s,     wPos, wRight, wUp);
-                    Vector3 v1 = ProfileToWorld(pb, s,     wPos, wRight, wUp);
-                    Vector3 v2 = ProfileToWorld(pa, s + 1, wPos, wRight, wUp);
-                    Vector3 v3 = ProfileToWorld(pb, s + 1, wPos, wRight, wUp);
-
-                    float vCoord0 = (float)s       / resolution * 8f;
-                    float vCoord1 = (float)(s + 1) / resolution * 8f;
-
-                    verts[vi]     = v0; uvs[vi]     = new Vector2(uA, vCoord0); vi++;
-                    verts[vi]     = v1; uvs[vi]     = new Vector2(uB, vCoord0); vi++;
-                    verts[vi]     = v2; uvs[vi]     = new Vector2(uA, vCoord1); vi++;
-                    verts[vi]     = v3; uvs[vi]     = new Vector2(uB, vCoord1); vi++;
-
-                    int b = vi - 4;
-                    tris[ti++] = b;     tris[ti++] = b + 2; tris[ti++] = b + 1;
-                    tris[ti++] = b + 1; tris[ti++] = b + 2; tris[ti++] = b + 3;
-                }
+                total   += Vector3.Distance(wPos[s], wPos[s - 1]);
+                dist[s]  = total;
             }
 
-            var mesh = new Mesh { name = "ConveyorTrack_Swept" };
-            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-            mesh.vertices    = verts;
-            mesh.uv          = uvs;
-            mesh.triangles   = tris;
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
+            if (total > 0f)
+                for (int s = 0; s < sCount; s++)
+                    dist[s] = (dist[s] / total) * vTiling;
+
+            return dist;
         }
 
-        private static Vector3 ProfileToWorld(Vector2 p, int sampleIdx,
-            Vector3[] wPos, Vector3[] wRight, Vector3[] wUp)
-        {
-            return wPos[sampleIdx]
-                 + wRight[sampleIdx] * p.x
-                 + wUp[sampleIdx]    * p.y;
-        }
-
-        // ── Editor ────────────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────
+        //  Editor
+        // ─────────────────────────────────────────────────────────────────────
 #if UNITY_EDITOR
         [UnityEditor.CustomEditor(typeof(ConveyorTrackMeshBuilder))]
         public class Editor : UnityEditor.Editor
@@ -193,8 +295,8 @@ namespace BlockShooter
             public override void OnInspectorGUI()
             {
                 DrawDefaultInspector();
-                UnityEditor.EditorGUILayout.Space(6);
-                if (GUILayout.Button("Rebuild Mesh", GUILayout.Height(34)))
+                GUILayout.Space(8);
+                if (GUILayout.Button("Rebuild Mesh", GUILayout.Height(36)))
                 {
                     var builder = (ConveyorTrackMeshBuilder)target;
                     builder._spline     = builder.GetComponent<SplineContainer>();
