@@ -88,19 +88,19 @@ namespace BlockShooter
         /// when viewed from the sweep direction (+Z local), so outward normals
         /// are generated automatically with the (A, C, B) winding below.
         ///
-        /// 12-point profile (Y=up, X=right):
+        /// 14-point profile — Blender-style bevel on BOTH ends of each wall-top edge.
+        /// The beveled edges are the horizontal top faces of each outer wall.
         ///
-        ///   P2────P3         P6────P7
-        ///  ╱        ╲       ╱        ╲
-        /// P1          P4───P5          P8
-        /// |    belt groove (Y=0)        |
-        /// P0                            P9
-        /// |  P11──────────────────P10   |
-        /// └──────────────────────────────┘
+        ///    P2────────P3              P10────────P11
+        ///   ╱            ╲           ╱              ╲
+        ///  P1              P4───────P9               P12
+        ///  |                  belt (Y=0)              |
+        ///  P0              P5───────P8               P13
+        ///  |  P7────────────────────────────────P6   |
+        ///  └────────────────────────────────────────┘
         ///
-        /// Outer walls stand wallAboveBelt above belt surface (Y=0).
-        /// Top-outer corner of each wall is chamfered by bevelSize.
-        /// Belt surface sits at Y=0, recessed inside the walls.
+        /// bevelSize is clamped to min(railWidth/2, wallAboveBelt) so the two
+        /// chamfers on each wall-top face never overlap and never sink below belt.
         /// </summary>
         private Vector2[] BuildProfile()
         {
@@ -108,34 +108,41 @@ namespace BlockShooter
             float rw = railWidth;
             float rh = railHeight;
             float wa = wallAboveBelt;
-            float bv = Mathf.Clamp(bevelSize, 0f, Mathf.Min(rw, wa));
+            float bv = Mathf.Clamp(bevelSize, 0f, Mathf.Min(rw * 0.5f, wa));
 
-            // P0:  left  outer wall bottom
-            // P1:  left  outer wall top, bevel start
-            // P2:  left  bevel end (chamfered top-outer corner)
-            // P3:  left  wall inner top (horizontal wall-top face right edge)
-            // P4:  left  belt edge (inner step down to belt surface)
-            // P5:  right belt edge
-            // P6:  right wall inner top
-            // P7:  right bevel end
-            // P8:  right outer wall top, bevel start
-            // P9:  right outer wall bottom
-            // P10: underside right
-            // P11: underside left
+            // Left wall (P0–P5)
+            // P0:  outer-bottom
+            // P1:  outer-top corner — vertical side    (-hw-rw,      wa-bv)
+            // P2:  outer-top corner — horizontal side  (-hw-rw+bv,   wa  )
+            // P3:  inner-top corner — horizontal side  (-hw-bv,      wa  )
+            // P4:  inner-top corner — vertical side    (-hw,         wa-bv)
+            // P5:  belt left edge                      (-hw,         0   )
+            //
+            // Right wall (P6–P11, mirror of left)
+            // P6:  belt right edge                     ( hw,         0   )
+            // P7:  inner-top corner — vertical side    ( hw,         wa-bv)
+            // P8:  inner-top corner — horizontal side  ( hw+bv,      wa  )
+            // P9:  outer-top corner — horizontal side  ( hw+rw-bv,   wa  )
+            // P10: outer-top corner — vertical side    ( hw+rw,      wa-bv)
+            // P11: outer-bottom
+            //
+            // Underside (P12–P13)
             return new Vector2[]
             {
-                new Vector2(-hw - rw,        -rh),    // P0
-                new Vector2(-hw - rw,         wa - bv), // P1
-                new Vector2(-hw - rw + bv,    wa),    // P2
-                new Vector2(-hw,              wa),    // P3
-                new Vector2(-hw,              0f),    // P4
-                new Vector2( hw,              0f),    // P5
-                new Vector2( hw,              wa),    // P6
-                new Vector2( hw + rw - bv,    wa),    // P7
-                new Vector2( hw + rw,         wa - bv), // P8
-                new Vector2( hw + rw,        -rh),    // P9
-                new Vector2( hw,             -rh),    // P10
-                new Vector2(-hw,             -rh),    // P11
+                new Vector2(-hw - rw,          -rh),       // P0
+                new Vector2(-hw - rw,           wa - bv),  // P1
+                new Vector2(-hw - rw + bv,      wa),       // P2
+                new Vector2(-hw - bv,           wa),       // P3
+                new Vector2(-hw,                wa - bv),  // P4
+                new Vector2(-hw,                0f),       // P5
+                new Vector2( hw,                0f),       // P6
+                new Vector2( hw,                wa - bv),  // P7
+                new Vector2( hw + bv,           wa),       // P8
+                new Vector2( hw + rw - bv,      wa),       // P9
+                new Vector2( hw + rw,           wa - bv),  // P10
+                new Vector2( hw + rw,          -rh),       // P11
+                new Vector2( hw,               -rh),       // P12
+                new Vector2(-hw,               -rh),       // P13
             };
         }
 
@@ -146,7 +153,7 @@ namespace BlockShooter
         private Mesh Sweep()
         {
             Vector2[] profile = BuildProfile();
-            int pCount  = profile.Length;    // 8 vertices in closed polygon
+            int pCount  = profile.Length;    // 14 vertices in closed polygon
             int sCount  = resolution + 1;    // rings along spline (last = first for closed)
 
             // ── Step 1: sample spline frames ──────────────────────────────────
