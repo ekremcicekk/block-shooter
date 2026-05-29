@@ -15,6 +15,8 @@ namespace BlockShooter
         private bool _active;
         private ProjectilePool _pool;
         private Rigidbody _rb;
+        private float _speed;
+        private ConveyorBlock3D _target; // homing target
 
         private static readonly int ColorProp = Shader.PropertyToID("_BaseColor");
 
@@ -30,11 +32,14 @@ namespace BlockShooter
             col.radius = 0.12f;
         }
 
-        public void Launch(BlockColorType colorType, float speed, ProjectilePool pool, Vector3 direction)
+        public void Launch(BlockColorType colorType, float speed, ProjectilePool pool, Vector3 direction,
+            ConveyorBlock3D target = null)
         {
             _colorType = colorType;
-            _pool = pool;
-            _active = true;
+            _pool      = pool;
+            _speed     = speed;
+            _target    = target;
+            _active    = true;
 
             Color c = GameManager.Instance.config.GetColor(colorType);
             if (ballRenderer != null)
@@ -47,6 +52,15 @@ namespace BlockShooter
 
             _rb.linearVelocity = direction.normalized * speed;
             Invoke(nameof(ReturnToPool), 4f);
+        }
+
+        private void Update()
+        {
+            if (!_active || _target == null || _target.IsDestroyed) return;
+
+            // Steer toward moving target each frame — guarantees hit regardless of conveyor speed
+            Vector3 dir = (_target.transform.position - transform.position).normalized;
+            _rb.linearVelocity = dir * _speed;
         }
 
         private void OnTriggerEnter(Collider other)
@@ -72,6 +86,7 @@ namespace BlockShooter
         private void ReturnToPool()
         {
             _active = false;
+            _target = null;
             _rb.linearVelocity = Vector3.zero;
             _pool?.Return(this);
         }
@@ -79,6 +94,7 @@ namespace BlockShooter
         private void OnDisable()
         {
             _active = false;
+            _target = null;
             CancelInvoke(nameof(ReturnToPool));
             if (_rb != null) _rb.linearVelocity = Vector3.zero;
         }

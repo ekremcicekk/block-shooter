@@ -44,6 +44,7 @@ namespace BlockShooter
         private bool _isAccessible;
         private bool _isShooting;
         private Coroutine _shootCoroutine;
+        private ConveyorBlock3D _lockedTarget; // held until destroyed — never switch mid-block
 
         private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
@@ -145,6 +146,7 @@ namespace BlockShooter
         private void StopShooting()
         {
             _isShooting = false;
+            _lockedTarget = null; // release lock so next group starts fresh
             if (_shootCoroutine != null) { StopCoroutine(_shootCoroutine); _shootCoroutine = null; }
         }
 
@@ -164,26 +166,30 @@ namespace BlockShooter
 
             BlockColorType targetColor = _isRainbowMode ? GetAnyActiveColor() : _colorType;
 
-            // Always target in conveyor arrival order — no random targeting
-            ConveyorBlock3D target = _isRainbowMode
-                ? FireRange.Instance?.GetFirstTarget()
-                : FireRange.Instance?.GetFirstTarget(targetColor);
+            // Refresh lock only when current target is gone — never switch mid-block
+            if (_lockedTarget == null || _lockedTarget.IsDestroyed || !_lockedTarget.gameObject.activeSelf)
+            {
+                _lockedTarget = _isRainbowMode
+                    ? FireRange.Instance?.GetFirstTarget()
+                    : FireRange.Instance?.GetFirstTarget(targetColor);
+            }
 
-            if (target == null) return; // no valid target, skip shot
+            if (_lockedTarget == null) return; // nothing in range yet
 
-            // Rotate body mesh to face the target before firing
+            // Rotate body mesh to face locked target
             if (bodyMesh != null)
             {
-                Vector3 lookDir = target.transform.position - bodyMesh.position;
+                Vector3 lookDir = _lockedTarget.transform.position - bodyMesh.position;
                 if (lookDir.sqrMagnitude > 0.001f)
                     bodyMesh.rotation = Quaternion.LookRotation(lookDir.normalized);
             }
 
             Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
-            Vector3 dir = (target.transform.position - spawnPos).normalized;
+            Vector3 dir = (_lockedTarget.transform.position - spawnPos).normalized;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
-            proj.Launch(targetColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir);
+            // Pass locked target so the projectile homes in — no misses due to block movement
+            proj.Launch(targetColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, _lockedTarget);
 
             if (muzzleFlash != null) muzzleFlash.Play();
             transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);
@@ -245,6 +251,8 @@ namespace BlockShooter
             StopShooting();
 
             if (depletedParticle != null) depletedParticle.Play();
+
+            _lockedTarget = null;
 
             // Notify systems immediately so slot/grid update right away
             SlotSystem.Instance?.ReleaseSlot(this);
