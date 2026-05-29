@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20aa57086e8a2df4da81cf03472bc9e7, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: 
+  defaultShotCount: 100
+  fireRate: 0.15
+  projectileSpeed: 12
+  conveyorSpeed: 2
+  columnCount: 5
+  blockSpacing: 1.1
+  gridColumns: 4
+  gridRows: 2
+  gridCellSize: 1.2
+  redColor: {r: 0.9, g: 0.2, b: 0.2, a: 1}
+  blueColor: {r: 0.2, g: 0.5, b: 0.9, a: 1}
+  greenColor: {r: 0.2, g: 0.8, b: 0.3, a: 1}
+  yellowColor: {r: 1, g: 0.85, b: 0.1, a: 1}
+  purpleColor: {r: 0.6, g: 0.2, b: 0.9, a: 1}
+  orangeColor: {r: 1, g: 0.55, b: 0.1, a: 1}
+  bombBoosterUnlockLevel: 5
+  rainbowBoosterUnlockLevel: 10
+  freezeBoosterUnlockLevel: 15
+  scorePerBlock: 10
+  scoreComboMultiplier: 2
