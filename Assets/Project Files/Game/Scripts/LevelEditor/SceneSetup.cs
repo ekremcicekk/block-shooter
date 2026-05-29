@@ -32,9 +32,10 @@ namespace BlockShooter.Editor
             SetupLighting();
             SetupCamera();
             SetupBackground();
-            var managers = SetupManagers();
+            SetupManagers();
             // Track created per-level via LevelData.trackPrefab (see Track Level Editor)
             SetupFireRange();
+            SetupSlotSystem();
             SetupShooterGrid();
             SetupProjectilePool();
             SetupBoosters();
@@ -73,9 +74,9 @@ namespace BlockShooter.Editor
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 100f;
 
-            // Top-down angled view — matches the reference game screenshots
-            camGo.transform.position = new Vector3(0f, 14f, -5f);
-            camGo.transform.rotation = Quaternion.Euler(62f, 0f, 0f);
+            // Portrait top-down angled view: grid at Z=-3.5 to -1, track at Z=0..10
+            camGo.transform.position = new Vector3(0f, 18f, -5f);
+            camGo.transform.rotation = Quaternion.Euler(72f, 0f, 0f);
 
             camGo.AddComponent<AudioListener>();
         }
@@ -83,50 +84,44 @@ namespace BlockShooter.Editor
         // ── Background ────────────────────────────────────────────────────────
         static void SetupBackground()
         {
-            // Ground plane
+            // Ground plane: covers full visible area (grid Z=-4 to track top Z=10)
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
-            ground.transform.position = new Vector3(0f, -0.05f, 2f);
-            ground.transform.localScale = new Vector3(4f, 1f, 5f);
+            ground.transform.position = new Vector3(0f, -0.05f, 3f);
+            ground.transform.localScale = new Vector3(4f, 1f, 8f);
             Object.DestroyImmediate(ground.GetComponent<MeshCollider>());
 
             var mr = ground.GetComponent<MeshRenderer>();
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-            // Shooter area platform
+            // Shooter area platform: sits under grid (Z=-3.5) + slots (Z=0)
             var platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
             platform.name = "ShooterPlatform";
-            platform.transform.position = new Vector3(0f, -0.08f, -4f);
-            platform.transform.localScale = new Vector3(7f, 0.15f, 5f);
+            platform.transform.position = new Vector3(0f, -0.08f, -2f);
+            platform.transform.localScale = new Vector3(7f, 0.15f, 7f);
             Object.DestroyImmediate(platform.GetComponent<BoxCollider>());
         }
 
         // ── Managers ──────────────────────────────────────────────────────────
-        static GameObject SetupManagers()
+        static void SetupManagers()
         {
             var root = new GameObject("[Managers]");
 
-            // GameManager
             var gmGo = new GameObject("GameManager");
             gmGo.transform.SetParent(root.transform);
             gmGo.AddComponent<GameManager>();
 
-            // LevelManager
             var lmGo = new GameObject("LevelManager");
             lmGo.transform.SetParent(root.transform);
             lmGo.AddComponent<LevelManager>();
 
-            // ScoreManager
             var smGo = new GameObject("ScoreManager");
             smGo.transform.SetParent(root.transform);
             smGo.AddComponent<ScoreManager>();
 
-            // GameBootstrap
             var bs = new GameObject("GameBootstrap");
             bs.transform.SetParent(root.transform);
             bs.AddComponent<GameBootstrap>();
-
-            return root;
         }
 
         // Track is NOT created in scene — it's instantiated per-level from LevelData.trackPrefab
@@ -136,45 +131,49 @@ namespace BlockShooter.Editor
         static void SetupFireRange()
         {
             var go = new GameObject("FireRange");
-            go.transform.position = new Vector3(0f, 0.2f, -0.5f);
+            // Positioned at the bottom of the oval track where conveyor blocks pass
+            // Track bottom segment is near Z=2; slots are at Z=0 — this sits between them
+            go.transform.position = new Vector3(0f, 0.5f, 2.0f);
 
             var col = go.AddComponent<BoxCollider>();
             col.isTrigger = true;
-            col.size = new Vector3(8f, 1.5f, 3f);
+            col.size = new Vector3(8f, 2f, 4f); // wide + tall enough for all lanes
 
             go.AddComponent<FireRange>();
 
-            // Visual gizmo only in editor
-            var layer = LayerMask.NameToLayer("Ignore Raycast");
-            go.layer = layer;
+            go.layer = LayerMask.NameToLayer("Ignore Raycast");
+        }
+
+        // ── Slot System ───────────────────────────────────────────────────────
+        static void SetupSlotSystem()
+        {
+            var root = new GameObject("[SlotSystem]");
+            root.transform.position = Vector3.zero;
+
+            // SlotOrigin: the world-space centre point of the slot row
+            // Sits between FireRange (Z=2) and ShooterGrid front row (Z=-1.1)
+            var originGo = new GameObject("SlotOrigin");
+            originGo.transform.SetParent(root.transform, false);
+            originGo.transform.position = new Vector3(0f, 0.5f, 0f);
+
+            var system = root.AddComponent<SlotSystem>();
+            system.slotOrigin = originGo.transform;
+            system.slotSpacing = 1.2f;
+            system.defaultSlotCount = 4;
+            system.moveToSlotDuration = 0.35f;
+            system.indicatorScale = new Vector3(0.9f, 0.1f, 0.9f);
         }
 
         // ── Shooter Grid ──────────────────────────────────────────────────────
         static void SetupShooterGrid()
         {
             var gridRoot = new GameObject("[ShooterGrid]");
-            gridRoot.transform.position = new Vector3(0f, 0.1f, -4f);
+            gridRoot.transform.position = Vector3.zero; // world-origin; gridOrigin drives block placement
 
             var grid = gridRoot.AddComponent<ShooterGrid>();
-            grid.gridOrigin = new Vector2(-1.8f, -0.5f);
-
-            // Placeholder grid slots (visual only)
-            for (int col = 0; col < 4; col++)
-            {
-                for (int row = 0; row < 2; row++)
-                {
-                    var slot = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    slot.name = $"GridSlot_{col}_{row}";
-                    slot.transform.SetParent(gridRoot.transform);
-                    slot.transform.localPosition = new Vector3(
-                        (col - 1.5f) * 1.25f, 0f, (row - 0.5f) * 1.25f);
-                    slot.transform.localScale = new Vector3(1.1f, 0.12f, 1.1f);
-                    Object.DestroyImmediate(slot.GetComponent<BoxCollider>());
-
-                    var mr = slot.GetComponent<MeshRenderer>();
-                    mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                }
-            }
+            // col 0-4 at X=-2.4..+2.4 (centred), row 0 at Z=-3.5, row 2 (front) at Z=-1.1
+            grid.gridOrigin = new Vector2(-2.4f, -3.5f);
+            // shooterBlockPrefab / doorPrefab must be assigned in Inspector
         }
 
         // ── Projectile Pool ───────────────────────────────────────────────────
@@ -188,10 +187,9 @@ namespace BlockShooter.Editor
         // ── Boosters ──────────────────────────────────────────────────────────
         static void SetupBoosters()
         {
-            // BoosterManager is self-contained — no child objects needed.
-            // Bomb/Rainbow/Freeze logic lives directly inside BoosterManager.
-            var root = new GameObject("[Managers_Boosters]");
-            root.AddComponent<BoosterManager>();
+            // BoosterManager is self-contained — BoosterData SOs assigned in Inspector
+            var go = new GameObject("BoosterManager");
+            go.AddComponent<BoosterManager>();
         }
 
         // ── UI ────────────────────────────────────────────────────────────────

@@ -23,6 +23,22 @@ namespace BlockShooter
 
         public event Action<ConveyorBlock3D> OnDestroyed;
 
+        private void Awake()
+        {
+            // FireRange uses OnTriggerEnter — block needs a Collider + kinematic Rigidbody
+            if (GetComponent<Collider>() == null)
+            {
+                var col = gameObject.AddComponent<BoxCollider>();
+                col.size = Vector3.one * 0.9f;
+            }
+            if (GetComponent<Rigidbody>() == null)
+            {
+                var rb = gameObject.AddComponent<Rigidbody>();
+                rb.isKinematic = true;
+                rb.useGravity  = false;
+            }
+        }
+
         public void Initialize(BlockColorType colorType, Color color)
         {
             _colorType = colorType;

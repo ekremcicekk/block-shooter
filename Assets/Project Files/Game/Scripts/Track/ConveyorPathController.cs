@@ -147,6 +147,7 @@ namespace BlockShooter
                     if (block == null || !block.gameObject.activeSelf) continue;
                     float xOff = (lane - (group.laneCount - 1) * 0.5f) * group.laneSpacing;
                     block.transform.SetPositionAndRotation(worldPos + right * xOff, rot);
+                    block.transform.localScale = Vector3.one * group.blockSize;
                 }
             }
 
