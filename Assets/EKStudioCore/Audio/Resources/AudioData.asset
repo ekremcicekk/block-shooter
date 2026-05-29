@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f, type: 3}
+  m_Name: AudioData
+  m_EditorClassIdentifier: 
+  audioClips:
+  - soundName: FailSound
+    clip: {fileID: 8300000, guid: 5082c374b0e544adba6bfb5f3d3308ba, type: 3}
+    soundType: 1
+    description: 
+  - soundName: MatchSound
+    clip: {fileID: 8300000, guid: 51ef6a9bb8d5f4c1d8ece5e2c001fda6, type: 3}
+    soundType: 1
+    description: 
+  - soundName: WinSound
+    clip: {fileID: 8300000, guid: 3236b914992bb456bb5422872626c5a5, type: 3}
+    soundType: 1
+    description: 

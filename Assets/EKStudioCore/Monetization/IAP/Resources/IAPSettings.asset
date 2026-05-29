@@ -1,0 +1,214 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed31051d76d560c479c2e5b78c701628, type: 3}
+  m_Name: IAPSettings
+  m_EditorClassIdentifier: 
+  enableIAP: 1
+  enableNoAds: 1
+  noAdsProductId: com.yourcompany.yourapp.removeads
+  noAdsPrice: $0.99
+  customProducts:
+  - productId: com.yourcompany.yourapp.starterpack
+    productName: Starter Pack
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 3
+    purchaseMethod: 0
+    price: $4.99
+    description: Get everything you need! 500 coins, 5 of each booster, and remove
+      all ads forever!
+    coinReward: 500
+    gemReward: 0
+    boosterRewards:
+    - boosterType: all
+      amount: 5
+    timedFreeCooldown: 3600
+    includesNoAds: 1
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.boosterpack
+    productName: Booster Pack
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 1
+    purchaseMethod: 0
+    price: $0.99
+    description: Product description
+    coinReward: 0
+    gemReward: 0
+    boosterRewards:
+    - boosterType: all
+      amount: 5
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.coinpack1
+    productName: CoinPack1
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 0
+    purchaseMethod: 0
+    price: $0.99
+    description: Product description
+    coinReward: 200
+    gemReward: 0
+    boosterRewards:
+    - boosterType: all
+      amount: 5
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.coinpack2
+    productName: CoinPack2
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 0
+    purchaseMethod: 0
+    price: $0.99
+    description: Product description
+    coinReward: 500
+    gemReward: 0
+    boosterRewards:
+    - boosterType: all
+      amount: 5
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.coinpack3
+    productName: CoinPack3
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 0
+    purchaseMethod: 0
+    price: $0.99
+    description: Product description
+    coinReward: 1000
+    gemReward: 0
+    boosterRewards:
+    - boosterType: all
+      amount: 5
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.cointimerfree
+    productName: CoinTimerFree
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 0
+    purchaseMethod: 1
+    price: $0.99
+    description: Product description
+    coinReward: 100
+    gemReward: 0
+    boosterRewards:
+    - boosterType: all
+      amount: 5
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.coinrewarded
+    productName: CoinRewarded
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 0
+    purchaseMethod: 2
+    price: $0.99
+    description: Product description
+    coinReward: 100
+    gemReward: 0
+    boosterRewards:
+    - boosterType: all
+      amount: 5
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.rwfreezetimer
+    productName: RWFreezeTimer
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 1
+    purchaseMethod: 2
+    price: $0.99
+    description: Product description
+    coinReward: 0
+    gemReward: 0
+    boosterRewards:
+    - boosterType: freezetimer
+      amount: 3
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.rwhammer
+    productName: RWHammer
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 1
+    purchaseMethod: 2
+    price: $0.99
+    description: Product description
+    coinReward: 0
+    gemReward: 0
+    boosterRewards:
+    - boosterType: hammer
+      amount: 3
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  - productId: com.yourcompany.yourapp.rwvacuum
+    productName: RWVacuum
+    androidProductId: 
+    iosProductId: 
+    productType: 1
+    rewardType: 1
+    purchaseMethod: 2
+    price: $0.99
+    description: Product description
+    coinReward: 0
+    gemReward: 0
+    boosterRewards:
+    - boosterType: vacuum
+      amount: 3
+    timedFreeCooldown: 3600
+    includesNoAds: 0
+    customValue: 0
+    customData: 
+    isNoAdsProduct: 0
+  googlePlayPublicKey: 
+  appleSharedSecret: 
+  usePlatformSpecificIds: 0
+  debugMode: 1

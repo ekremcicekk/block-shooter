@@ -1,0 +1,10 @@
+﻿<Solution>
+  <Project Path="asset-store-tools-editor.csproj" />
+  <Project Path="EKStudioCore.csproj" />
+  <Project Path="NaughtyAttributes.Core.csproj" />
+  <Project Path="UIEffect.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="NaughtyAttributes.Test.csproj" />
+  <Project Path="NaughtyAttributes.Editor.csproj" />
+  <Project Path="UIEffect-Editor.csproj" />
+</Solution>

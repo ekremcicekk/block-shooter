@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8274339d7c843043b41d3e2647960ee, type: 3}
+  m_Name: Ad Configuration
+  m_EditorClassIdentifier: 
+  bannerType: 1
+  interstitialType: 1
+  rewardedVideoType: 1
+  levelPlaySettings:
+    androidAppKey: your_android_app_key
+    androidBannerID: DefaultBanner
+    androidInterstitialID: DefaultInterstitial
+    androidRewardedVideoID: DefaultRewardedVideo
+    iOSAppKey: your_ios_app_key
+    iOSBannerID: DefaultBanner
+    iOSInterstitialID: DefaultInterstitial
+    iOSRewardedVideoID: DefaultRewardedVideo
+    bannerPosition: 0
+    bannerType: 0
+  adMobSettings:
+    androidAppId: 
+    androidBannerID: ca-app-pub-3940256099942544/6300978111
+    androidInterstitialID: ca-app-pub-3940256099942544/1033173712
+    androidRewardedVideoID: ca-app-pub-3940256099942544/5224354917
+    iosAppId: 
+    iOSBannerID: ca-app-pub-3940256099942544/2934735716
+    iOSInterstitialID: ca-app-pub-3940256099942544/4411468910
+    iOSRewardedVideoID: ca-app-pub-3940256099942544/1712485313
+    bannerType: 0
+    bannerPosition: 0
+    testDevicesIDs: []
+  unityAdsSettings:
+    androidAppID: 1234567
+    iOSAppID: 1234567
+    androidBannerID: banner
+    iOSBannerID: banner
+    androidInterstitialID: video
+    iOSInterstitialID: video
+    androidRewardedVideoID: rewardedVideo
+    iOSRewardedVideoID: rewardedVideo
+    bannerPosition: 4
+  mockAdSettings:
+    bannerPosition: 0
+  testMode: 1
+  systemLogs: 1
+  interstitialFirstStartDelay: 40
+  interstitialStartDelay: 30
+  interstitialShowingDelay: 30
+  autoShowInterstitial: 1
+  enableGDPR: 1
+  gdprCanvasPrefab: {fileID: 5269805264853961472, guid: b968127cf8733984c83ea4e74f896927, type: 3}
+  privacyPolicyUrl: https://your-website.com/privacy-policy
+  termsOfUseUrl: https://your-website.com/terms-of-use
+  enableIDFA: 1
+  showGDPROnFirstLaunch: 1
