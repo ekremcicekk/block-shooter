@@ -6,6 +6,19 @@ namespace BlockShooter.Editor
 {
     public static class GameConfigSetup
     {
+        static void EnsureDirectory(string path)
+        {
+            string[] parts = path.Split('/');
+            string current = parts[0];
+            for (int i = 1; i < parts.Length; i++)
+            {
+                string next = current + "/" + parts[i];
+                if (!AssetDatabase.IsValidFolder(next))
+                    AssetDatabase.CreateFolder(current, parts[i]);
+                current = next;
+            }
+        }
+
         [MenuItem("BlockShooter/Create GameConfig Asset", false, 2)]
         public static void CreateGameConfig()
         {
@@ -18,6 +31,8 @@ namespace BlockShooter.Editor
                 Selection.activeObject = existing;
                 return;
             }
+
+            EnsureDirectory("Assets/Project Files/Game/ScriptableObjects/Config");
 
             var config = ScriptableObject.CreateInstance<GameConfig>();
             AssetDatabase.CreateAsset(config, path);
@@ -84,6 +99,7 @@ namespace BlockShooter.Editor
             level.availableColors = new System.Collections.Generic.List<BlockColorType>
                 { BlockColorType.Red, BlockColorType.Blue, BlockColorType.Green };
 
+            EnsureDirectory("Assets/Project Files/Game/ScriptableObjects/Levels");
             AssetDatabase.CreateAsset(level, path);
             AssetDatabase.SaveAssets();
 
