@@ -23,7 +23,9 @@ namespace BlockShooter
 
         [Header("Layout")]
         public Transform  gridParent;
-        public Vector2    gridOrigin = new Vector2(-1.65f, -3.5f);
+        // X: centres 5 columns (4 gaps × 1.2 = 4.8, half = 2.4) → col2 at X=0
+        // Y (Z in world): row 0 is deepest (Z=-3.5), row 2 is front (Z=-1.1, near slots at Z=0)
+        public Vector2    gridOrigin = new Vector2(-2.4f, -3.5f);
 
         private GameConfig  _config;
         private LevelData   _levelData;
@@ -127,17 +129,18 @@ namespace BlockShooter
         {
             if (!_columns.TryGetValue(col, out var list)) return;
 
+            // list is DESCENDING: [row2(front), row1, row0(back)]
+            // Only the first InGrid block (= highest row, closest to slots) is accessible.
             bool frontFound = false;
-            // list is ordered front-to-back (ascending row index)
             foreach (var block in list)
             {
-                if (block == null || block.IsDepleted || block.IsInSlot) continue;
-                if (block.State != ShooterBlock.BlockState.InGrid) continue;
+                if (block == null) continue;
+                if (block.State == ShooterBlock.BlockState.Depleted) continue;
+                if (block.State == ShooterBlock.BlockState.InSlot ||
+                    block.State == ShooterBlock.BlockState.MovingToSlot) continue;
 
                 if (_freePickActive)
-                {
                     block.SetAccessible(true);
-                }
                 else
                 {
                     block.SetAccessible(!frontFound);
@@ -158,11 +161,12 @@ namespace BlockShooter
                 _columns[block.GridColumn] = list;
             }
 
-            // Insert in row order (ascending = front first)
+            // Insert DESCENDING by row: [row2, row1, row0]
+            // row2 = highest Z = closest to slots = FRONT (index 0 in list = accessible first)
             int insertAt = list.Count;
             for (int i = 0; i < list.Count; i++)
             {
-                if (block.GridRow < list[i].GridRow) { insertAt = i; break; }
+                if (block.GridRow > list[i].GridRow) { insertAt = i; break; }
             }
             list.Insert(insertAt, block);
         }
