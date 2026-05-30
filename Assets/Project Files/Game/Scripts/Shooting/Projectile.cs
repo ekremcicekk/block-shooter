@@ -94,6 +94,7 @@ namespace BlockShooter
         {
             if (!_active) return;
             if (!other.TryGetComponent<ConveyorBlock3D>(out var block)) return;
+            if (_target != null && block != _target) return; // only hit assigned target
             if (block.ColorType != _colorType) return;
 
             _active = false;
