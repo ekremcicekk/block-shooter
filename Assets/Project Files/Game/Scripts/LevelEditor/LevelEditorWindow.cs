@@ -46,9 +46,12 @@ namespace BlockShooter.Editor
 
         // ── Spline ────────────────────────────────────────────────────────────
         private List<Vector3> _knots       = new();
-        private float         _splineWidth = 6f;
-        private float         _splineDepth = 10f;
+        private float         _splineWidth = 3.5f;
+        private float         _splineDepth = 5f;
         private int           _splinePreset = 0;  // 0=Oval 1=Wide 2=Rectangle
+
+        // Safe-area guide toggle
+        private bool _showSafeArea = true;
 
         // Spline edit state
         private bool         _editingSpline = false;
@@ -221,9 +224,14 @@ namespace BlockShooter.Editor
         // ── Center panel ──────────────────────────────────────────────────────
         private void DrawCenter()
         {
+            // Reserve space for toolbar (~21px) and footer buttons (~52px)
+            const float toolbarH = 21f;
+            const float footerH  = 52f;
+            float scrollH = Mathf.Max(80f, position.height - toolbarH - footerH);
+
             EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             _midScroll = EditorGUILayout.BeginScrollView(_midScroll,
-                GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                GUILayout.ExpandWidth(true), GUILayout.Height(scrollH));
 
             DrawSplineSection();
             DrawGridSection();
@@ -231,7 +239,7 @@ namespace BlockShooter.Editor
 
             EditorGUILayout.EndScrollView();
 
-            // ── Action buttons at bottom ──────────────────────────────────────
+            // ── Action buttons — always visible below scroll ──────────────────
             GUILayout.Space(6);
             EditorGUILayout.BeginHorizontal();
             GUI.backgroundColor = new Color(.3f,.85f,.45f);
@@ -317,6 +325,11 @@ namespace BlockShooter.Editor
             }
             EditorGUILayout.EndHorizontal();
 
+            // Safe-area toggle
+            EditorGUILayout.BeginHorizontal();
+            _showSafeArea = EditorGUILayout.ToggleLeft("Show Safe Area Guide", _showSafeArea, GUILayout.Width(160));
+            EditorGUILayout.EndHorizontal();
+
             GUILayout.Space(6);
         }
 
@@ -396,6 +409,9 @@ namespace BlockShooter.Editor
             if (_cfg == null) return;
             float cs = _cfg.gridCellSize;
 
+            // Safe area guide
+            if (_showSafeArea) DrawSafeAreaGuide();
+
             // FireRange guide box (red)
             float frWidth = _cfg.gridCellSize * Mathf.Max(_gridCols, 4) + 2f;
             Handles.color = new Color(1f, .25f, .25f, .5f);
@@ -429,6 +445,67 @@ namespace BlockShooter.Editor
                 Handles.color = col;
                 Handles.DrawWireCube(pos, new Vector3(cs * .85f, .05f, cs * .85f));
             }
+        }
+
+        private void DrawSafeAreaGuide()
+        {
+            // Try to project camera viewport corners onto Y=0 plane
+            Vector3[] corners = new Vector3[4];
+            bool usedCamera   = false;
+
+            Camera cam = Camera.main;
+            if (cam != null)
+            {
+                // Portrait safe-area approximation: 5% top, 8% bottom (notch / home bar)
+                const float safeT = 0.92f, safeB = 0.05f, safeL = 0.02f, safeR = 0.98f;
+                var vp = new Vector3[]
+                {
+                    new(safeL, safeB, 0), new(safeR, safeB, 0),
+                    new(safeR, safeT, 0), new(safeL, safeT, 0),
+                };
+                bool ok = true;
+                for (int i = 0; i < 4; i++)
+                {
+                    Ray ray = cam.ViewportPointToRay(vp[i]);
+                    if (Mathf.Abs(ray.direction.y) < 0.0001f) { ok = false; break; }
+                    float t = -ray.origin.y / ray.direction.y;
+                    if (t < 0f) { ok = false; break; }
+                    corners[i] = ray.origin + ray.direction * t;
+                }
+                usedCamera = ok;
+            }
+
+            if (!usedCamera)
+            {
+                // Fallback: fixed portrait rectangle centred on the gameplay area (9:16 ratio at 4 wide)
+                float hw = 2f;
+                float front = FIRE_Z + 1f;
+                float back  = FIRE_Z - 6.1f;  // 9:16 * 4 ≈ 7.1
+                corners[0] = new Vector3(-hw, 0, back);
+                corners[1] = new Vector3(+hw, 0, back);
+                corners[2] = new Vector3(+hw, 0, front);
+                corners[3] = new Vector3(-hw, 0, front);
+            }
+
+            Color fill    = new Color(.15f, 1f, .55f, .04f);
+            Color outline = new Color(.15f, 1f, .55f, .60f);
+            Handles.DrawSolidRectangleWithOutline(corners, fill, outline);
+
+            // Corner tick marks
+            Handles.color = outline;
+            float tickLen = 0.25f;
+            void Tick(Vector3 a, Vector3 b, Vector3 c2)
+            {
+                Handles.DrawLine(a + (b - a).normalized * tickLen, a);
+                Handles.DrawLine(a, a + (c2 - a).normalized * tickLen);
+            }
+            Tick(corners[0], corners[1], corners[3]);
+            Tick(corners[1], corners[0], corners[2]);
+            Tick(corners[2], corners[3], corners[1]);
+            Tick(corners[3], corners[2], corners[0]);
+
+            GUIStyle lbl = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = new Color(.2f, 1f, .6f, .9f) } };
+            Handles.Label(corners[3] + Vector3.right * .1f, "SAFE AREA", lbl);
         }
 
         private void HandleKnots(SceneView sv)
@@ -748,6 +825,9 @@ namespace BlockShooter.Editor
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
                 _selC = c; _selR = r; _selKnot = -1;
+                // Auto-promote empty cells to ShooterBlock so the inspector opens meaningfully
+                if (_type[c, r] == GridCellType.Empty)
+                    _type[c, r] = GridCellType.ShooterBlock;
                 e.Use(); Repaint();
             }
         }
@@ -858,7 +938,7 @@ namespace BlockShooter.Editor
             int c = _selC, r = _selR;
             Hdr($"CELL  ({c}, {r})");
 
-            // Type buttons — only Block and Door; Clear removes the block
+            // Type toggle — Shooter Block / Door
             GUILayout.Label("Type:", EditorStyles.miniLabel);
             EditorGUILayout.BeginHorizontal();
             bool isBlock = _type[c, r] == GridCellType.ShooterBlock;
@@ -869,47 +949,35 @@ namespace BlockShooter.Editor
             GUI.backgroundColor = isDoor ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
             if (GUILayout.Button("Door", GUILayout.Height(22)))
             { _type[c, r] = GridCellType.Door; Repaint(); }
-            GUI.backgroundColor = new Color(.5f,.2f,.2f);
-            if (GUILayout.Button("✕", GUILayout.Width(24), GUILayout.Height(22)))
-            { _type[c, r] = GridCellType.Empty; Repaint(); }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
 
-            if (_type[c, r] == GridCellType.Empty) return;
-
             GUILayout.Space(8);
 
-            // Color palette
-            GUILayout.Label("Color:", EditorStyles.miniLabel);
-            int perRow = 2;
-            for (int i = 0; i < Pal.Length; i++)
-            {
-                if (i % perRow == 0) EditorGUILayout.BeginHorizontal();
-                var entry = Pal[i];
-                bool isSel = _color[c, r] == entry.t;
-                GUI.backgroundColor = entry.c;
-                GUIStyle st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
-                if (isSel) st.normal.textColor = Color.white;
-                if (GUILayout.Button(entry.n, st, GUILayout.Height(26), GUILayout.Width(98)))
-                { _color[c, r] = entry.t; Repaint(); }
-                GUI.backgroundColor = Color.white;
-                if (i % perRow == perRow - 1 || i == Pal.Length - 1) EditorGUILayout.EndHorizontal();
-            }
-
-            GUILayout.Space(8);
-
-            if (_type[c, r] == GridCellType.ShooterBlock)
+            if (isBlock)
             {
                 GUILayout.Label("Shot Count:", EditorStyles.miniLabel);
                 bool usedef = _shots[c, r] < 0;
                 bool nd = EditorGUILayout.Toggle("Default", usedef);
                 if (nd != usedef) _shots[c, r] = nd ? -1 : (_cfg?.defaultShots ?? 3);
                 if (!nd) _shots[c, r] = EditorGUILayout.IntSlider(_shots[c, r], 1, 20);
+
+                GUILayout.Space(10);
+                GUI.backgroundColor = new Color(.5f,.22f,.22f);
+                if (GUILayout.Button("Set Empty", GUILayout.Height(22)))
+                { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
+                GUI.backgroundColor = Color.white;
             }
-            else if (_type[c, r] == GridCellType.Door)
+            else if (isDoor)
             {
                 GUILayout.Label("Blocks spawned from door:", EditorStyles.miniLabel);
                 _doors[c, r] = EditorGUILayout.IntSlider(_doors[c, r], 1, 15);
+
+                GUILayout.Space(10);
+                GUI.backgroundColor = new Color(.5f,.22f,.22f);
+                if (GUILayout.Button("Set Empty", GUILayout.Height(22)))
+                { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
+                GUI.backgroundColor = Color.white;
             }
         }
 
@@ -929,7 +997,7 @@ namespace BlockShooter.Editor
             _goalType   = LevelGoalType.ClearAllBlocks;
             _goalAmount = 0;
             _gridCols   = 4; _gridRows = 2;
-            _splinePreset = 0; _splineWidth = 6f; _splineDepth = 10f;
+            _splinePreset = 0; _splineWidth = 3.5f; _splineDepth = 5f;
             _activeIdx  = -1; _selC = -1; _selR = -1; _selKnot = -1;
             StopSplineEdit(save: false);
             InitGrid();
