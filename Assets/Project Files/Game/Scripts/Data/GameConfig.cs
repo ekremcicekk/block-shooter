@@ -10,14 +10,7 @@ namespace BlockShooter
         public float fireRate = 0.15f;
         public float projectileSpeed = 12f;
 
-        [Header("Conveyor Settings")]
-        public float conveyorSpeed = 2f;
-        public int columnCount = 5;
-        public float blockSpacing = 1.1f;
-
         [Header("Grid Settings")]
-        public int gridColumns = 4;
-        public int gridRows = 2;
         public float gridCellSize = 1.2f;
 
         [Header("Colors")]
@@ -28,10 +21,10 @@ namespace BlockShooter
         public Color purpleColor = new Color(0.6f, 0.2f, 0.9f);
         public Color orangeColor = new Color(1f, 0.55f, 0.1f);
 
-        [Header("Booster Unlock Levels")]
-        public int bombBoosterUnlockLevel    = 1;   // ExtraSlot (reused field name for BoosterData fallback)
-        public int rainbowBoosterUnlockLevel = 3;   // FreePick
-        public int freezeBoosterUnlockLevel  = 5;   // ColorBlast
+        [Header("Booster Unlock Levels (fallback when BoosterData SO is not assigned)")]
+        public int extraSlotUnlockLevel  = 1;
+        public int freePickUnlockLevel   = 3;
+        public int colorBlastUnlockLevel = 5;
 
         [Header("Scoring")]
         public int scorePerBlock = 10;

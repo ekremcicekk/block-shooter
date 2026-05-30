@@ -23,9 +23,6 @@ namespace BlockShooter
         [Tooltip("World-unit distance between consecutive arrows")]
         public float arrowSpacing = 2.0f;
 
-        [Header("Speed Sync")]
-        [Tooltip("Must match ConveyorPathController.speed")]
-        public float blockSpeed = 1.5f;
 
         private SplineContainer _splineContainer;
         private float _splineWorldLength;
@@ -121,7 +118,8 @@ namespace BlockShooter
         {
             if (!GameManager.Instance.IsPlaying) return;
 
-            float deltaTPerSec = blockSpeed / Mathf.Max(_splineWorldLength, 0.1f);
+            float speed = ConveyorPathController.Instance != null ? ConveyorPathController.Instance.speed : 1.5f;
+            float deltaTPerSec = speed / Mathf.Max(_splineWorldLength, 0.1f);
             float delta = deltaTPerSec * Time.deltaTime;
 
             for (int i = 0; i < _arrows.Count; i++)
@@ -166,11 +164,6 @@ namespace BlockShooter
         }
 
         // ── Public API ────────────────────────────────────────────────────────
-
-        public void SetSpeed(float speed)
-        {
-            blockSpeed = speed;
-        }
 
         public void RebuildInEditor()
         {

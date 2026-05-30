@@ -61,10 +61,6 @@ namespace BlockShooter
                 var pathCtrl = _activeTrackInstance.GetComponent<ConveyorPathController>();
                 if (pathCtrl != null)
                     pathCtrl.speed *= data.conveyorSpeedMultiplier;
-
-                var trackRenderer = _activeTrackInstance.GetComponent<ConveyorTrackRenderer>();
-                if (trackRenderer != null && pathCtrl != null)
-                    trackRenderer.SetSpeed(pathCtrl.speed);
             }
             else
             {

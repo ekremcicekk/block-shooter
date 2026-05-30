@@ -45,9 +45,9 @@ namespace BlockShooter
         {
             int unlockLevel = type switch
             {
-                BoosterType.ExtraSlot  => extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.bombBoosterUnlockLevel,
-                BoosterType.FreePick   => freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.rainbowBoosterUnlockLevel,
-                BoosterType.ColorBlast => colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.freezeBoosterUnlockLevel,
+                BoosterType.ExtraSlot  => extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,
+                BoosterType.FreePick   => freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,
+                BoosterType.ColorBlast => colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.colorBlastUnlockLevel,
                 _ => 999
             };
             return SaveManager.CurrentLevel >= unlockLevel;
@@ -172,9 +172,9 @@ namespace BlockShooter
         private void CheckUnlocks()
         {
             int level = SaveManager.CurrentLevel;
-            TryGiveInitial(BoosterType.ExtraSlot,  extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.bombBoosterUnlockLevel,    level);
-            TryGiveInitial(BoosterType.FreePick,   freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.rainbowBoosterUnlockLevel, level);
-            TryGiveInitial(BoosterType.ColorBlast, colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.freezeBoosterUnlockLevel,  level);
+            TryGiveInitial(BoosterType.ExtraSlot,  extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,  level);
+            TryGiveInitial(BoosterType.FreePick,   freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,   level);
+            TryGiveInitial(BoosterType.ColorBlast, colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.colorBlastUnlockLevel, level);
         }
 
         private void TryGiveInitial(BoosterType type, int unlockLevel, int currentLevel)

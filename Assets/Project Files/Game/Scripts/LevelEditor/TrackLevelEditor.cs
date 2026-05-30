@@ -27,7 +27,7 @@ namespace BlockShooter.Editor
         private GameObject _segmentPrefab;
         private GameObject _arrowPrefab;
         private float _arrowSpacing = 2.0f;
-        private float _blockSpeed = 1.5f;
+        private float _conveyorSpeed = 1.5f;
         private ConveyorTrackRenderer _activeTrack;
 
         // Block prefab & group colors shown in CreateTrack tab
@@ -98,7 +98,7 @@ namespace BlockShooter.Editor
             _segmentPrefab   = (GameObject)EditorGUILayout.ObjectField("Segment Prefab", _segmentPrefab, typeof(GameObject), false);
             _arrowPrefab     = (GameObject)EditorGUILayout.ObjectField("Arrow Prefab",   _arrowPrefab,   typeof(GameObject), false);
             _arrowSpacing    = EditorGUILayout.FloatField("Arrow Spacing (m)", _arrowSpacing);
-            _blockSpeed      = EditorGUILayout.FloatField("Block Speed", _blockSpeed);
+            _conveyorSpeed   = EditorGUILayout.FloatField("Conveyor Speed", _conveyorSpeed);
 
             EditorGUILayout.Space(4);
             _blockPrefab = (ConveyorBlock3D)EditorGUILayout.ObjectField("Block Prefab", _blockPrefab, typeof(ConveyorBlock3D), false);
@@ -172,10 +172,9 @@ namespace BlockShooter.Editor
             renderer.segmentPrefab = _segmentPrefab;
             renderer.arrowPrefab   = _arrowPrefab;
             renderer.arrowSpacing  = _arrowSpacing;
-            renderer.blockSpeed    = _blockSpeed;
 
             var pathCtrl = go.AddComponent<ConveyorPathController>();
-            pathCtrl.speed       = _blockSpeed;
+            pathCtrl.speed       = _conveyorSpeed;
             pathCtrl.loop        = true;
             pathCtrl.blockPrefab = _blockPrefab;
             pathCtrl.groupColors = _groupColors.ToArray();
