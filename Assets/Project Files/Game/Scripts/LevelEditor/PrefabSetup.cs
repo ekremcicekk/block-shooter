@@ -22,8 +22,8 @@ namespace BlockShooter.Editor
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            EditorUtility.DisplayDialog("Prefablar Oluşturuldu!",
-                $"Prefablar şuraya kaydedildi:\n{PrefabPath}", "Tamam");
+            EditorUtility.DisplayDialog("Prefabs Created",
+                $"Prefabs saved to:\n{PrefabPath}", "OK");
         }
 
         // ── Projectile ─────────────────────────────────────────────────────────
@@ -184,8 +184,8 @@ namespace BlockShooter.Editor
             string fullPath = PrefabPath + name + ".prefab";
             bool success;
             PrefabUtility.SaveAsPrefabAsset(go, fullPath, out success);
-            if (success) Debug.Log($"[PrefabSetup] Oluşturuldu: {fullPath}");
-            else Debug.LogError($"[PrefabSetup] Başarısız: {fullPath}");
+            if (success) Debug.Log($"[PrefabSetup] Created: {fullPath}");
+            else Debug.LogError($"[PrefabSetup] Failed to save: {fullPath}");
         }
     }
 }

@@ -7,23 +7,18 @@ namespace BlockShooter
     {
         public static LevelManager Instance { get; private set; }
 
-        [Header("Levels")]
-        public LevelData[] levels;
+        [Header("Level Prefabs")]
+        [Tooltip("Array of self-contained level prefabs (LevelRoot). Loops when exhausted.")]
+        public LevelRoot[] levelPrefabs;
 
-        [Header("Scene References")]
-        public ShooterGrid shooterGrid;
+        [Header("Spawn Point")]
+        [Tooltip("Parent transform under which the active level prefab is instantiated.")]
+        public Transform levelSpawnParent;
 
-        [Header("Track Spawn Point")]
-        [Tooltip("Where the level track prefab is instantiated")]
-        public Transform trackSpawnParent;
-        [Tooltip("Local position offset applied to the instantiated track")]
-        public Vector3 trackSpawnOffset = new Vector3(0f, 0f, 6f);
+        private LevelRoot _activeLevelRoot;
 
-        private LevelData _currentLevel;
-        private GameObject _activeTrackInstance;
-
-        public LevelData CurrentLevel => _currentLevel;
-        public int CurrentLevelIndex => SaveManager.CurrentLevel;
+        public LevelRoot CurrentLevelRoot => _activeLevelRoot;
+        public int CurrentLevelIndex     => SaveManager.CurrentLevel;
 
         private void Awake()
         {
@@ -38,53 +33,30 @@ namespace BlockShooter
 
         public void LoadCurrentLevel()
         {
-            int raw = SaveManager.CurrentLevel - 1;
-            int index = levels.Length > 0 ? raw % levels.Length : 0;
-            _currentLevel = levels[Mathf.Clamp(index, 0, levels.Length - 1)];
-            ApplyLevel(_currentLevel);
-        }
-
-        private void ApplyLevel(LevelData data)
-        {
-            // Destroy previous track
-            if (_activeTrackInstance != null)
-                Destroy(_activeTrackInstance);
-
-            // Instantiate this level's track prefab
-            if (data.trackPrefab != null)
+            if (levelPrefabs == null || levelPrefabs.Length == 0)
             {
-                Transform parent = trackSpawnParent != null ? trackSpawnParent : transform;
-                _activeTrackInstance = Instantiate(data.trackPrefab, parent);
-                _activeTrackInstance.transform.localPosition = trackSpawnOffset;
-
-                // Apply speed multiplier
-                var pathCtrl = _activeTrackInstance.GetComponent<ConveyorPathController>();
-                if (pathCtrl != null)
-                    pathCtrl.speed *= data.conveyorSpeedMultiplier;
-            }
-            else
-            {
-                Debug.LogWarning($"[LevelManager] Level '{data.levelName}' has no trackPrefab assigned!");
+                Debug.LogWarning("[LevelManager] No level prefabs assigned.");
+                return;
             }
 
-            // Setup shooter grid
-            if (shooterGrid != null)
-                shooterGrid.Initialize(data);
+            int raw   = SaveManager.CurrentLevel - 1;
+            int index = raw % levelPrefabs.Length;
+            SpawnLevel(levelPrefabs[Mathf.Clamp(index, 0, levelPrefabs.Length - 1)]);
         }
 
-        public void RestartLevel()
+        private void SpawnLevel(LevelRoot prefab)
         {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            if (_activeLevelRoot != null)
+                Destroy(_activeLevelRoot.gameObject);
+
+            Transform parent = levelSpawnParent != null ? levelSpawnParent : transform;
+            _activeLevelRoot = Instantiate(prefab, parent);
+            _activeLevelRoot.transform.localPosition = Vector3.zero;
+            _activeLevelRoot.Initialize();
         }
 
-        public void LoadNextLevel()
-        {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-        }
-
-        public void LoadMainMenu()
-        {
-            SceneManager.LoadScene(0);
-        }
+        public void RestartLevel()  => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        public void LoadNextLevel() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        public void LoadMainMenu()  => SceneManager.LoadScene(0);
     }
 }

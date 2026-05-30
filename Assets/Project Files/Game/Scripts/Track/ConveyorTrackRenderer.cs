@@ -118,7 +118,7 @@ namespace BlockShooter
         {
             if (!GameManager.Instance.IsPlaying) return;
 
-            float speed = ConveyorPathController.Instance != null ? ConveyorPathController.Instance.speed : 1.5f;
+            float speed = ConveyorController.Instance != null ? ConveyorController.Instance.speed : 1.5f;
             float deltaTPerSec = speed / Mathf.Max(_splineWorldLength, 0.1f);
             float delta = deltaTPerSec * Time.deltaTime;
 

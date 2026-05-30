@@ -2,344 +2,573 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Splines;
 
 namespace BlockShooter.Editor
 {
+    /// <summary>
+    /// Single unified Level Editor window.
+    /// Menu: BlockShooter / Level Editor
+    ///
+    /// Left panel  — level metadata, conveyor settings, prefab slots.
+    /// Right panel — interactive shooter grid + conveyor group list + Generate button.
+    ///
+    /// "Generate Level Prefab" creates a fully self-contained prefab at
+    /// Assets/Levels/Level_XXX.prefab with every sub-system wired inside it.
+    /// </summary>
     public class LevelEditorWindow : EditorWindow
     {
-        private int _levelIndex = 1;
-        private string _levelName = "Level_01";
+        // ── Constants ─────────────────────────────────────────────────────────
+        private const string SavePath  = "Assets/Levels/";
+        private const float  CellPx    = 52f;
+        private const float  CellPad   = 3f;
+        private const float  LeftWidth = 220f;
+
+        // ── Level metadata ────────────────────────────────────────────────────
+        private string          _levelName  = "Level 1";
+        private int             _levelIndex = 1;
         private LevelDifficulty _difficulty = LevelDifficulty.Normal;
-        private float _conveyorSpeedMult = 1f;
-        private LevelGoalType _goalType = LevelGoalType.ClearAllBlocks;
-        private int _goalAmount = 0;
-        private int _gridCols = 4;
-        private int _gridRows = 2;
-        private int _conveyorRowCount = 10;
-        private int _conveyorColCount = 5;
+        private LevelGoalType   _goalType   = LevelGoalType.ClearAllBlocks;
+        private int             _goalAmount = 0;
 
-        private GridCellType[,] _cellTypes;
+        // ── Conveyor settings ─────────────────────────────────────────────────
+        private float _conveyorSpeed = 1.5f;
+        private int   _laneCount     = 5;
+        private float _laneSpacing   = 0.22f;
+        private float _rowSpacing    = 0.22f;
+
+        // ── Shooter grid ──────────────────────────────────────────────────────
+        private int   _gridCols     = 4;
+        private int   _gridRows     = 2;
+        private float _gridCellSize = 1.2f;
+        private int   _defaultShots = 3;
+
+        private enum CellType { Empty, ShooterBlock, Door }
+
+        private CellType[,]       _cellTypes;
         private BlockColorType[,] _cellColors;
-        private int[,] _cellShotCounts;
-        private int[,] _cellDoorCounts;
-        private BlockColorType[,] _conveyorGrid;
+        private int[,]            _cellShots;  // -1 = use default
+        private int[,]            _doorCount;
 
-        private bool _gridInitialized;
-        private Vector2 _scrollPos;
-
-        private readonly Color[] _colorMap = new Color[]
+        // ── Conveyor groups ───────────────────────────────────────────────────
+        private class ConveyorGroupDef
         {
-            Color.gray,                              // None
-            new Color(0.9f, 0.2f, 0.2f),            // Red
-            new Color(0.2f, 0.5f, 0.9f),            // Blue
-            new Color(0.2f, 0.8f, 0.3f),            // Green
-            new Color(1f, 0.85f, 0.1f),             // Yellow
-            new Color(0.6f, 0.2f, 0.9f),            // Purple
-            new Color(1f, 0.55f, 0.1f)              // Orange
+            public BlockColorType color    = BlockColorType.Red;
+            public int            rowCount = 20;
+            public int            lanes    = 5;
+        }
+
+        private readonly List<ConveyorGroupDef> _groups = new();
+
+        // ── Prefab references ─────────────────────────────────────────────────
+        private GameObject _shooterBlockPrefab;
+        private GameObject _wallElementPrefab;
+        private GameObject _conveyorBlockPrefab;
+        private GameObject _slotIndicatorPrefab;
+        private GameObject _trackSegmentPrefab;
+        private GameObject _arrowPrefab;
+
+        // ── UI state ──────────────────────────────────────────────────────────
+        private Vector2 _leftScroll;
+        private Vector2 _rightScroll;
+
+        // ── Block color palette ───────────────────────────────────────────────
+        private static readonly Color[] BlockColors =
+        {
+            new Color(0.90f, 0.20f, 0.20f), // Red
+            new Color(0.20f, 0.50f, 0.90f), // Blue
+            new Color(0.20f, 0.80f, 0.30f), // Green
+            new Color(0.95f, 0.80f, 0.10f), // Yellow
+            new Color(0.90f, 0.50f, 0.10f), // Orange
+            new Color(0.70f, 0.20f, 0.90f), // Purple
         };
 
-        [MenuItem("BlockShooter/Level Editor")]
+        private static Color GetBlockColor(BlockColorType t)
+        {
+            int i = (int)t;
+            return i >= 0 && i < BlockColors.Length ? BlockColors[i] : Color.gray;
+        }
+
+        // ── Menu entry ────────────────────────────────────────────────────────
+
+        [MenuItem("BlockShooter/Level Editor", false, 10)]
         public static void Open()
         {
-            GetWindow<LevelEditorWindow>("Level Editor").Show();
+            var w = GetWindow<LevelEditorWindow>("Level Editor");
+            w.minSize = new Vector2(700, 500);
+            w.Show();
         }
 
         private void OnEnable()
         {
-            InitializeGrids();
+            RebuildGrid();
+            if (_groups.Count == 0)
+            {
+                _groups.Add(new ConveyorGroupDef { color = BlockColorType.Red,  rowCount = 20, lanes = 5 });
+                _groups.Add(new ConveyorGroupDef { color = BlockColorType.Blue, rowCount = 20, lanes = 5 });
+            }
         }
 
-        private void InitializeGrids()
-        {
-            _cellTypes = new GridCellType[_gridCols, _gridRows];
-            _cellColors = new BlockColorType[_gridCols, _gridRows];
-            _cellShotCounts = new int[_gridCols, _gridRows];
-            _cellDoorCounts = new int[_gridCols, _gridRows];
-            _conveyorGrid = new BlockColorType[_conveyorColCount, _conveyorRowCount];
-
-            for (int c = 0; c < _gridCols; c++)
-                for (int r = 0; r < _gridRows; r++)
-                {
-                    _cellTypes[c, r] = GridCellType.ShooterBlock;
-                    _cellColors[c, r] = BlockColorType.Red;
-                    _cellShotCounts[c, r] = 100;
-                    _cellDoorCounts[c, r] = 3;
-                }
-
-            for (int c = 0; c < _conveyorColCount; c++)
-                for (int r = 0; r < _conveyorRowCount; r++)
-                    _conveyorGrid[c, r] = BlockColorType.None;
-
-            _gridInitialized = true;
-        }
+        // ── GUI ───────────────────────────────────────────────────────────────
 
         private void OnGUI()
         {
-            _scrollPos = GUILayout.BeginScrollView(_scrollPos);
+            DrawToolbar();
+            GUILayout.BeginHorizontal();
+            DrawLeftPanel();
+            DrawDivider();
+            DrawRightPanel();
+            GUILayout.EndHorizontal();
+        }
 
-            DrawHeader();
-            EditorGUILayout.Space(10);
+        private void DrawToolbar()
+        {
+            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+            GUILayout.Label("BLOCK SHOOTER  —  LEVEL EDITOR", EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+        }
 
-            DrawLevelSettings();
-            EditorGUILayout.Space(10);
+        // ── Left panel ─────────────────────────────────────────────────────────
 
-            DrawGridSettings();
-            EditorGUILayout.Space(10);
+        private void DrawLeftPanel()
+        {
+            _leftScroll = GUILayout.BeginScrollView(_leftScroll,
+                GUILayout.Width(LeftWidth), GUILayout.ExpandHeight(true));
 
-            DrawShooterGrid();
-            EditorGUILayout.Space(10);
+            DrawSection("LEVEL");
+            _levelName  = EditorGUILayout.TextField("Name",       _levelName);
+            _levelIndex = EditorGUILayout.IntField ("Index",      _levelIndex);
+            _difficulty = (LevelDifficulty)EditorGUILayout.EnumPopup("Difficulty", _difficulty);
+            _goalType   = (LevelGoalType)  EditorGUILayout.EnumPopup("Goal",       _goalType);
+            if (_goalType != LevelGoalType.ClearAllBlocks)
+                _goalAmount = EditorGUILayout.IntField("Amount", _goalAmount);
 
-            DrawConveyorGrid();
-            EditorGUILayout.Space(10);
+            DrawSection("CONVEYOR");
+            _conveyorSpeed = EditorGUILayout.FloatField("Speed",        _conveyorSpeed);
+            _laneCount     = EditorGUILayout.IntField  ("Lanes",        _laneCount);
+            _laneSpacing   = EditorGUILayout.FloatField("Lane Spacing", _laneSpacing);
+            _rowSpacing    = EditorGUILayout.FloatField("Row Spacing",  _rowSpacing);
 
-            DrawExportButton();
+            DrawSection("GRID");
+            EditorGUI.BeginChangeCheck();
+            _gridCols     = EditorGUILayout.IntField  ("Columns",      _gridCols);
+            _gridRows     = EditorGUILayout.IntField  ("Rows",         _gridRows);
+            _gridCellSize = EditorGUILayout.FloatField("Cell Size",    _gridCellSize);
+            _defaultShots = EditorGUILayout.IntField  ("Default Shots",_defaultShots);
+            if (EditorGUI.EndChangeCheck()) RebuildGrid();
+
+            DrawSection("PREFABS");
+            _shooterBlockPrefab  = ObjectField("Shooter Block",  _shooterBlockPrefab);
+            _wallElementPrefab   = ObjectField("Wall Element",   _wallElementPrefab);
+            _conveyorBlockPrefab = ObjectField("Conveyor Block", _conveyorBlockPrefab);
+            _slotIndicatorPrefab = ObjectField("Slot Indicator", _slotIndicatorPrefab);
+            _trackSegmentPrefab  = ObjectField("Track Segment",  _trackSegmentPrefab);
+            _arrowPrefab         = ObjectField("Track Arrow",    _arrowPrefab);
 
             GUILayout.EndScrollView();
         }
 
-        private void DrawHeader()
+        private static GameObject ObjectField(string label, GameObject current)
+            => (GameObject)EditorGUILayout.ObjectField(label, current, typeof(GameObject), false);
+
+        // ── Right panel ────────────────────────────────────────────────────────
+
+        private void DrawRightPanel()
         {
-            GUIStyle headerStyle = new GUIStyle(EditorStyles.boldLabel)
-            { fontSize = 16, alignment = TextAnchor.MiddleCenter };
-            EditorGUILayout.LabelField("Block Shooter - Level Editor", headerStyle, GUILayout.Height(30));
-            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+            _rightScroll = GUILayout.BeginScrollView(_rightScroll,
+                GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+
+            DrawSection("SHOOTER GRID  (LMB = cycle type  |  RMB = color / shots)");
+            DrawShooterGrid();
+
+            DrawSection("CONVEYOR GROUPS");
+            DrawConveyorGroups();
+
+            GUILayout.Space(12);
+            DrawGenerateButton();
+
+            GUILayout.EndScrollView();
         }
 
-        private void DrawLevelSettings()
-        {
-            EditorGUILayout.LabelField("Level Settings", EditorStyles.boldLabel);
-            _levelIndex = EditorGUILayout.IntField("Level Index", _levelIndex);
-            _levelName = EditorGUILayout.TextField("Level Name", _levelName);
-            _difficulty = (LevelDifficulty)EditorGUILayout.EnumPopup("Difficulty", _difficulty);
-            _conveyorSpeedMult = EditorGUILayout.Slider("Conveyor Speed Multiplier", _conveyorSpeedMult, 0.5f, 3f);
-            _goalType = (LevelGoalType)EditorGUILayout.EnumPopup("Goal Type", _goalType);
-            if (_goalType != LevelGoalType.ClearAllBlocks)
-                _goalAmount = EditorGUILayout.IntField("Goal Amount", _goalAmount);
-        }
-
-        private void DrawGridSettings()
-        {
-            EditorGUILayout.LabelField("Grid Size", EditorStyles.boldLabel);
-
-            int newCols = EditorGUILayout.IntSlider("Grid Columns", _gridCols, 1, 6);
-            int newRows = EditorGUILayout.IntSlider("Grid Rows", _gridRows, 1, 3);
-            int newConvCols = EditorGUILayout.IntSlider("Conveyor Columns", _conveyorColCount, 1, 8);
-            int newConvRows = EditorGUILayout.IntSlider("Conveyor Rows", _conveyorRowCount, 1, 30);
-
-            if (newCols != _gridCols || newRows != _gridRows ||
-                newConvCols != _conveyorColCount || newConvRows != _conveyorRowCount)
-            {
-                _gridCols = newCols;
-                _gridRows = newRows;
-                _conveyorColCount = newConvCols;
-                _conveyorRowCount = newConvRows;
-                InitializeGrids();
-            }
-        }
+        // ── Shooter grid ───────────────────────────────────────────────────────
 
         private void DrawShooterGrid()
         {
-            if (!_gridInitialized) return;
-            EditorGUILayout.LabelField("Shooter Grid (Bottom Area)", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("Click cells to cycle: ShooterBlock → Door → Empty → ShooterBlock", MessageType.Info);
+            if (_cellTypes == null) RebuildGrid();
 
-            float cellSize = 55f;
-
-            for (int r = _gridRows - 1; r >= 0; r--)
+            GUILayout.BeginVertical();
+            for (int row = _gridRows - 1; row >= 0; row--)
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Space(10);
-                for (int c = 0; c < _gridCols; c++)
-                {
-                    DrawShooterCell(c, r, cellSize);
-                }
+                for (int col = 0; col < _gridCols; col++)
+                    DrawGridCell(col, row);
                 GUILayout.EndHorizontal();
-                GUILayout.Space(2);
             }
+            GUILayout.EndVertical();
         }
 
-        private void DrawShooterCell(int col, int row, float size)
+        private void DrawGridCell(int col, int row)
         {
-            GridCellType cellType = _cellTypes[col, row];
-            BlockColorType color = _cellColors[col, row];
+            CellType       type = _cellTypes[col, row];
+            BlockColorType clr  = _cellColors[col, row];
 
-            Rect rect = GUILayoutUtility.GetRect(size, size, GUILayout.Width(size), GUILayout.Height(size));
+            Color bg = type == CellType.Empty
+                ? new Color(0.25f, 0.25f, 0.28f)
+                : GetBlockColor(clr);
+            if (type == CellType.Door)
+                bg = Color.Lerp(bg, Color.black, 0.45f);
 
-            Color bgColor = cellType switch
-            {
-                GridCellType.Empty => new Color(0.2f, 0.2f, 0.2f),
-                GridCellType.Door => new Color(0.5f, 0.35f, 0.1f),
-                _ => _colorMap[(int)color]
-            };
+            string label = type == CellType.Empty ? ""
+                         : type == CellType.Door  ? $"Door\n{_doorCount[col, row]}"
+                         : $"{clr}\n{GetShotsLabel(col, row)}";
 
-            EditorGUI.DrawRect(rect, bgColor);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1), Color.black);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1, rect.height), Color.black);
+            Rect r = GUILayoutUtility.GetRect(
+                CellPx + CellPad, CellPx + CellPad,
+                GUILayout.Width(CellPx + CellPad));
+            r = new Rect(r.x + CellPad * 0.5f, r.y + CellPad * 0.5f, CellPx, CellPx);
 
-            GUIStyle labelStyle = new GUIStyle(EditorStyles.miniLabel)
-            { alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white }, fontSize = 9 };
+            Color prev = GUI.backgroundColor;
+            GUI.backgroundColor = bg;
+            GUI.Box(r, label, EditorStyles.helpBox);
+            GUI.backgroundColor = prev;
 
-            string label = cellType switch
-            {
-                GridCellType.Empty => "EMPTY",
-                GridCellType.Door => $"DOOR\nx{_cellDoorCounts[col, row]}",
-                _ => $"{color.ToString().Substring(0, 3)}\n{_cellShotCounts[col, row]}"
-            };
+            Event e = Event.current;
+            if (!r.Contains(e.mousePosition)) return;
 
-            GUI.Label(rect, label, labelStyle);
-
-            if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
-            {
-                if (Event.current.button == 0)
-                    CycleCell(col, row);
-                else if (Event.current.button == 1)
-                    ShowCellContextMenu(col, row);
-
-                Event.current.Use();
-                Repaint();
-            }
+            if (e.type == EventType.MouseDown && e.button == 0) { CycleCell(col, row); e.Use(); Repaint(); }
+            else if (e.type == EventType.MouseDown && e.button == 1) { ShowCellMenu(col, row); e.Use(); }
         }
+
+        private string GetShotsLabel(int col, int row)
+            => _cellShots[col, row] < 0 ? $"×{_defaultShots}" : $"×{_cellShots[col, row]}";
 
         private void CycleCell(int col, int row)
         {
             _cellTypes[col, row] = _cellTypes[col, row] switch
             {
-                GridCellType.ShooterBlock => GridCellType.Door,
-                GridCellType.Door => GridCellType.Empty,
-                _ => GridCellType.ShooterBlock
+                CellType.Empty        => CellType.ShooterBlock,
+                CellType.ShooterBlock => CellType.Door,
+                _                     => CellType.Empty,
             };
         }
 
-        private void ShowCellContextMenu(int col, int row)
+        private void ShowCellMenu(int col, int row)
         {
-            GenericMenu menu = new GenericMenu();
-            if (_cellTypes[col, row] == GridCellType.ShooterBlock)
-            {
-                foreach (BlockColorType ct in System.Enum.GetValues(typeof(BlockColorType)))
-                {
-                    if (ct == BlockColorType.None) continue;
-                    var capturedColor = ct;
-                    menu.AddItem(new GUIContent($"Set Color/{ct}"), _cellColors[col, row] == ct,
-                        () => { _cellColors[col, row] = capturedColor; Repaint(); });
-                }
-                menu.AddSeparator("");
-                for (int shots = 50; shots <= 200; shots += 50)
-                {
-                    var capturedShots = shots;
-                    menu.AddItem(new GUIContent($"Set Shots/{shots}"), _cellShotCounts[col, row] == shots,
-                        () => { _cellShotCounts[col, row] = capturedShots; Repaint(); });
-                }
-            }
-            else if (_cellTypes[col, row] == GridCellType.Door)
-            {
-                for (int count = 1; count <= 5; count++)
-                {
-                    var capturedCount = count;
-                    menu.AddItem(new GUIContent($"Door Count/{count}"), _cellDoorCounts[col, row] == count,
-                        () => { _cellDoorCounts[col, row] = capturedCount; Repaint(); });
-                }
-            }
-            menu.ShowAsContext();
-        }
+            var menu = new GenericMenu();
+            menu.AddDisabledItem(new GUIContent($"Cell ({col}, {row})"));
+            menu.AddSeparator("");
 
-        private void DrawConveyorGrid()
-        {
-            if (!_gridInitialized) return;
-            EditorGUILayout.LabelField("Conveyor Belt (Top Area) — Right-click for color menu", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("Rows scroll from right to left. Top row spawns first.", MessageType.Info);
-
-            float cellSize = 42f;
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(10);
-            for (int c = 0; c < _conveyorColCount; c++)
-                GUILayout.Label($"Col {c + 1}", GUILayout.Width(cellSize));
-            GUILayout.EndHorizontal();
-
-            for (int r = 0; r < _conveyorRowCount; r++)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Space(10);
-                for (int c = 0; c < _conveyorColCount; c++)
-                {
-                    DrawConveyorCell(c, r, cellSize);
-                }
-                GUILayout.Label($" Row {r + 1}", GUILayout.Width(50));
-                GUILayout.EndHorizontal();
-                GUILayout.Space(1);
-            }
-        }
-
-        private void DrawConveyorCell(int col, int row, float size)
-        {
-            BlockColorType color = _conveyorGrid[col, row];
-            Rect rect = GUILayoutUtility.GetRect(size, size, GUILayout.Width(size), GUILayout.Height(size));
-
-            Color bg = color == BlockColorType.None ? new Color(0.15f, 0.15f, 0.15f) : _colorMap[(int)color];
-            EditorGUI.DrawRect(rect, bg);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1), Color.black);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1, rect.height), Color.black);
-
-            if (color != BlockColorType.None)
-            {
-                GUIStyle s = new GUIStyle(EditorStyles.miniLabel)
-                { alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white }, fontSize = 8 };
-                GUI.Label(rect, color.ToString().Substring(0, 1), s);
-            }
-
-            if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
-            {
-                if (Event.current.button == 0)
-                    CycleConveyorColor(col, row);
-                else
-                    ShowConveyorContextMenu(col, row);
-                Event.current.Use();
-                Repaint();
-            }
-        }
-
-        private void CycleConveyorColor(int col, int row)
-        {
-            int next = ((int)_conveyorGrid[col, row] + 1) % System.Enum.GetValues(typeof(BlockColorType)).Length;
-            _conveyorGrid[col, row] = (BlockColorType)next;
-        }
-
-        private void ShowConveyorContextMenu(int col, int row)
-        {
-            GenericMenu menu = new GenericMenu();
             foreach (BlockColorType ct in System.Enum.GetValues(typeof(BlockColorType)))
             {
                 var captured = ct;
-                menu.AddItem(new GUIContent(ct == BlockColorType.None ? "Empty" : ct.ToString()),
-                    _conveyorGrid[col, row] == ct,
-                    () => { _conveyorGrid[col, row] = captured; Repaint(); });
+                menu.AddItem(new GUIContent("Color/" + ct), _cellColors[col, row] == ct,
+                    () => { _cellColors[col, row] = captured; Repaint(); });
             }
+
+            menu.AddSeparator("");
+            menu.AddItem(new GUIContent("Shots/Default"), _cellShots[col, row] < 0,
+                () => { _cellShots[col, row] = -1; Repaint(); });
+            for (int s = 1; s <= 10; s++)
+            {
+                int shots = s;
+                menu.AddItem(new GUIContent($"Shots/{s}"), _cellShots[col, row] == shots,
+                    () => { _cellShots[col, row] = shots; Repaint(); });
+            }
+
+            if (_cellTypes[col, row] == CellType.Door)
+            {
+                menu.AddSeparator("");
+                for (int d = 1; d <= 10; d++)
+                {
+                    int n = d;
+                    menu.AddItem(new GUIContent($"Door Blocks/{d}"), _doorCount[col, row] == n,
+                        () => { _doorCount[col, row] = n; Repaint(); });
+                }
+            }
+
             menu.ShowAsContext();
         }
 
-        private void DrawExportButton()
+        // ── Conveyor groups ────────────────────────────────────────────────────
+
+        private void DrawConveyorGroups()
         {
-            GUILayout.Space(10);
-            GUI.backgroundColor = new Color(0.2f, 0.8f, 0.3f);
-            if (GUILayout.Button("Export Level as ScriptableObject", GUILayout.Height(40)))
-                ExportLevel();
-            GUI.backgroundColor = Color.white;
+            for (int i = _groups.Count - 1; i >= 0; i--)
+            {
+                var g = _groups[i];
+                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
 
-            if (GUILayout.Button("Fill Random Conveyor", GUILayout.Height(25)))
-                FillRandomConveyor();
+                Color prev = GUI.backgroundColor;
+                GUI.backgroundColor = GetBlockColor(g.color);
+                GUILayout.Box("", GUILayout.Width(16), GUILayout.Height(16));
+                GUI.backgroundColor = prev;
 
-            if (GUILayout.Button("Reset All", GUILayout.Height(25)))
-                InitializeGrids();
+                g.color    = (BlockColorType)EditorGUILayout.EnumPopup(g.color, GUILayout.Width(80));
+                GUILayout.Label("Rows",  GUILayout.Width(36));
+                g.rowCount = EditorGUILayout.IntField(g.rowCount, GUILayout.Width(38));
+                GUILayout.Label("Lanes", GUILayout.Width(38));
+                g.lanes    = EditorGUILayout.IntField(g.lanes,    GUILayout.Width(30));
+
+                if (GUILayout.Button("×", GUILayout.Width(22)))
+                    _groups.RemoveAt(i);
+
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (GUILayout.Button("+ Add Group"))
+                _groups.Add(new ConveyorGroupDef());
         }
 
-        private void FillRandomConveyor()
+        // ── Generate button ────────────────────────────────────────────────────
+
+        private void DrawGenerateButton()
         {
-            BlockColorType[] colors = { BlockColorType.Red, BlockColorType.Blue, BlockColorType.Green,
-                                         BlockColorType.Yellow, BlockColorType.Purple };
-            for (int r = 0; r < _conveyorRowCount; r++)
-                for (int c = 0; c < _conveyorColCount; c++)
-                    _conveyorGrid[c, r] = colors[Random.Range(0, colors.Length)];
-            Repaint();
+            GUI.backgroundColor = new Color(0.3f, 0.85f, 0.45f);
+            if (GUILayout.Button("GENERATE LEVEL PREFAB", GUILayout.Height(38)))
+                GeneratePrefab();
+            GUI.backgroundColor = Color.white;
+        }
+
+        // ── Helper drawing ─────────────────────────────────────────────────────
+
+        private void RebuildGrid()
+        {
+            _gridCols = Mathf.Max(1, _gridCols);
+            _gridRows = Mathf.Max(1, _gridRows);
+
+            var oldTypes  = _cellTypes;
+            var oldColors = _cellColors;
+            var oldShots  = _cellShots;
+            var oldDoor   = _doorCount;
+
+            _cellTypes  = new CellType[_gridCols, _gridRows];
+            _cellColors = new BlockColorType[_gridCols, _gridRows];
+            _cellShots  = new int[_gridCols, _gridRows];
+            _doorCount  = new int[_gridCols, _gridRows];
+
+            for (int c = 0; c < _gridCols; c++)
+            for (int r = 0; r < _gridRows; r++)
+            {
+                _cellShots[c, r] = -1;
+                _doorCount[c, r] = 3;
+
+                if (oldTypes == null || c >= oldTypes.GetLength(0) || r >= oldTypes.GetLength(1)) continue;
+                _cellTypes[c, r]  = oldTypes[c, r];
+                _cellColors[c, r] = oldColors[c, r];
+                _cellShots[c, r]  = oldShots[c, r];
+                _doorCount[c, r]  = oldDoor[c, r];
+            }
+        }
+
+        private static void DrawSection(string title)
+        {
+            GUILayout.Space(8);
+            EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
+            var r = GUILayoutUtility.GetRect(1, 1, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(r, new Color(0.5f, 0.5f, 0.5f, 0.4f));
+            GUILayout.Space(4);
+        }
+
+        private static void DrawDivider()
+        {
+            var r = GUILayoutUtility.GetRect(1, float.MaxValue,
+                GUILayout.Width(1), GUILayout.ExpandHeight(true));
+            EditorGUI.DrawRect(r, new Color(0.3f, 0.3f, 0.3f));
+        }
+
+        // ── Prefab generation ──────────────────────────────────────────────────
+
+        private void GeneratePrefab()
+        {
+            EnsureDirectory(SavePath.TrimEnd('/'));
+
+            string prefabName = $"Level_{_levelIndex:000}";
+            string prefabPath = SavePath + prefabName + ".prefab";
+
+            var root = new GameObject(prefabName);
+
+            // LevelRoot
+            var lr = root.AddComponent<LevelRoot>();
+            lr.levelIndex              = _levelIndex;
+            lr.levelName               = _levelName;
+            lr.difficulty              = _difficulty;
+            lr.goalType                = _goalType;
+            lr.goalAmount              = _goalAmount;
+            lr.conveyorSpeedMultiplier = _conveyorSpeed;
+
+            // Track (SplineContainer + ConveyorController)
+            var trackGo = CreateChild(root.transform, "Track");
+            var splineContainer = trackGo.AddComponent<SplineContainer>();
+            BuildDefaultSpline(splineContainer);
+            var convCtrl = trackGo.AddComponent<ConveyorController>();
+            convCtrl.speed = 1.5f;
+            lr.conveyorController = convCtrl;
+
+            if (_trackSegmentPrefab != null)
+            {
+                var rend = trackGo.AddComponent<ConveyorTrackRenderer>();
+                rend.segmentPrefab = _trackSegmentPrefab;
+                if (_arrowPrefab != null) rend.arrowPrefab = _arrowPrefab;
+            }
+
+            // Block Groups under Track
+            var groupsParent = CreateChild(trackGo.transform, "Groups");
+            foreach (var gd in _groups)
+            {
+                var groupGo = CreateChild(groupsParent.transform, $"Group_{gd.color}");
+                var bg = groupGo.AddComponent<BlockGroup>();
+                bg.colorType   = gd.color;
+                bg.rowCount    = gd.rowCount;
+                bg.laneCount   = gd.lanes;
+                bg.laneSpacing = _laneSpacing;
+                bg.rowSpacing  = _rowSpacing;
+
+                if (_conveyorBlockPrefab != null)
+                    BuildBlockChildren(groupGo.transform, gd);
+            }
+
+            // FireRange
+            var frGo = CreateChild(root.transform, "FireRange");
+            frGo.transform.localPosition = new Vector3(0f, 0.5f, 2f);
+            var frCol = frGo.AddComponent<BoxCollider>();
+            frCol.isTrigger = true;
+            frCol.size = new Vector3(6f, 2f, 3f);
+            lr.fireRange = frGo.AddComponent<FireRange>();
+
+            // SlotDeck
+            var slotDeckGo = CreateChild(root.transform, "SlotDeck");
+            slotDeckGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+            var slotSys = slotDeckGo.AddComponent<SlotSystem>();
+            slotSys.slotIndicatorPrefab = _slotIndicatorPrefab;
+            lr.slotSystem = slotSys;
+
+            float totalSlotW = (_gridCols - 1) * _gridCellSize;
+            for (int i = 0; i < _gridCols; i++)
+            {
+                var slotGo = CreateChild(slotDeckGo.transform, $"Slot_{i}");
+                slotGo.transform.localPosition =
+                    new Vector3(-totalSlotW * 0.5f + i * _gridCellSize, 0f, 0f);
+            }
+
+            // ShooterGrid
+            var sgGo = CreateChild(root.transform, "ShooterGrid");
+            sgGo.transform.localPosition = new Vector3(0f, 0f, -2f);
+            var sg = sgGo.AddComponent<ShooterGrid>();
+            sg.shooterBlockPrefab = _shooterBlockPrefab != null
+                ? _shooterBlockPrefab.GetComponent<ShooterBlock>() : null;
+            lr.shooterGrid = sg;
+
+            float halfW = (_gridCols - 1) * _gridCellSize * 0.5f;
+            float halfD = (_gridRows - 1) * _gridCellSize * 0.5f;
+
+            for (int r = 0; r < _gridRows; r++)
+            for (int c = 0; c < _gridCols; c++)
+            {
+                var cellPos = new Vector3(
+                    -halfW + c * _gridCellSize,
+                    0f,
+                    -halfD + r * _gridCellSize);
+
+                string cellName = $"Cell_r{r}_c{c}";
+
+                switch (_cellTypes[c, r])
+                {
+                    case CellType.ShooterBlock when _shooterBlockPrefab != null:
+                    {
+                        var cellGo = (GameObject)PrefabUtility.InstantiatePrefab(
+                            _shooterBlockPrefab, sgGo.transform);
+                        cellGo.name = cellName;
+                        cellGo.transform.localPosition = cellPos;
+                        var sb = cellGo.GetComponent<ShooterBlock>();
+                        if (sb != null)
+                        {
+                            int shots = _cellShots[c, r] >= 0 ? _cellShots[c, r] : _defaultShots;
+                            sb.EditorSetup(_cellColors[c, r], shots, c, r);
+                        }
+                        break;
+                    }
+                    case CellType.Door:
+                    {
+                        var cellGo = CreateChild(sgGo.transform, cellName);
+                        cellGo.transform.localPosition = cellPos;
+                        var door = cellGo.AddComponent<BlockDoor>();
+                        door.blockCount  = _doorCount[c, r];
+                        door.spawnColors = new List<BlockColorType> { _cellColors[c, r] };
+                        break;
+                    }
+                    case CellType.Empty when _wallElementPrefab != null:
+                    {
+                        var cellGo = (GameObject)PrefabUtility.InstantiatePrefab(
+                            _wallElementPrefab, sgGo.transform);
+                        cellGo.name = cellName;
+                        cellGo.transform.localPosition = cellPos;
+                        cellGo.GetComponent<WallElement>()?.SetGridPosition(c, r);
+                        break;
+                    }
+                }
+            }
+
+            // Ground
+            var groundGo = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            groundGo.name = "Ground";
+            groundGo.transform.SetParent(root.transform, false);
+            groundGo.transform.localPosition = new Vector3(0f, -0.01f, 0f);
+            groundGo.transform.localScale    = new Vector3(1.5f, 1f, 1.5f);
+            Object.DestroyImmediate(groundGo.GetComponent<MeshCollider>());
+
+            // Save prefab
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out bool ok);
+            Object.DestroyImmediate(root);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            if (ok)
+            {
+                Debug.Log($"[LevelEditor] Saved: {prefabPath}");
+                EditorUtility.DisplayDialog("Done", $"Prefab saved:\n{prefabPath}", "OK");
+                Selection.activeObject = prefab;
+            }
+            else
+            {
+                Debug.LogError($"[LevelEditor] Failed to save: {prefabPath}");
+                EditorUtility.DisplayDialog("Error", $"Failed to save:\n{prefabPath}", "OK");
+            }
+        }
+
+        private void BuildBlockChildren(Transform parent, ConveyorGroupDef gd)
+        {
+            for (int row = 0; row < gd.rowCount; row++)
+            {
+                var rowGo = CreateChild(parent, $"Row_{row}");
+                for (int lane = 0; lane < gd.lanes; lane++)
+                {
+                    var blockGo = (GameObject)PrefabUtility.InstantiatePrefab(
+                        _conveyorBlockPrefab, rowGo.transform);
+                    blockGo.name = $"Block_{lane}";
+                    blockGo.transform.localPosition = Vector3.zero;
+                    blockGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
+                }
+            }
+        }
+
+        private static GameObject CreateChild(Transform parent, string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            return go;
+        }
+
+        private static void BuildDefaultSpline(SplineContainer container)
+        {
+            var spline = container.Spline;
+            spline.Clear();
+            spline.Add(new BezierKnot(new Unity.Mathematics.float3(-3f, 0f,  0f)));
+            spline.Add(new BezierKnot(new Unity.Mathematics.float3( 0f, 0f,  5f)));
+            spline.Add(new BezierKnot(new Unity.Mathematics.float3( 3f, 0f,  0f)));
+            spline.Add(new BezierKnot(new Unity.Mathematics.float3( 0f, 0f, -5f)));
+            spline.Closed = true;
+            SplineUtility.SetTangentMode(spline, TangentMode.AutoSmooth);
         }
 
         private static void EnsureDirectory(string path)
@@ -353,62 +582,6 @@ namespace BlockShooter.Editor
                     AssetDatabase.CreateFolder(current, parts[i]);
                 current = next;
             }
-        }
-
-        private void ExportLevel()
-        {
-            LevelData asset = CreateInstance<LevelData>();
-            asset.levelIndex = _levelIndex;
-            asset.levelName = _levelName;
-            asset.difficulty = _difficulty;
-            asset.conveyorSpeedMultiplier = _conveyorSpeedMult;
-            asset.goalType = _goalType;
-            asset.goalAmount = _goalAmount;
-
-            // Build grid cells
-            asset.gridCells = new List<GridCellData>();
-            for (int c = 0; c < _gridCols; c++)
-            {
-                for (int r = 0; r < _gridRows; r++)
-                {
-                    if (_cellTypes[c, r] == GridCellType.Empty) continue;
-                    asset.gridCells.Add(new GridCellData
-                    {
-                        column = c,
-                        row = r,
-                        cellType = _cellTypes[c, r],
-                        color = _cellColors[c, r],
-                        customShotCount = _cellShotCounts[c, r],
-                        doorBlockCount = _cellDoorCounts[c, r]
-                    });
-                }
-            }
-
-            // Build conveyor rows
-            asset.conveyorRows = new List<ConveyorRowData>();
-            for (int r = 0; r < _conveyorRowCount; r++)
-            {
-                var row = new ConveyorRowData { columns = new List<BlockColorType>() };
-                for (int c = 0; c < _conveyorColCount; c++)
-                    row.columns.Add(_conveyorGrid[c, r]);
-                asset.conveyorRows.Add(row);
-            }
-
-            // Collect available colors
-            asset.availableColors = new List<BlockColorType>();
-            foreach (GridCellData cell in asset.gridCells)
-                if (cell.cellType == GridCellType.ShooterBlock && !asset.availableColors.Contains(cell.color))
-                    asset.availableColors.Add(cell.color);
-
-            string path = $"Assets/Project Files/Game/ScriptableObjects/Levels/{_levelName}.asset";
-            EnsureDirectory("Assets/Project Files/Game/ScriptableObjects/Levels");
-            AssetDatabase.CreateAsset(asset, path);
-            AssetDatabase.SaveAssets();
-            EditorUtility.FocusProjectWindow();
-            Selection.activeObject = asset;
-
-            EditorUtility.DisplayDialog("Level Exported!",
-                $"Level saved to:\n{path}", "OK");
         }
     }
 }

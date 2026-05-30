@@ -28,7 +28,7 @@ namespace BlockShooter
         {
             if (_pool == null)
             {
-                Debug.LogWarning("[ProjectilePool] Prefab atanmamış!");
+                Debug.LogWarning("[ProjectilePool] Projectile prefab not assigned!");
                 return null;
             }
             return _pool.Get(position);

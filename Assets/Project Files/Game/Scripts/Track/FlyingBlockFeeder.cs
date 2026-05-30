@@ -15,7 +15,7 @@ namespace BlockShooter
     public class FlyingBlockFeeder : MonoBehaviour
     {
         [Header("Main Track Reference")]
-        public ConveyorPathController mainPath;
+        public ConveyorController mainPath;
 
         [Header("Connection")]
         [Tooltip("T position (0-1) on the MAIN spline where this feeder connects")]

@@ -35,8 +35,11 @@ namespace BlockShooter
         public Transform shootPoint;
 
         // ── State ──────────────────────────────────────────────────────────────
-        private BlockColorType _colorType;
-        private int   _shotCount;
+        // Serialized so the Level Editor can bake color/shots/position into the prefab.
+        [SerializeField] private BlockColorType _colorType;
+        [SerializeField] private int   _shotCount = 3;
+        [SerializeField] private int   _gridColumn;
+        [SerializeField] private int   _gridRow;
         private bool  _isRainbowMode;
 
         public enum BlockState { InGrid, MovingToSlot, InSlot, Depleted }
@@ -54,8 +57,8 @@ namespace BlockShooter
         public BlockColorType ColorType  => _colorType;
         public bool IsDepleted           => State == BlockState.Depleted;
         public bool IsInSlot             => State == BlockState.InSlot;
-        public int  GridColumn           { get; private set; }
-        public int  GridRow              { get; private set; }
+        public int  GridColumn           => _gridColumn;
+        public int  GridRow              => _gridRow;
 
         // Events
         public event Action<ShooterBlock> OnSlotted;
@@ -63,19 +66,40 @@ namespace BlockShooter
 
         // ── Init ──────────────────────────────────────────────────────────────
 
-        public void Initialize(BlockColorType colorType, int shotCount, int col, int row)
+        /// <summary>
+        /// Runtime initialization for pre-placed blocks. Reads serialized fields set by the Level Editor.
+        /// </summary>
+        public void Initialize()
         {
-            _colorType = colorType;
-            _shotCount = shotCount;
-            GridColumn = col;
-            GridRow    = row;
-            State      = BlockState.InGrid;
+            State         = BlockState.InGrid;
             _isAccessible = false;
-
             ApplyColor();
             UpdateShotCountUI();
             SetAccessible(false);
         }
+
+        /// <summary>
+        /// Full initialization used when spawning blocks dynamically at runtime (e.g. from BlockDoor).
+        /// </summary>
+        public void Initialize(BlockColorType colorType, int shotCount, int col, int row)
+        {
+            _colorType  = colorType;
+            _shotCount  = shotCount;
+            _gridColumn = col;
+            _gridRow    = row;
+            Initialize();
+        }
+
+#if UNITY_EDITOR
+        /// <summary>Editor-only: bakes values into serialized fields without triggering runtime logic.</summary>
+        public void EditorSetup(BlockColorType colorType, int shotCount, int col, int row)
+        {
+            _colorType  = colorType;
+            _shotCount  = shotCount;
+            _gridColumn = col;
+            _gridRow    = row;
+        }
+#endif
 
         // ── Tap handling ──────────────────────────────────────────────────────
 

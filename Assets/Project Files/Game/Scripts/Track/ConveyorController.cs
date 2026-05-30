@@ -4,31 +4,27 @@ using UnityEngine.Splines;
 
 namespace BlockShooter
 {
+    /// <summary>
+    /// Moves pre-placed BlockGroup children along a SplineContainer loop.
+    /// Replaces the old ConveyorPathController. Block GameObjects are created
+    /// by the Level Editor tool — this script only animates them at runtime.
+    /// </summary>
     [RequireComponent(typeof(SplineContainer))]
-    public class ConveyorPathController : MonoBehaviour
+    public class ConveyorController : MonoBehaviour
     {
-        [Header("Block Group Settings")]
-        public ConveyorBlock3D blockPrefab;
-        public int   lanesPerGroup = 5;
-        public int   rowsPerGroup  = 20;
-        [Tooltip("Side-by-side gap between lanes (world units)")]
-        public float laneSpacing   = 0.22f;
-        [Tooltip("Front-to-back gap between rows (world units) — also drives SplineLength")]
-        public float rowSpacing    = 0.22f;
-
-        [Header("Initial Groups (spawned on Start)")]
-        [Tooltip("One entry per color group — spawned evenly around the spline at startup")]
-        public BlockColorType[] groupColors = { BlockColorType.Red, BlockColorType.Blue };
+        public static ConveyorController Instance { get; private set; }
 
         [Header("Movement")]
         public float speed = 1.5f;
-        public bool loop = true;
+        public bool  loop  = true;
 
-        public static ConveyorPathController Instance { get; private set; }
+        public bool  IsFrozen         { get => _isFrozen; set => _isFrozen = value; }
+        public float SplineWorldLength => _splineWorldLength;
+        public SplineContainer SplineContainer => _splineContainer;
 
         private SplineContainer _splineContainer;
         private float _splineWorldLength;
-        private bool _isFrozen;
+        private bool  _isFrozen;
 
         private readonly List<GroupEntry> _groups = new();
 
@@ -39,62 +35,35 @@ namespace BlockShooter
             public float TailT;
         }
 
-        public bool IsFrozen { get => _isFrozen; set => _isFrozen = value; }
-        public float SplineWorldLength => _splineWorldLength;
-        public SplineContainer SplineContainer => _splineContainer;
-
         private void Awake()
         {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             _splineContainer = GetComponent<SplineContainer>();
         }
 
-        /// <summary>
-        /// Returns all blocks of the given color in conveyor order (row N-1 first = leading edge first).
-        /// Pass anyColor=true for rainbow mode.
-        /// </summary>
-        public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType, bool anyColor = false)
+        private void OnDestroy()
         {
-            var result = new List<ConveyorBlock3D>();
-            foreach (var entry in _groups)
-            {
-                if (entry.Group == null || entry.Group.IsEmpty) continue;
-                if (!anyColor && entry.Group.colorType != colorType) continue;
-
-                for (int row = entry.Group.rowCount - 1; row >= 0; row--)
-                    for (int lane = 0; lane < entry.Group.laneCount; lane++)
-                    {
-                        var block = entry.Group.GetBlock(row, lane);
-                        if (block != null && !block.IsDestroyed && block.gameObject.activeSelf)
-                            result.Add(block);
-                    }
-            }
-            return result;
+            if (Instance == this) Instance = null;
         }
 
-        private void Start()
+        /// <summary>
+        /// Called by LevelRoot.Initialize(). Scans BlockGroup children and starts movement.
+        /// </summary>
+        public void Initialize(float speedMultiplier = 1f)
         {
+            speed *= speedMultiplier;
             _splineWorldLength = SplineUtility.CalculateLength(
                 _splineContainer.Spline, transform.localToWorldMatrix);
 
-            SpawnInitialGroups();
-        }
-
-        private void SpawnInitialGroups()
-        {
-            if (blockPrefab == null || groupColors == null || groupColors.Length == 0) return;
-
-            // Place groups back-to-back starting at T=0 — no gap between them
+            var blockGroups = GetComponentsInChildren<BlockGroup>(true);
             float currentT = 0f;
-            for (int i = 0; i < groupColors.Length; i++)
+            foreach (var group in blockGroups)
             {
-                var groupGo = new GameObject($"BlockGroup_{groupColors[i]}");
-                var group = groupGo.AddComponent<BlockGroup>();
-                group.Initialize(groupColors[i], blockPrefab, lanesPerGroup, rowsPerGroup,
-                    laneSpacing, rowSpacing);
-
+                group.Initialize();
                 AddGroup(group, currentT);
                 currentT += WorldLengthToT(group.SplineLength);
+                if (currentT >= 1f) currentT -= 1f;
             }
         }
 
@@ -112,7 +81,7 @@ namespace BlockShooter
 
                 entry.HeadT = (entry.HeadT + delta) % 1f;
                 entry.TailT = (entry.TailT + delta) % 1f;
-                _groups[i] = entry;
+                _groups[i]  = entry;
 
                 PlaceGroupAtT(entry.Group, entry.HeadT);
             }
@@ -141,18 +110,34 @@ namespace BlockShooter
             block.transform.SetParent(transform, true);
         }
 
-        /// <summary>
-        /// Destroys all conveyor blocks currently inside the FireRange bounds (used by BombBooster).
-        /// </summary>
         public void DestroyBlocksInFireRange()
         {
             if (FireRange.Instance == null) return;
-            var fr = FireRange.Instance;
+            var bounds = FireRange.Instance.GetBounds();
             foreach (var entry in _groups)
             {
                 if (entry.Group == null || entry.Group.IsEmpty) continue;
-                entry.Group.DestroyBlocksInBounds(fr.GetBounds());
+                entry.Group.DestroyBlocksInBounds(bounds);
             }
+        }
+
+        public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType, bool anyColor = false)
+        {
+            var result = new List<ConveyorBlock3D>();
+            foreach (var entry in _groups)
+            {
+                if (entry.Group == null || entry.Group.IsEmpty) continue;
+                if (!anyColor && entry.Group.colorType != colorType) continue;
+
+                for (int row = entry.Group.RowCount - 1; row >= 0; row--)
+                    for (int lane = 0; lane < entry.Group.LaneCount; lane++)
+                    {
+                        var block = entry.Group.GetBlock(row, lane);
+                        if (block != null && !block.IsDestroyed && block.gameObject.activeSelf)
+                            result.Add(block);
+                    }
+            }
+            return result;
         }
 
         private void PlaceGroupAtT(BlockGroup group, float headT)
@@ -161,9 +146,9 @@ namespace BlockShooter
 
             float groupTLength = group.SplineLength / _splineWorldLength;
 
-            for (int row = 0; row < group.rowCount; row++)
+            for (int row = 0; row < group.RowCount; row++)
             {
-                float rowT = (headT + (float)row / group.rowCount * groupTLength) % 1f;
+                float rowT = (headT + (float)row / group.RowCount * groupTLength) % 1f;
                 _splineContainer.Spline.Evaluate(rowT, out var pos, out var tangent, out var up);
 
                 Vector3 worldPos = transform.TransformPoint(pos);
@@ -173,16 +158,15 @@ namespace BlockShooter
                 Vector3 right   = Vector3.Cross(upDir, fwd).normalized;
                 Quaternion rot  = fwd != Vector3.zero ? Quaternion.LookRotation(fwd, upDir) : Quaternion.identity;
 
-                for (int lane = 0; lane < group.laneCount; lane++)
+                for (int lane = 0; lane < group.LaneCount; lane++)
                 {
                     var block = group.GetBlock(row, lane);
                     if (block == null || !block.gameObject.activeSelf) continue;
-                    float xOff = (lane - (group.laneCount - 1) * 0.5f) * group.laneSpacing;
+                    float xOff = (lane - (group.LaneCount - 1) * 0.5f) * group.LaneSpacing;
                     block.transform.SetPositionAndRotation(worldPos + right * xOff, rot);
                 }
             }
 
-            // Keep group transform at head for reference/debugging
             _splineContainer.Spline.Evaluate(headT, out var hPos, out _, out _);
             group.transform.position = transform.TransformPoint(hPos);
         }

@@ -24,11 +24,13 @@ namespace BlockShooter
 
         public void SetTargeted(bool v) => IsTargeted = v;
 
-        // Position within the BlockGroup — used by FireRange to target in row/lane order
-        public int RowIndex  { get; private set; }
-        public int LaneIndex { get; private set; }
+        // Serialized so the Level Editor can bake row/lane into the prefab hierarchy.
+        [SerializeField] private int _rowIndex;
+        [SerializeField] private int _laneIndex;
+        public int RowIndex  => _rowIndex;
+        public int LaneIndex => _laneIndex;
 
-        public void SetGroupIndex(int row, int lane) { RowIndex = row; LaneIndex = lane; }
+        public void SetGroupIndex(int row, int lane) { _rowIndex = row; _laneIndex = lane; }
 
         public event Action<ConveyorBlock3D> OnDestroyed;
 
@@ -64,7 +66,6 @@ namespace BlockShooter
         public void TakeHit()
         {
             if (_isDestroyed) return;
-            Debug.Log($"[Block:{_colorType}] HIT → Row:{RowIndex} Lane:{LaneIndex}");
             DestroyBlock();
         }
 

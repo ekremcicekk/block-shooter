@@ -7,28 +7,17 @@ namespace BlockShooter
     /// <summary>
     /// Manages the row of firing slots between the conveyor track and the shooter grid.
     ///
-    /// Empty slots show a visual placeholder (slotIndicatorPrefab).
-    /// When a ShooterBlock is tapped, it animates to the next free slot and starts shooting.
+    /// Slot positions are defined by child GameObjects named "Slot_0", "Slot_1", etc.
+    /// Initialize() reads those transforms at level start; the Level Editor places them.
     ///
-    /// Scene positioning:
-    ///   slotOrigin Z ≈ 0  (between track at Z>0 and grid at Z=-3.5 to -1)
-    ///   slotSpacing   = 1.2  (matches gridCellSize)
-    ///   defaultSlotCount = 4
+    /// Empty slots show a visual placeholder (slotIndicatorPrefab).
     /// </summary>
     public class SlotSystem : MonoBehaviour
     {
         public static SlotSystem Instance { get; private set; }
 
-        [Header("Slot Layout")]
-        [Tooltip("Centre of the slot row in world space")]
-        public Transform slotOrigin;
-        [Tooltip("Horizontal gap between slot centres — match GameConfig.gridCellSize")]
-        public float slotSpacing = 1.2f;
-        [Tooltip("Default number of slots at level start")]
-        public int defaultSlotCount = 4;
-
         [Header("Visuals")]
-        [Tooltip("Prefab shown when slot is empty (gray rounded square). If null, a primitive cube is used.")]
+        [Tooltip("Prefab shown when slot is empty (gray rounded square). Falls back to a cube if null.")]
         public GameObject slotIndicatorPrefab;
         [Tooltip("Scale applied to each slot indicator")]
         public Vector3 indicatorScale = new Vector3(0.9f, 0.1f, 0.9f);
@@ -39,8 +28,11 @@ namespace BlockShooter
         // ── Runtime state ─────────────────────────────────────────────────────
         private int _maxSlots;
         private readonly List<Vector3>      _slotPositions = new();
-        private readonly List<ShooterBlock> _occupied      = new();  // null = empty
-        private readonly List<GameObject>   _indicators    = new();  // one per slot
+        private readonly List<ShooterBlock> _occupied      = new();
+        private readonly List<GameObject>   _indicators    = new();
+
+        private float   _slotSpacing = 1.2f;
+        private Vector3 _extraSlotDir = Vector3.right;
 
         public int  MaxSlots     => _maxSlots;
         public bool HasEmptySlot => EmptySlotIndex() >= 0;
@@ -53,7 +45,59 @@ namespace BlockShooter
             Instance = this;
         }
 
-        private void Start() => RebuildSlots(defaultSlotCount);
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        // ── Initialization ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Reads child Slot_N transforms and builds slot positions.
+        /// Called by LevelRoot.Initialize().
+        /// </summary>
+        public void Initialize()
+        {
+            // Clean up any previous state
+            foreach (var ind in _indicators)
+                if (ind != null) Destroy(ind);
+
+            _slotPositions.Clear();
+            _occupied.Clear();
+            _indicators.Clear();
+
+            // Collect and sort child slot markers
+            var slotTransforms = new List<Transform>();
+            foreach (Transform child in transform)
+            {
+                if (child.name.StartsWith("Slot_"))
+                    slotTransforms.Add(child);
+            }
+            slotTransforms.Sort((a, b) =>
+                string.Compare(a.name, b.name, System.StringComparison.Ordinal));
+
+            // Derive spacing and direction for AddExtraSlot
+            if (slotTransforms.Count >= 2)
+            {
+                Vector3 delta = slotTransforms[1].position - slotTransforms[0].position;
+                _slotSpacing  = delta.magnitude;
+                _extraSlotDir = delta.normalized;
+            }
+
+            foreach (var t in slotTransforms)
+            {
+                _slotPositions.Add(t.position);
+                _occupied.Add(null);
+
+                GameObject ind = slotIndicatorPrefab != null
+                    ? Instantiate(slotIndicatorPrefab, t.position, Quaternion.identity, transform)
+                    : CreateDefaultIndicator(t.position);
+                ind.transform.localScale = indicatorScale;
+                _indicators.Add(ind);
+            }
+
+            _maxSlots = _slotPositions.Count;
+        }
 
         // ── Public API ────────────────────────────────────────────────────────
 
@@ -85,18 +129,23 @@ namespace BlockShooter
             }
         }
 
-        /// <summary>ExtraSlot booster — adds one more slot permanently for this level.</summary>
+        /// <summary>ExtraSlot booster — appends one more slot at the end of the row.</summary>
         public void AddExtraSlot()
         {
-            int prev = _maxSlots;
-            RebuildSlots(_maxSlots + 1);
+            Vector3 newPos = _slotPositions.Count > 0
+                ? _slotPositions[_slotPositions.Count - 1] + _extraSlotDir * _slotSpacing
+                : transform.position;
 
-            // Bounce-in the new indicator
-            if (_indicators.Count > prev && _indicators[prev] != null)
-            {
-                _indicators[prev].transform.localScale = Vector3.zero;
-                _indicators[prev].transform.DOScale(indicatorScale, 0.4f).SetEase(Ease.OutBack);
-            }
+            _slotPositions.Add(newPos);
+            _occupied.Add(null);
+            _maxSlots++;
+
+            GameObject ind = slotIndicatorPrefab != null
+                ? Instantiate(slotIndicatorPrefab, newPos, Quaternion.identity, transform)
+                : CreateDefaultIndicator(newPos);
+            ind.transform.localScale = Vector3.zero;
+            ind.transform.DOScale(indicatorScale, 0.4f).SetEase(Ease.OutBack);
+            _indicators.Add(ind);
         }
 
         public List<ShooterBlock> GetSlottedBlocks()
@@ -108,45 +157,6 @@ namespace BlockShooter
         }
 
         // ── Private ───────────────────────────────────────────────────────────
-
-        private void RebuildSlots(int count)
-        {
-            _maxSlots = count;
-
-            Vector3 origin = slotOrigin != null ? slotOrigin.position : transform.position;
-            float totalWidth = (count - 1) * slotSpacing;
-            Vector3 start = origin - Vector3.right * (totalWidth * 0.5f);
-
-            // Expand position + state lists
-            while (_slotPositions.Count < count)
-                _slotPositions.Add(Vector3.zero);
-            while (_occupied.Count < count)
-                _occupied.Add(null);
-
-            // Reposition existing indicators and build new ones
-            for (int i = 0; i < count; i++)
-            {
-                _slotPositions[i] = start + Vector3.right * (i * slotSpacing);
-
-                if (i >= _indicators.Count)
-                {
-                    // Create new indicator
-                    GameObject ind = slotIndicatorPrefab != null
-                        ? Instantiate(slotIndicatorPrefab, _slotPositions[i], Quaternion.identity, transform)
-                        : CreateDefaultIndicator(_slotPositions[i]);
-                    ind.transform.localScale = indicatorScale;
-                    _indicators.Add(ind);
-                }
-                else
-                {
-                    // Reposition existing
-                    _indicators[i].transform.position = _slotPositions[i];
-                }
-
-                // Sync visibility with occupancy
-                SetIndicatorVisible(i, _occupied[i] == null);
-            }
-        }
 
         private void SetIndicatorVisible(int idx, bool visible)
         {
@@ -160,11 +170,8 @@ namespace BlockShooter
             go.name = "SlotIndicator";
             go.transform.position = pos;
             go.transform.SetParent(transform);
-
-            // Destroy collider so it doesn't interfere with raycasts
             Destroy(go.GetComponent<Collider>());
 
-            // Gray material
             var mr = go.GetComponent<MeshRenderer>();
             if (mr != null)
             {

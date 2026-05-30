@@ -16,19 +16,19 @@ namespace BlockShooter
         [Header("Exit Point")]
         public Transform exitPoint;
 
+        [Header("Door Config")]
+        public int blockCount = 5;
+        public List<BlockColorType> spawnColors = new();
+
         private int _remainingBlocks;
         private List<BlockColorType> _availableColors;
-        private GameConfig _config;
-        private Vector3 _targetPosition;
         private bool _isOpen = true;
 
-        public void Initialize(int blockCount, List<BlockColorType> colors, GameConfig config, Vector3 gridPosition)
+        /// <summary>Called by ShooterGrid.Initialize() when scanning pre-placed doors.</summary>
+        public void Initialize()
         {
             _remainingBlocks = blockCount;
-            _availableColors = colors;
-            _config = config;
-            _targetPosition = gridPosition;
-
+            _availableColors = spawnColors;
             UpdateCountText();
             CheckFrontPositionLoop();
         }

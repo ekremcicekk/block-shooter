@@ -61,7 +61,6 @@ namespace BlockShooter
             // Target already destroyed before projectile arrived
             if (_target == null || _target.IsDestroyed)
             {
-                Debug.Log($"[Projectile] Hedef zaten ölmüş (Row:{_target?.RowIndex} Lane:{_target?.LaneIndex}) — pool'a döndü");
                 ReturnToPool();
                 return;
             }
@@ -72,7 +71,6 @@ namespace BlockShooter
             float stepDist = _speed * Time.deltaTime;
             if (stepDist >= dist)
             {
-                Debug.Log($"[Projectile] Overshoot önlendi → Row:{_target.RowIndex} Lane:{_target.LaneIndex} (dist:{dist:F3})");
                 transform.position = _target.transform.position;
                 _target.TakeHit();
                 ReturnToPool();
@@ -84,7 +82,6 @@ namespace BlockShooter
 
             if (dist < 0.2f)
             {
-                Debug.Log($"[Projectile] Proximity hit → Row:{_target.RowIndex} Lane:{_target.LaneIndex} (dist:{dist:F3})");
                 _target.TakeHit();
                 ReturnToPool();
             }
