@@ -159,11 +159,9 @@ namespace BlockShooter
 
         private IEnumerator ShootRoutine()
         {
-            float fireRate = GameManager.Instance.config.fireRate;
-
             while (!IsDepleted)
             {
-                // Skip destroyed/inactive blocks at front of queue
+                // Skip dead/inactive blocks at front of queue
                 while (_targetQueue.Count > 0)
                 {
                     var front = _targetQueue.Peek();
@@ -173,11 +171,14 @@ namespace BlockShooter
                         break;
                 }
 
-                if (_targetQueue.Count == 0) break; // all blocks done
+                if (_targetQueue.Count == 0) break;
 
+                // Dequeue and fire — homing projectile will catch the block wherever it is.
+                // Multiple projectiles can be in flight simultaneously; each targets a unique block.
                 ConveyorBlock3D target = _targetQueue.Dequeue();
                 FireAt(target);
-                yield return new WaitForSeconds(fireRate);
+
+                yield return new WaitForSeconds(GameManager.Instance.config.fireRate);
             }
 
             _isShooting = false;
@@ -190,9 +191,11 @@ namespace BlockShooter
 
             BlockColorType projColor = _isRainbowMode ? target.ColorType : _colorType;
 
+            // Rotate body mesh on Y axis only — no pitch/roll
             if (bodyMesh != null)
             {
                 Vector3 lookDir = target.transform.position - bodyMesh.position;
+                lookDir.y = 0f;
                 if (lookDir.sqrMagnitude > 0.001f)
                     bodyMesh.rotation = Quaternion.LookRotation(lookDir.normalized);
             }

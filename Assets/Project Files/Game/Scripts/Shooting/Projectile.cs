@@ -56,20 +56,38 @@ namespace BlockShooter
 
         private void Update()
         {
-            if (!_active || _target == null || _target.IsDestroyed) return;
+            if (!_active) return;
 
-            Vector3 dir = (_target.transform.position - transform.position);
-            float dist = dir.magnitude;
-
-            // Close enough — guaranteed hit, no collision dependency
-            if (dist < 0.25f)
+            // Target already destroyed (e.g. bomb/blast) — nothing to do
+            if (_target == null || _target.IsDestroyed)
             {
+                ReturnToPool();
+                return;
+            }
+
+            Vector3 toTarget = _target.transform.position - transform.position;
+            float dist = toTarget.magnitude;
+
+            // Step the projectile manually this frame to avoid overshooting at high speed
+            float stepDist = _speed * Time.deltaTime;
+            if (stepDist >= dist)
+            {
+                // Would overshoot — teleport to target and hit
+                transform.position = _target.transform.position;
                 _target.TakeHit();
                 ReturnToPool();
                 return;
             }
 
-            _rb.linearVelocity = dir.normalized * _speed;
+            // Normal homing steering
+            _rb.linearVelocity = toTarget.normalized * _speed;
+
+            // Proximity trigger (redundant safety net)
+            if (dist < 0.2f)
+            {
+                _target.TakeHit();
+                ReturnToPool();
+            }
         }
 
         private void OnTriggerEnter(Collider other)
