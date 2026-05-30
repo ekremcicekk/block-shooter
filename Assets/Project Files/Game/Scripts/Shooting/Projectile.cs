@@ -58,9 +58,10 @@ namespace BlockShooter
         {
             if (!_active) return;
 
-            // Target already destroyed (e.g. bomb/blast) — nothing to do
+            // Target already destroyed before projectile arrived
             if (_target == null || _target.IsDestroyed)
             {
+                Debug.Log($"[Projectile] Hedef zaten ölmüş (Row:{_target?.RowIndex} Lane:{_target?.LaneIndex}) — pool'a döndü");
                 ReturnToPool();
                 return;
             }
@@ -68,11 +69,10 @@ namespace BlockShooter
             Vector3 toTarget = _target.transform.position - transform.position;
             float dist = toTarget.magnitude;
 
-            // Step the projectile manually this frame to avoid overshooting at high speed
             float stepDist = _speed * Time.deltaTime;
             if (stepDist >= dist)
             {
-                // Would overshoot — teleport to target and hit
+                Debug.Log($"[Projectile] Overshoot önlendi → Row:{_target.RowIndex} Lane:{_target.LaneIndex} (dist:{dist:F3})");
                 transform.position = _target.transform.position;
                 _target.TakeHit();
                 ReturnToPool();
@@ -82,9 +82,9 @@ namespace BlockShooter
             // Normal homing steering
             _rb.linearVelocity = toTarget.normalized * _speed;
 
-            // Proximity trigger (redundant safety net)
             if (dist < 0.2f)
             {
+                Debug.Log($"[Projectile] Proximity hit → Row:{_target.RowIndex} Lane:{_target.LaneIndex} (dist:{dist:F3})");
                 _target.TakeHit();
                 ReturnToPool();
             }

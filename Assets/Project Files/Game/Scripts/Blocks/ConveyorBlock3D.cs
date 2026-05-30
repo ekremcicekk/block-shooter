@@ -64,6 +64,7 @@ namespace BlockShooter
         public void TakeHit()
         {
             if (_isDestroyed) return;
+            Debug.Log($"[Block:{_colorType}] HIT → Row:{RowIndex} Lane:{LaneIndex}");
             DestroyBlock();
         }
 

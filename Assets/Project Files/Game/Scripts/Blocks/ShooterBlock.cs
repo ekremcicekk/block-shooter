@@ -122,6 +122,7 @@ namespace BlockShooter
         {
             State = BlockState.InSlot;
             BuildTargetQueue();
+            Debug.Log($"[Shooter:{_colorType}] Slota geldi. Queue: {_targetQueue.Count} blok.");
             if (_targetQueue.Count > 0) StartShooting();
         }
 
@@ -159,23 +160,34 @@ namespace BlockShooter
 
         private IEnumerator ShootRoutine()
         {
+            int shotNumber = 0;
             while (!IsDepleted)
             {
                 // Skip dead/inactive blocks at front of queue
+                int skipped = 0;
                 while (_targetQueue.Count > 0)
                 {
                     var front = _targetQueue.Peek();
                     if (front == null || front.IsDestroyed || !front.gameObject.activeSelf)
+                    {
                         _targetQueue.Dequeue();
-                    else
-                        break;
+                        skipped++;
+                    }
+                    else break;
+                }
+                if (skipped > 0)
+                    Debug.Log($"[Shooter:{_colorType}] {skipped} blok zaten ölü, atlandı. Kalan queue: {_targetQueue.Count}");
+
+                if (_targetQueue.Count == 0)
+                {
+                    Debug.Log($"[Shooter:{_colorType}] Queue bitti. Toplam atış: {shotNumber}");
+                    break;
                 }
 
-                if (_targetQueue.Count == 0) break;
-
-                // Dequeue and fire — homing projectile will catch the block wherever it is.
-                // Multiple projectiles can be in flight simultaneously; each targets a unique block.
                 ConveyorBlock3D target = _targetQueue.Dequeue();
+                shotNumber++;
+                Debug.Log($"[Shooter:{_colorType}] Atış #{shotNumber} → Row:{target.RowIndex} Lane:{target.LaneIndex} | Kalan queue: {_targetQueue.Count}");
+
                 FireAt(target);
 
                 yield return new WaitForSeconds(GameManager.Instance.config.fireRate);
