@@ -188,6 +188,21 @@ namespace BlockShooter
                 shotNumber++;
                 Debug.Log($"[Shooter:{_colorType}] Atış #{shotNumber} → Row:{target.RowIndex} Lane:{target.LaneIndex} | Kalan queue: {_targetQueue.Count}");
 
+                // Wait until this specific target enters FireRange before firing
+                while (target != null && !target.IsDestroyed && target.gameObject.activeSelf)
+                {
+                    if (FireRange.Instance == null) break;
+                    if (FireRange.Instance.BlocksInRange.Contains(target)) break;
+                    yield return null;
+                }
+
+                // Target may have died while waiting for it to enter range
+                if (target == null || target.IsDestroyed || !target.gameObject.activeSelf)
+                {
+                    Debug.Log($"[Shooter:{_colorType}] FireRange beklerken hedef öldü → Row:{target?.RowIndex} Lane:{target?.LaneIndex}");
+                    continue;
+                }
+
                 FireAt(target);
 
                 yield return new WaitForSeconds(GameManager.Instance.config.fireRate);
