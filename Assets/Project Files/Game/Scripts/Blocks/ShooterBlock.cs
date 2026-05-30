@@ -121,18 +121,41 @@ namespace BlockShooter
         public void OnArrivedInSlot()
         {
             State = BlockState.InSlot;
+            if (FireRange.Instance != null)
+                FireRange.Instance.OnBlockEntered += OnFireRangeBlockEntered;
             BuildTargetQueue();
-            Debug.Log($"[Shooter:{_colorType}] Slota geldi. Queue: {_targetQueue.Count} blok.");
             if (_targetQueue.Count > 0) StartShooting();
         }
 
+        // Builds queue from blocks CURRENTLY in FireRange, sorted by arrival order (highest RowIndex first).
         private void BuildTargetQueue()
         {
             _targetQueue.Clear();
-            if (ConveyorPathController.Instance == null) return;
-            var blocks = ConveyorPathController.Instance.GetOrderedBlocks(_colorType, _isRainbowMode);
-            foreach (var b in blocks)
-                _targetQueue.Enqueue(b);
+            if (FireRange.Instance == null) return;
+
+            var sorted = new List<ConveyorBlock3D>();
+            foreach (var b in FireRange.Instance.BlocksInRange)
+            {
+                if (b == null || b.IsDestroyed || !b.gameObject.activeSelf) continue;
+                if (!_isRainbowMode && b.ColorType != _colorType) continue;
+                sorted.Add(b);
+            }
+            sorted.Sort((a, b) =>
+            {
+                int cmp = b.RowIndex.CompareTo(a.RowIndex);
+                return cmp != 0 ? cmp : a.LaneIndex.CompareTo(b.LaneIndex);
+            });
+            foreach (var b in sorted) _targetQueue.Enqueue(b);
+        }
+
+        // Called whenever a new block enters FireRange — adds it to the shoot queue.
+        private void OnFireRangeBlockEntered(ConveyorBlock3D block)
+        {
+            if (State != BlockState.InSlot || IsDepleted) return;
+            if (!_isRainbowMode && block.ColorType != _colorType) return;
+            if (block == null || block.IsDestroyed) return;
+            _targetQueue.Enqueue(block);
+            if (!_isShooting) StartShooting();
         }
 
         // ── Shooting (only active while InSlot) ───────────────────────────────
@@ -141,8 +164,7 @@ namespace BlockShooter
         {
             if (!GameManager.Instance.IsPlaying) return;
             if (State != BlockState.InSlot || IsDepleted) return;
-
-            // Restart if queue got new blocks (e.g. after rainbow mode toggle)
+            // Safety net: restart if queue has items but shooting stopped (e.g. rainbow toggle)
             if (_targetQueue.Count > 0 && !_isShooting) StartShooting();
         }
 
@@ -160,52 +182,21 @@ namespace BlockShooter
 
         private IEnumerator ShootRoutine()
         {
-            int shotNumber = 0;
             while (!IsDepleted)
             {
                 // Skip dead/inactive blocks at front of queue
-                int skipped = 0;
                 while (_targetQueue.Count > 0)
                 {
                     var front = _targetQueue.Peek();
                     if (front == null || front.IsDestroyed || !front.gameObject.activeSelf)
-                    {
                         _targetQueue.Dequeue();
-                        skipped++;
-                    }
                     else break;
                 }
-                if (skipped > 0)
-                    Debug.Log($"[Shooter:{_colorType}] {skipped} blok zaten ölü, atlandı. Kalan queue: {_targetQueue.Count}");
 
                 if (_targetQueue.Count == 0)
-                {
-                    Debug.Log($"[Shooter:{_colorType}] Queue bitti. Toplam atış: {shotNumber}");
-                    break;
-                }
+                    break; // OnFireRangeBlockEntered will restart when next block enters
 
                 ConveyorBlock3D target = _targetQueue.Dequeue();
-                shotNumber++;
-                Debug.Log($"[Shooter:{_colorType}] Atış #{shotNumber} → Row:{target.RowIndex} Lane:{target.LaneIndex} | Kalan queue: {_targetQueue.Count}");
-
-                // Wait until this specific target enters FireRange before firing
-                while (target != null && !target.IsDestroyed && target.gameObject.activeSelf)
-                {
-                    if (FireRange.Instance == null) break;
-                    bool found = false;
-                    foreach (var b in FireRange.Instance.BlocksInRange)
-                        if (b == target) { found = true; break; }
-                    if (found) break;
-                    yield return null;
-                }
-
-                // Target may have died while waiting for it to enter range
-                if (target == null || target.IsDestroyed || !target.gameObject.activeSelf)
-                {
-                    Debug.Log($"[Shooter:{_colorType}] FireRange beklerken hedef öldü → Row:{target?.RowIndex} Lane:{target?.LaneIndex}");
-                    continue;
-                }
-
                 FireAt(target);
 
                 yield return new WaitForSeconds(GameManager.Instance.config.fireRate);
@@ -237,6 +228,7 @@ namespace BlockShooter
             proj.Launch(projColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, target);
 
             if (muzzleFlash != null) muzzleFlash.Play();
+            transform.DOKill(false);
             transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);
 
             _shotCount--;
@@ -303,6 +295,8 @@ namespace BlockShooter
         {
             State = BlockState.Depleted;
             StopShooting();
+            if (FireRange.Instance != null)
+                FireRange.Instance.OnBlockEntered -= OnFireRangeBlockEntered;
 
             if (depletedParticle != null) depletedParticle.Play();
 
@@ -375,6 +369,8 @@ namespace BlockShooter
 
         private void OnDisable()
         {
+            if (FireRange.Instance != null)
+                FireRange.Instance.OnBlockEntered -= OnFireRangeBlockEntered;
             DOTween.Kill(transform);
             StopShooting();
         }
