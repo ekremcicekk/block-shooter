@@ -45,7 +45,10 @@ namespace BlockShooter
         [HideInInspector] public float splineDepth  = 10f;
         [HideInInspector] public int   splinePreset = 0;
 
-        [HideInInspector] public List<Vector3>           splineKnots = new();
+        [HideInInspector] public List<Vector3>           splineKnots      = new();
+        [HideInInspector] public List<Vector3>           splineTangentsIn  = new();
+        [HideInInspector] public List<Vector3>           splineTangentsOut = new();
+        [HideInInspector] public List<int>               splineTangentModes = new(); // TangentMode enum int values
         [HideInInspector] public List<LevelGridCell>     cells       = new();
         [HideInInspector] public List<LevelConveyorGroup> groups     = new();
 

@@ -46,10 +46,13 @@ namespace BlockShooter.Editor
         private List<LevelConveyorGroup> _groups = new();
 
         // ── Spline ────────────────────────────────────────────────────────────
-        private List<Vector3> _knots       = new();
-        private float         _splineWidth = 3.5f;
-        private float         _splineDepth = 5f;
-        private int           _splinePreset = 0;  // 0=Oval 1=Wide 2=Rectangle
+        private List<Vector3>     _knots        = new();
+        private List<Vector3>     _tangentsIn   = new();
+        private List<Vector3>     _tangentsOut  = new();
+        private List<TangentMode> _tangentModes = new();
+        private float             _splineWidth = 3.5f;
+        private float             _splineDepth = 5f;
+        private int               _splinePreset = 0;  // 0=Oval 1=Wide 2=Rectangle
 
         // Safe-area guide toggle
         private bool _showSafeArea = true;
@@ -208,6 +211,9 @@ namespace BlockShooter.Editor
                 GUI.backgroundColor = active ? new Color(.4f,.65f,1f) : new Color(.24f,.24f,.26f);
                 if (GUILayout.Button(_labels[i], GUILayout.Height(22)))
                 { _activeIdx = i; LoadLevel(i); }
+                GUI.backgroundColor = new Color(.55f,.75f,.4f);
+                if (GUILayout.Button("⧉", GUILayout.Width(22), GUILayout.Height(22)))
+                    DuplicateLevel(i);
                 GUI.backgroundColor = new Color(.9f,.3f,.3f);
                 if (GUILayout.Button("✕", GUILayout.Width(22), GUILayout.Height(22)))
                     DeleteLevel(i);
@@ -216,6 +222,17 @@ namespace BlockShooter.Editor
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndScrollView();
+
+            if (_activeIdx >= 0 && _activeIdx < _paths.Count)
+            {
+                GUILayout.Space(4);
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_paths[_activeIdx]);
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUILayout.ObjectField(prefab, typeof(GameObject), false);
+                if (GUILayout.Button("Select Prefab Asset", EditorStyles.miniButton))
+                    Selection.activeObject = prefab;
+                GUILayout.Space(4);
+            }
 
             GUILayout.Space(6);
             Hdr("SETTINGS");
@@ -530,6 +547,7 @@ namespace BlockShooter.Editor
                 {
                     int insertAt = FindInsertIndex(hitPos);
                     _knots.Insert(insertAt, hitPos);
+                    EnsureTangentLists();
                     _selKnot = insertAt;
                     SyncPreviewSpline();
                     e.Use(); Repaint(); return;
@@ -542,11 +560,14 @@ namespace BlockShooter.Editor
                 if (_selKnot > 0 && _knots.Count > 3)
                 {
                     _knots.RemoveAt(_selKnot);
+                    EnsureTangentLists();
                     _selKnot = Mathf.Min(_selKnot, _knots.Count - 1);
                     SyncPreviewSpline();
                     e.Use(); Repaint(); return;
                 }
             }
+
+            EnsureTangentLists();
 
             // Handle per knot
             for (int i = 0; i < _knots.Count; i++)
@@ -587,6 +608,45 @@ namespace BlockShooter.Editor
                         Repaint();
                     }
                 }
+
+                // Tangent handles — only for selected knot in non-AutoSmooth mode
+                if (isSel && i < _tangentModes.Count && _tangentModes[i] != TangentMode.AutoSmooth)
+                {
+                    Vector3 kpos = _knots[i];
+
+                    // TangentIn — orange
+                    Vector3 inWorld = kpos + _tangentsIn[i];
+                    inWorld.y = 0f;
+                    Handles.color = new Color(1f, .55f, .1f, .9f);
+                    Handles.DrawLine(kpos, inWorld, 1.5f);
+                    float tsz = HandleUtility.GetHandleSize(inWorld) * .10f;
+                    EditorGUI.BeginChangeCheck();
+                    Vector3 newIn = Handles.FreeMoveHandle(inWorld, tsz, Vector3.zero, Handles.DotHandleCap);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        newIn.y = 0f;
+                        _tangentsIn[i] = newIn - kpos;
+                        if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
+                            _tangentsOut[i] = -_tangentsIn[i];
+                        SyncPreviewSpline();
+                    }
+
+                    // TangentOut — cyan
+                    Vector3 outWorld = kpos + _tangentsOut[i];
+                    outWorld.y = 0f;
+                    Handles.color = new Color(.1f, .9f, .9f, .9f);
+                    Handles.DrawLine(kpos, outWorld, 1.5f);
+                    EditorGUI.BeginChangeCheck();
+                    Vector3 newOut = Handles.FreeMoveHandle(outWorld, tsz, Vector3.zero, Handles.DotHandleCap);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        newOut.y = 0f;
+                        _tangentsOut[i] = newOut - kpos;
+                        if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
+                            _tangentsIn[i] = -_tangentsOut[i];
+                        SyncPreviewSpline();
+                    }
+                }
             }
 
         }
@@ -594,19 +654,29 @@ namespace BlockShooter.Editor
         private void DrawSplineCurveHandles()
         {
             if (_knots.Count < 2) return;
+            EnsureTangentLists();
             Handles.color = new Color(.35f, .65f, 1f, .85f);
 
             for (int i = 0; i < _knots.Count; i++)
             {
-                int  nxt  = (i + 1) % _knots.Count;
-                int  prv  = (i - 1 + _knots.Count) % _knots.Count;
-                int  nxt2 = (nxt + 1) % _knots.Count;
+                int nxt  = (i + 1) % _knots.Count;
+                int prv  = (i - 1 + _knots.Count) % _knots.Count;
+                int nxt2 = (nxt + 1) % _knots.Count;
 
-                Vector3 t0 = (_knots[nxt]  - _knots[prv])  * .33f;
-                Vector3 t1 = (_knots[nxt2] - _knots[i])    * .33f;
+                bool iAutoSmooth   = _tangentModes[i]   == TangentMode.AutoSmooth;
+                bool nxtAutoSmooth = _tangentModes[nxt] == TangentMode.AutoSmooth;
+
+                // Control points — use explicit tangents when not AutoSmooth, else Catmull-Rom approx
+                Vector3 ctrl0 = iAutoSmooth
+                    ? _knots[i]   + (_knots[nxt]  - _knots[prv])  * .33f
+                    : _knots[i]   + _tangentsOut[i];
+
+                Vector3 ctrl1 = nxtAutoSmooth
+                    ? _knots[nxt] - (_knots[nxt2] - _knots[i])    * .33f
+                    : _knots[nxt] + _tangentsIn[nxt];
 
                 Handles.DrawBezier(_knots[i], _knots[nxt],
-                    _knots[i] + t0, _knots[nxt] - t1,
+                    ctrl0, ctrl1,
                     new Color(.35f, .65f, 1f, .85f), null, 2.5f);
             }
         }
@@ -643,6 +713,7 @@ namespace BlockShooter.Editor
                     break;
             }
 
+            EnsureTangentLists();
             SyncPreviewSpline();
             SceneView.RepaintAll();
             // Frame scene so the new preset shape is immediately visible
@@ -685,6 +756,7 @@ namespace BlockShooter.Editor
                 newKnots[0] = new Vector3(newKnots[0].x, 0f, FIRE_Z);
 
             _knots = newKnots;
+            EnsureTangentLists();
             SyncPreviewSpline();
             SceneView.RepaintAll();
             Repaint();
@@ -698,30 +770,59 @@ namespace BlockShooter.Editor
             SceneView.RepaintAll();
         }
 
+        private void EnsureTangentLists()
+        {
+            while (_tangentsIn.Count < _knots.Count)   _tangentsIn.Add(Vector3.zero);
+            while (_tangentsOut.Count < _knots.Count)  _tangentsOut.Add(Vector3.zero);
+            while (_tangentModes.Count < _knots.Count) _tangentModes.Add(TangentMode.AutoSmooth);
+            // Trim if knots were removed
+            if (_tangentsIn.Count > _knots.Count)   _tangentsIn.RemoveRange(_knots.Count, _tangentsIn.Count - _knots.Count);
+            if (_tangentsOut.Count > _knots.Count)  _tangentsOut.RemoveRange(_knots.Count, _tangentsOut.Count - _knots.Count);
+            if (_tangentModes.Count > _knots.Count) _tangentModes.RemoveRange(_knots.Count, _tangentModes.Count - _knots.Count);
+        }
+
         private void WriteKnotsToContainer(SplineContainer sc)
         {
+            EnsureTangentLists();
             var spline = sc.Spline;
             spline.Clear();
-            foreach (var k in _knots)
-                spline.Add(new BezierKnot(new float3(k.x, k.y, k.z)));
+            for (int i = 0; i < _knots.Count; i++)
+            {
+                var k = _knots[i];
+                var tanIn  = (float3)(Vector3)_tangentsIn[i];
+                var tanOut = (float3)(Vector3)_tangentsOut[i];
+                spline.Add(new BezierKnot(new float3(k.x, k.y, k.z), tanIn, tanOut));
+            }
             spline.Closed = true;
             for (int i = 0; i < spline.Count; i++)
-                spline.SetTangentMode(i, TangentMode.AutoSmooth);
+                spline.SetTangentMode(i, _tangentModes[i]);
         }
 
         private void ReadKnotsFromContainer(SplineContainer sc)
         {
             var xform = sc.transform;
             _knots.Clear();
+            _tangentsIn.Clear();
+            _tangentsOut.Clear();
+            _tangentModes.Clear();
             foreach (var k in sc.Spline)
             {
                 Vector3 w = xform.TransformPoint(k.Position);
                 w.y = 0f;
                 _knots.Add(w);
+                // Tangents are in local spline space — convert to world then back to Vector3
+                Vector3 tIn  = xform.TransformVector((Vector3)(float3)k.TangentIn);
+                Vector3 tOut = xform.TransformVector((Vector3)(float3)k.TangentOut);
+                tIn.y  = 0f;
+                tOut.y = 0f;
+                _tangentsIn.Add(tIn);
+                _tangentsOut.Add(tOut);
+                _tangentModes.Add(TangentMode.AutoSmooth);
             }
             // Lock anchor Z
             if (_knots.Count > 0)
                 _knots[0] = new Vector3(_knots[0].x, 0f, FIRE_Z);
+            EnsureTangentLists();
         }
 
         // ── Mouse-to-ground ray ───────────────────────────────────────────────
@@ -838,13 +939,11 @@ namespace BlockShooter.Editor
                 EditorGUI.LabelField(new Rect(cell.x, cell.y+cell.height*.5f, cell.width, cell.height*.5f-4), lbl2, st);
             }
 
-            // Click = select + auto-promote empty to ShooterBlock for immediate color access
+            // Click = select only (no auto-promote)
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
                 _selC = c; _selR = r; _selKnot = -1;
-                if (_type[c, r] == GridCellType.Empty)
-                    _type[c, r] = GridCellType.ShooterBlock;
                 e.Use(); Repaint();
             }
         }
@@ -915,6 +1014,8 @@ namespace BlockShooter.Editor
             bool anch = (i == 0);
             Hdr($"KNOT #{i}{(anch ? "  🔒" : "")}");
 
+            EnsureTangentLists();
+
             Vector3 k = _knots[i];
 
             EditorGUI.BeginChangeCheck();
@@ -933,6 +1034,51 @@ namespace BlockShooter.Editor
 
             if (anch) EditorGUILayout.HelpBox($"FireRange anchor\nZ = {FIRE_Z:F1} locked\nX is free", MessageType.None);
 
+            GUILayout.Space(6);
+
+            // Tangent Mode
+            GUILayout.Label("Tangent Mode:", EditorStyles.miniLabel);
+            TangentMode newMode = (TangentMode)EditorGUILayout.EnumPopup(_tangentModes[i]);
+            if (newMode != _tangentModes[i])
+            {
+                _tangentModes[i] = newMode;
+                if (newMode == TangentMode.AutoSmooth)
+                {
+                    _tangentsIn[i]  = Vector3.zero;
+                    _tangentsOut[i] = Vector3.zero;
+                }
+                SyncPreviewSpline();
+                SceneView.RepaintAll();
+            }
+
+            if (_tangentModes[i] != TangentMode.AutoSmooth)
+            {
+                GUILayout.Space(4);
+                GUILayout.Label("Tangent In (orange):", EditorStyles.miniLabel);
+                EditorGUI.BeginChangeCheck();
+                Vector3 newTanIn = EditorGUILayout.Vector3Field("", _tangentsIn[i]);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    newTanIn.y = 0f;
+                    _tangentsIn[i] = newTanIn;
+                    if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
+                        _tangentsOut[i] = -newTanIn;
+                    SyncPreviewSpline(); SceneView.RepaintAll();
+                }
+
+                GUILayout.Label("Tangent Out (cyan):", EditorStyles.miniLabel);
+                EditorGUI.BeginChangeCheck();
+                Vector3 newTanOut = EditorGUILayout.Vector3Field("", _tangentsOut[i]);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    newTanOut.y = 0f;
+                    _tangentsOut[i] = newTanOut;
+                    if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
+                        _tangentsIn[i] = -newTanOut;
+                    SyncPreviewSpline(); SceneView.RepaintAll();
+                }
+            }
+
             GUILayout.Space(8);
 
             if (!anch && _knots.Count > 3)
@@ -941,6 +1087,7 @@ namespace BlockShooter.Editor
                 if (GUILayout.Button("Delete Knot", GUILayout.Height(24)))
                 {
                     _knots.RemoveAt(i);
+                    EnsureTangentLists();
                     _selKnot = Mathf.Min(i, _knots.Count - 1);
                     SyncPreviewSpline();
                     SceneView.RepaintAll(); Repaint();
@@ -961,7 +1108,7 @@ namespace BlockShooter.Editor
             // ── Shooter Block ─────────────────────────────────────────────────
             if (isBlock)
             {
-                // Color palette — shown immediately, no extra click needed
+                // Color palette — always shown at top
                 GUILayout.Label("Color:", EditorStyles.miniLabel);
                 for (int i = 0; i < Pal.Length; i += 2)
                 {
@@ -974,7 +1121,12 @@ namespace BlockShooter.Editor
                         var st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
                         if (isSel) st.normal.textColor = Color.white;
                         if (GUILayout.Button(entry.n, st, GUILayout.Height(28)))
-                        { _color[c, r] = entry.t; Repaint(); }
+                        {
+                            _color[c, r] = entry.t;
+                            if (_type[c, r] == GridCellType.Empty)
+                                _type[c, r] = GridCellType.ShooterBlock;
+                            Repaint();
+                        }
                         GUI.backgroundColor = Color.white;
                     }
                     EditorGUILayout.EndHorizontal();
@@ -982,22 +1134,21 @@ namespace BlockShooter.Editor
 
                 GUILayout.Space(6);
 
-                // Shot count: default 100, range 50-200
+                // Shot count — IntField only, no toggle/slider
                 GUILayout.Label("Shot Count:", EditorStyles.miniLabel);
-                bool usedef = _shots[c, r] < 0;
-                bool nd = EditorGUILayout.Toggle("Default", usedef);
-                if (nd != usedef) _shots[c, r] = nd ? -1 : (_cfg?.defaultShots ?? 100);
-                if (!nd) _shots[c, r] = EditorGUILayout.IntSlider(_shots[c, r], 50, 200);
+                int displayVal = _shots[c, r] < 0 ? (_cfg?.defaultShots ?? 100) : _shots[c, r];
+                int newVal = EditorGUILayout.IntField(displayVal);
+                _shots[c, r] = Mathf.Max(1, newVal);
 
                 GUILayout.Space(8);
 
-                // Type/Clear — compact, at the bottom
+                // Bottom row — compact action buttons
                 EditorGUILayout.BeginHorizontal();
                 GUI.backgroundColor = new Color(.5f,.3f,.9f);
                 if (GUILayout.Button("→ Door", GUILayout.Height(20)))
                 { _type[c, r] = GridCellType.Door; Repaint(); }
                 GUI.backgroundColor = new Color(.5f,.18f,.18f);
-                if (GUILayout.Button("Set Empty", GUILayout.Height(20)))
+                if (GUILayout.Button("Clear", GUILayout.Height(20)))
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
                 GUI.backgroundColor = Color.white;
                 EditorGUILayout.EndHorizontal();
@@ -1009,25 +1160,6 @@ namespace BlockShooter.Editor
                 GUILayout.Label("Blocks from door:", EditorStyles.miniLabel);
                 _doors[c, r] = EditorGUILayout.IntSlider(_doors[c, r], 1, 15);
 
-                GUILayout.Space(4);
-                GUILayout.Label("Door color:", EditorStyles.miniLabel);
-                for (int i = 0; i < Pal.Length; i += 2)
-                {
-                    EditorGUILayout.BeginHorizontal();
-                    for (int j = i; j < Mathf.Min(i + 2, Pal.Length); j++)
-                    {
-                        var entry = Pal[j];
-                        bool isSel = _color[c, r] == entry.t;
-                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .4f);
-                        var st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
-                        if (isSel) st.normal.textColor = Color.white;
-                        if (GUILayout.Button(entry.n, st, GUILayout.Height(28)))
-                        { _color[c, r] = entry.t; Repaint(); }
-                        GUI.backgroundColor = Color.white;
-                    }
-                    EditorGUILayout.EndHorizontal();
-                }
-
                 GUILayout.Space(8);
 
                 EditorGUILayout.BeginHorizontal();
@@ -1035,10 +1167,34 @@ namespace BlockShooter.Editor
                 if (GUILayout.Button("→ Shooter Block", GUILayout.Height(20)))
                 { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
                 GUI.backgroundColor = new Color(.5f,.18f,.18f);
-                if (GUILayout.Button("Set Empty", GUILayout.Height(20)))
+                if (GUILayout.Button("Clear", GUILayout.Height(20)))
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
                 GUI.backgroundColor = Color.white;
                 EditorGUILayout.EndHorizontal();
+            }
+
+            // ── Empty ─────────────────────────────────────────────────────────
+            else
+            {
+                // Color palette — clicking a color auto-promotes to ShooterBlock
+                GUILayout.Label("Color:", EditorStyles.miniLabel);
+                for (int i = 0; i < Pal.Length; i += 2)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    for (int j = i; j < Mathf.Min(i + 2, Pal.Length); j++)
+                    {
+                        var entry = Pal[j];
+                        GUI.backgroundColor = Color.Lerp(entry.c, Color.black, .4f);
+                        if (GUILayout.Button(entry.n, GUILayout.Height(28)))
+                        {
+                            _color[c, r] = entry.t;
+                            _type[c, r]  = GridCellType.ShooterBlock;
+                            Repaint();
+                        }
+                        GUI.backgroundColor = Color.white;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
             }
         }
 
@@ -1063,7 +1219,8 @@ namespace BlockShooter.Editor
             StopSplineEdit(save: false);
             InitGrid();
             _groups.Clear(); DefaultGroups();
-            ApplyPreset();
+            _tangentsIn.Clear(); _tangentsOut.Clear(); _tangentModes.Clear();
+            ApplyPreset(); // calls EnsureTangentLists internally
             Repaint();
         }
 
@@ -1101,9 +1258,17 @@ namespace BlockShooter.Editor
                 _groups.Add(new LevelConveyorGroup { color=g.color, rowCount=g.rowCount, laneCount=g.laneCount });
 
             if (lr.splineKnots.Count >= 3)
+            {
                 _knots = new List<Vector3>(lr.splineKnots);
+                _tangentsIn   = new List<Vector3>(lr.splineTangentsIn);
+                _tangentsOut  = new List<Vector3>(lr.splineTangentsOut);
+                _tangentModes = lr.splineTangentModes.Select(m => (TangentMode)m).ToList();
+            }
             else
+            {
                 ApplyPreset();
+            }
+            EnsureTangentLists();
 
             _selC = -1; _selR = -1; _selKnot = -1;
             Repaint();
@@ -1127,6 +1292,59 @@ namespace BlockShooter.Editor
             else if (_activeIdx > idx) _activeIdx--;
 
             RefreshList();
+            Repaint();
+        }
+
+        private void DuplicateLevel(int idx)
+        {
+            if (idx < 0 || idx >= _paths.Count) return;
+
+            // Find highest level index in labels
+            int maxIdx = 0;
+            foreach (var lbl in _labels)
+            {
+                var p = lbl.Split('_');
+                if (p.Length > 1 && int.TryParse(p[p.Length - 1], out int n)) maxIdx = Mathf.Max(maxIdx, n);
+            }
+            int newIndex = maxIdx + 1;
+            string newName = $"Level_{newIndex:000}";
+
+            string srcPath  = _paths[idx];
+            string dir      = _cfg.levelSavePath.TrimEnd('/');
+            string destPath = dir + "/" + newName + ".prefab";
+            EnsureDir(dir);
+
+            bool copied = AssetDatabase.CopyAsset(srcPath, destPath);
+            if (!copied)
+            {
+                Debug.LogError($"[LevelEditor] DuplicateLevel: CopyAsset failed from {srcPath} to {destPath}");
+                return;
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            // Update the copy's LevelRoot data
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(destPath);
+            if (go != null)
+            {
+                var lr = go.GetComponent<LevelRoot>();
+                if (lr != null)
+                {
+                    lr.levelIndex = newIndex;
+                    lr.levelName  = $"Level {newIndex}";
+                    EditorUtility.SetDirty(go);
+                    PrefabUtility.SavePrefabAsset(go);
+                }
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            RefreshList();
+
+            // Select the new level
+            _activeIdx = _paths.IndexOf(destPath);
+            if (_activeIdx >= 0) LoadLevel(_activeIdx);
             Repaint();
         }
 
@@ -1178,6 +1396,10 @@ namespace BlockShooter.Editor
             lr.splineDepth  = _splineDepth;
             lr.splinePreset = _splinePreset;
             lr.splineKnots  = new List<Vector3>(_knots);
+            EnsureTangentLists();
+            lr.splineTangentsIn   = new List<Vector3>(_tangentsIn);
+            lr.splineTangentsOut  = new List<Vector3>(_tangentsOut);
+            lr.splineTangentModes = _tangentModes.Select(m => (int)m).ToList();
 
             lr.cells.Clear();
             for (int c = 0; c < _gridCols; c++)
@@ -1376,7 +1598,9 @@ namespace BlockShooter.Editor
             var mf = track.GetComponent<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return;
 
-            string meshPath = $"{dir}/{name}_TrackMesh.asset";
+            const string meshDir = "Assets/Game/Models/LevelMesh";
+            EnsureDir(meshDir);
+            string meshPath = $"{meshDir}/{name}_TrackMesh.asset";
             var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
             if (existing != null)
             {
