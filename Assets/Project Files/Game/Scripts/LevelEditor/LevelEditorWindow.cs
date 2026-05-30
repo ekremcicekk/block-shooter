@@ -778,23 +778,25 @@ namespace BlockShooter.Editor
             }
 
             GUILayout.Space(3);
-            EditorGUILayout.LabelField("  Click = select cell   |   Change type/color in right panel",
+            EditorGUILayout.LabelField("  Click = select   |   Assign type & color in right panel",
                 EditorStyles.miniLabel);
             GUILayout.Space(6);
         }
 
         private void DrawCell(int c, int r)
         {
-            GridCellType   t    = _type[c, r];
-            BlockColorType col  = _color[c, r];
-            bool           sel  = _selC == c && _selR == r;
+            GridCellType   t   = _type[c, r];
+            BlockColorType col = _color[c, r];
+            bool           sel = _selC == c && _selR == r;
 
+            // Background color
             Color bg = t == GridCellType.Empty
-                ? new Color(.17f,.17f,.19f)
+                ? (sel ? new Color(.26f,.26f,.30f) : new Color(.17f,.17f,.19f))
                 : PC(col);
-            if (t == GridCellType.Door) bg = Color.Lerp(bg, Color.black, .55f);
+            if (t == GridCellType.Door) bg = Color.Lerp(bg, Color.black, .5f);
 
-            string lbl1 = t == GridCellType.Empty ? ""
+            // Labels
+            string lbl1 = t == GridCellType.Empty ? "+"
                         : t == GridCellType.Door   ? "DOOR"
                         : col.ToString().Substring(0, 3).ToUpper();
             string lbl2 = t == GridCellType.Empty ? ""
@@ -808,26 +810,28 @@ namespace BlockShooter.Editor
                 GUILayout.Height(CellSize + CellGap));
             Rect cell = new Rect(outer.x + CellGap*.5f, outer.y + CellGap*.5f, CellSize, CellSize);
 
-            if (sel) EditorGUI.DrawRect(new Rect(cell.x-2,cell.y-2,cell.width+4,cell.height+4), Color.white);
+            // Selection border
+            Color borderCol = sel ? Color.white : new Color(.38f,.38f,.42f);
+            EditorGUI.DrawRect(new Rect(cell.x-1,cell.y-1,cell.width+2,cell.height+2), borderCol);
             EditorGUI.DrawRect(cell, bg);
 
-            if (t != GridCellType.Empty)
+            // Cell label
+            var st = new GUIStyle(EditorStyles.boldLabel)
+                { alignment = TextAnchor.MiddleCenter, fontSize = t == GridCellType.Empty ? 18 : 10,
+                  normal = { textColor = t == GridCellType.Empty ? new Color(.4f,.4f,.45f) : Color.white } };
+            EditorGUI.LabelField(new Rect(cell.x, cell.y+2, cell.width, cell.height*.5f+2), lbl1, st);
+            if (lbl2 != "")
             {
-                var st = new GUIStyle(EditorStyles.boldLabel)
-                    { alignment = TextAnchor.MiddleCenter, fontSize = 10,
-                      normal = { textColor = Color.white } };
-                EditorGUI.LabelField(new Rect(cell.x, cell.y+4, cell.width, cell.height*.5f-2), lbl1, st);
                 st.fontSize = 9;
+                st.normal.textColor = Color.white;
                 EditorGUI.LabelField(new Rect(cell.x, cell.y+cell.height*.5f, cell.width, cell.height*.5f-4), lbl2, st);
             }
 
+            // Click = select only, no type change
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
                 _selC = c; _selR = r; _selKnot = -1;
-                // Auto-promote empty cells to ShooterBlock so the inspector opens meaningfully
-                if (_type[c, r] == GridCellType.Empty)
-                    _type[c, r] = GridCellType.ShooterBlock;
                 e.Use(); Repaint();
             }
         }
@@ -938,15 +942,31 @@ namespace BlockShooter.Editor
             int c = _selC, r = _selR;
             Hdr($"CELL  ({c}, {r})");
 
-            // Type toggle — Shooter Block / Door
-            GUILayout.Label("Type:", EditorStyles.miniLabel);
-            EditorGUILayout.BeginHorizontal();
+            bool isEmpty = _type[c, r] == GridCellType.Empty;
             bool isBlock = _type[c, r] == GridCellType.ShooterBlock;
             bool isDoor  = _type[c, r] == GridCellType.Door;
+
+            // ── Empty cell: show big assign buttons ───────────────────────────
+            if (isEmpty)
+            {
+                EditorGUILayout.HelpBox("Empty cell — assign a type below.", MessageType.None);
+                GUILayout.Space(6);
+                GUI.backgroundColor = new Color(.35f,.65f,1f);
+                if (GUILayout.Button("Shooter Block", GUILayout.Height(36)))
+                { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
+                GUI.backgroundColor = new Color(.6f,.4f,.9f);
+                if (GUILayout.Button("Door", GUILayout.Height(36)))
+                { _type[c, r] = GridCellType.Door; Repaint(); }
+                GUI.backgroundColor = Color.white;
+                return;
+            }
+
+            // ── Type toggle row ───────────────────────────────────────────────
+            EditorGUILayout.BeginHorizontal();
             GUI.backgroundColor = isBlock ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
             if (GUILayout.Button("Shooter Block", GUILayout.Height(22)))
             { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
-            GUI.backgroundColor = isDoor ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
+            GUI.backgroundColor = isDoor ? new Color(.6f,.4f,.9f) : new Color(.28f,.28f,.3f);
             if (GUILayout.Button("Door", GUILayout.Height(22)))
             { _type[c, r] = GridCellType.Door; Repaint(); }
             GUI.backgroundColor = Color.white;
@@ -954,8 +974,31 @@ namespace BlockShooter.Editor
 
             GUILayout.Space(8);
 
+            // ── Shooter Block details ─────────────────────────────────────────
             if (isBlock)
             {
+                // Color palette
+                GUILayout.Label("Color:", EditorStyles.miniLabel);
+                for (int i = 0; i < Pal.Length; i += 2)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    for (int j = i; j < Mathf.Min(i + 2, Pal.Length); j++)
+                    {
+                        var entry = Pal[j];
+                        bool isSel = _color[c, r] == entry.t;
+                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .45f);
+                        var st = new GUIStyle(GUI.skin.button);
+                        if (isSel) { st.fontStyle = FontStyle.Bold; st.normal.textColor = Color.white; }
+                        if (GUILayout.Button(entry.n, st, GUILayout.Height(26)))
+                        { _color[c, r] = entry.t; Repaint(); }
+                        GUI.backgroundColor = Color.white;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+
+                GUILayout.Space(6);
+
+                // Shot count
                 GUILayout.Label("Shot Count:", EditorStyles.miniLabel);
                 bool usedef = _shots[c, r] < 0;
                 bool nd = EditorGUILayout.Toggle("Default", usedef);
@@ -968,10 +1011,31 @@ namespace BlockShooter.Editor
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
                 GUI.backgroundColor = Color.white;
             }
+
+            // ── Door details ──────────────────────────────────────────────────
             else if (isDoor)
             {
-                GUILayout.Label("Blocks spawned from door:", EditorStyles.miniLabel);
+                GUILayout.Label("Blocks from door:", EditorStyles.miniLabel);
                 _doors[c, r] = EditorGUILayout.IntSlider(_doors[c, r], 1, 15);
+
+                GUILayout.Space(4);
+                GUILayout.Label("Door color:", EditorStyles.miniLabel);
+                for (int i = 0; i < Pal.Length; i += 2)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    for (int j = i; j < Mathf.Min(i + 2, Pal.Length); j++)
+                    {
+                        var entry = Pal[j];
+                        bool isSel = _color[c, r] == entry.t;
+                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .45f);
+                        var st = new GUIStyle(GUI.skin.button);
+                        if (isSel) { st.fontStyle = FontStyle.Bold; st.normal.textColor = Color.white; }
+                        if (GUILayout.Button(entry.n, st, GUILayout.Height(26)))
+                        { _color[c, r] = entry.t; Repaint(); }
+                        GUI.backgroundColor = Color.white;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
 
                 GUILayout.Space(10);
                 GUI.backgroundColor = new Color(.5f,.22f,.22f);
