@@ -176,14 +176,6 @@ namespace BlockShooter.Editor
                 Selection.activeObject = _cfg;
             if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(55)))
             { LoadCfg(); RefreshList(); }
-            GUILayout.Space(6);
-            GUI.backgroundColor = new Color(.25f,.6f,1f);
-            if (GUILayout.Button("  ▶ Test in Scene  ", EditorStyles.toolbarButton))
-                TestInScene();
-            GUI.backgroundColor = new Color(.3f,.85f,.45f);
-            if (GUILayout.Button("  ✓ Save Prefab  ", EditorStyles.toolbarButton))
-                SavePrefab();
-            GUI.backgroundColor = Color.white;
             GUILayout.Space(4);
             EditorGUILayout.EndHorizontal();
         }
@@ -202,9 +194,15 @@ namespace BlockShooter.Editor
             for (int i = 0; i < _labels.Count; i++)
             {
                 bool active = _activeIdx == i;
+                EditorGUILayout.BeginHorizontal();
                 GUI.backgroundColor = active ? new Color(.4f,.65f,1f) : new Color(.24f,.24f,.26f);
                 if (GUILayout.Button(_labels[i], GUILayout.Height(22)))
                 { _activeIdx = i; LoadLevel(i); }
+                GUI.backgroundColor = new Color(.9f,.3f,.3f);
+                if (GUILayout.Button("✕", GUILayout.Width(22), GUILayout.Height(22)))
+                    DeleteLevel(i);
+                GUI.backgroundColor = Color.white;
+                EditorGUILayout.EndHorizontal();
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndScrollView();
@@ -223,6 +221,7 @@ namespace BlockShooter.Editor
         // ── Center panel ──────────────────────────────────────────────────────
         private void DrawCenter()
         {
+            EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             _midScroll = EditorGUILayout.BeginScrollView(_midScroll,
                 GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
@@ -231,6 +230,20 @@ namespace BlockShooter.Editor
             DrawGroupsSection();
 
             EditorGUILayout.EndScrollView();
+
+            // ── Action buttons at bottom ──────────────────────────────────────
+            GUILayout.Space(6);
+            EditorGUILayout.BeginHorizontal();
+            GUI.backgroundColor = new Color(.3f,.85f,.45f);
+            if (GUILayout.Button("  ✓  SAVE PREFAB  ", GUILayout.Height(34)))
+                SavePrefab();
+            GUI.backgroundColor = new Color(.25f,.6f,1f);
+            if (GUILayout.Button("  ▶  TEST IN SCENE  ", GUILayout.Height(34)))
+                TestInScene();
+            GUI.backgroundColor = Color.white;
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Space(4);
+            EditorGUILayout.EndVertical();
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -357,13 +370,25 @@ namespace BlockShooter.Editor
         // ── Scene View handles ────────────────────────────────────────────────
         private void OnSceneGUI(SceneView sv)
         {
-            if (!_editingSpline) return;
-
+            // Always draw guides and curve preview
             DrawSceneGuides();
-            HandleKnots(sv);
+            DrawSplineCurveHandles();
 
-            // Continuous repaint while editing
-            sv.Repaint();
+            if (_editingSpline)
+            {
+                HandleKnots(sv);
+                sv.Repaint();
+            }
+            else if (_knots.Count >= 1)
+            {
+                // Show non-interactive knot dots so designer can see the shape
+                Handles.color = new Color(.6f, .85f, 1f, .6f);
+                foreach (var k in _knots)
+                {
+                    float sz = HandleUtility.GetHandleSize(k) * .07f;
+                    Handles.SphereHandleCap(0, k, Quaternion.identity, sz, EventType.Repaint);
+                }
+            }
         }
 
         private void DrawSceneGuides()
@@ -476,8 +501,6 @@ namespace BlockShooter.Editor
                 }
             }
 
-            // Draw spline curve
-            DrawSplineCurveHandles();
         }
 
         private void DrawSplineCurveHandles()
@@ -522,16 +545,21 @@ namespace BlockShooter.Editor
                     _knots.Add(new Vector3( 0,  0, fz+d     ));
                     _knots.Add(new Vector3(-hw, 0, fz+d*.25f));
                     break;
-                case 2: // Rectangle
-                    _knots.Add(new Vector3(-hw, 0, fz  ));
-                    _knots.Add(new Vector3(+hw, 0, fz  ));
-                    _knots.Add(new Vector3(+hw, 0, fz+d));
-                    _knots.Add(new Vector3(-hw, 0, fz+d));
+                case 2: // Rectangle — 6 knots, knot 0 always at center-front (X=0)
+                    _knots.Add(new Vector3(  0,  0, fz        ));
+                    _knots.Add(new Vector3(+hw,  0, fz+d*.15f ));
+                    _knots.Add(new Vector3(+hw,  0, fz+d*.85f ));
+                    _knots.Add(new Vector3(  0,  0, fz+d      ));
+                    _knots.Add(new Vector3(-hw,  0, fz+d*.85f ));
+                    _knots.Add(new Vector3(-hw,  0, fz+d*.15f ));
                     break;
             }
 
             SyncPreviewSpline();
             SceneView.RepaintAll();
+            // Frame scene so the new preset shape is immediately visible
+            SceneView.lastActiveSceneView?.FrameSelected();
+            Repaint();
         }
 
         private void CopySplineFrom(string srcPath)
@@ -830,15 +858,20 @@ namespace BlockShooter.Editor
             int c = _selC, r = _selR;
             Hdr($"CELL  ({c}, {r})");
 
-            // Type buttons
+            // Type buttons — only Block and Door; Clear removes the block
             GUILayout.Label("Type:", EditorStyles.miniLabel);
             EditorGUILayout.BeginHorizontal();
-            foreach (GridCellType t in System.Enum.GetValues(typeof(GridCellType)))
-            {
-                bool active = _type[c, r] == t;
-                GUI.backgroundColor = active ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
-                if (GUILayout.Button(t.ToString(), GUILayout.Height(22))) { _type[c, r] = t; Repaint(); }
-            }
+            bool isBlock = _type[c, r] == GridCellType.ShooterBlock;
+            bool isDoor  = _type[c, r] == GridCellType.Door;
+            GUI.backgroundColor = isBlock ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
+            if (GUILayout.Button("Shooter Block", GUILayout.Height(22)))
+            { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
+            GUI.backgroundColor = isDoor ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
+            if (GUILayout.Button("Door", GUILayout.Height(22)))
+            { _type[c, r] = GridCellType.Door; Repaint(); }
+            GUI.backgroundColor = new Color(.5f,.2f,.2f);
+            if (GUILayout.Button("✕", GUILayout.Width(24), GUILayout.Height(22)))
+            { _type[c, r] = GridCellType.Empty; Repaint(); }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
 
@@ -947,6 +980,27 @@ namespace BlockShooter.Editor
             Repaint();
         }
 
+        private void DeleteLevel(int idx)
+        {
+            if (idx < 0 || idx >= _paths.Count) return;
+            string path  = _paths[idx];
+            string label = _labels[idx];
+            if (!EditorUtility.DisplayDialog(
+                    "Delete Level",
+                    $"Delete \"{label}\"?\nThis will permanently remove the prefab asset.",
+                    "Delete", "Cancel")) return;
+
+            AssetDatabase.DeleteAsset(path);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            if (_activeIdx == idx) { _activeIdx = -1; NewLevel(); }
+            else if (_activeIdx > idx) _activeIdx--;
+
+            RefreshList();
+            Repaint();
+        }
+
         // ═════════════════════════════════════════════════════════════════════
         //  SAVE PREFAB
         // ═════════════════════════════════════════════════════════════════════
@@ -1023,6 +1077,25 @@ namespace BlockShooter.Editor
             var cc = trackGo.AddComponent<ConveyorController>();
             cc.speed = _cfg.conveyorSpeed;
             lr.conveyorController = cc;
+
+            // Track mesh — ConveyorTrackMeshBuilder (RequireComponent auto-adds MeshFilter + MeshRenderer)
+            var meshBuilder = trackGo.AddComponent<ConveyorTrackMeshBuilder>();
+            meshBuilder.beltHalfWidth = 0.45f;
+            meshBuilder.wallAboveBelt = 0.18f;
+            meshBuilder.railHeight    = 1f;
+            meshBuilder.railWidth     = 0.1f;
+            meshBuilder.bevelSize     = 0.02f;
+            meshBuilder.BuildMesh();
+
+            var mr = trackGo.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                mr.sharedMaterials = new Material[]
+                {
+                    _cfg.trackSideMaterial,
+                    _cfg.trackBeltMaterial,
+                };
+            }
 
             if (_cfg.trackSegmentPrefab != null)
             {

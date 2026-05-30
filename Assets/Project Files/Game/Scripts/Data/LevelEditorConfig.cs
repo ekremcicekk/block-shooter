@@ -36,5 +36,11 @@ namespace BlockShooter
         [Header("Grid Defaults")]
         public float gridCellSize  = 1.2f;
         public int   defaultShots  = 3;
+
+        [Header("Track Materials")]
+        [Tooltip("Slot 0 — wall/side material (M_ConveyorSide)")]
+        public Material trackSideMaterial;
+        [Tooltip("Slot 1 — belt surface material (M_ConveyorIn)")]
+        public Material trackBeltMaterial;
     }
 }
