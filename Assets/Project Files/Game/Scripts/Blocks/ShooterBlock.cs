@@ -192,7 +192,10 @@ namespace BlockShooter
                 while (target != null && !target.IsDestroyed && target.gameObject.activeSelf)
                 {
                     if (FireRange.Instance == null) break;
-                    if (FireRange.Instance.BlocksInRange.Contains(target)) break;
+                    bool found = false;
+                    foreach (var b in FireRange.Instance.BlocksInRange)
+                        if (b == target) { found = true; break; }
+                    if (found) break;
                     yield return null;
                 }
 
