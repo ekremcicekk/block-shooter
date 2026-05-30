@@ -20,6 +20,8 @@ namespace BlockShooter
         public GameObject slotIndicatorPrefab;
         public GameObject trackSegmentPrefab;
         public GameObject arrowPrefab;
+        public GameObject fireRangePrefab;
+        public GameObject groundPrefab;
 
         [Header("Conveyor Defaults")]
         public float conveyorSpeed    = 1.5f;

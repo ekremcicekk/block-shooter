@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using DG.Tweening;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Splines;
@@ -251,18 +252,6 @@ namespace BlockShooter.Editor
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
-
-            // Size sliders
-            EditorGUI.BeginChangeCheck();
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Width", GUILayout.Width(56));
-            _splineWidth = EditorGUILayout.Slider(_splineWidth, 2f, 14f);
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Depth", GUILayout.Width(56));
-            _splineDepth = EditorGUILayout.Slider(_splineDepth, 4f, 22f);
-            EditorGUILayout.EndHorizontal();
-            if (EditorGUI.EndChangeCheck()) ApplyPreset();
 
             GUILayout.Space(4);
 
@@ -600,6 +589,8 @@ namespace BlockShooter.Editor
             foreach (var k in _knots)
                 spline.Add(new BezierKnot(new float3(k.x, k.y, k.z)));
             spline.Closed = true;
+            for (int i = 0; i < spline.Count; i++)
+                spline.SetTangentMode(i, TangentMode.AutoSmooth);
         }
 
         private void ReadKnotsFromContainer(SplineContainer sc)
@@ -682,7 +673,7 @@ namespace BlockShooter.Editor
             }
 
             GUILayout.Space(3);
-            EditorGUILayout.LabelField("  LMB = cycle Empty→Block→Door   |   Click = select",
+            EditorGUILayout.LabelField("  Click = select cell   |   Change type/color in right panel",
                 EditorStyles.miniLabel);
             GUILayout.Space(6);
         }
@@ -728,13 +719,6 @@ namespace BlockShooter.Editor
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
-                if (e.button == 0)
-                    _type[c, r] = _type[c, r] switch
-                    {
-                        GridCellType.Empty        => GridCellType.ShooterBlock,
-                        GridCellType.ShooterBlock => GridCellType.Door,
-                        _                         => GridCellType.Empty,
-                    };
                 _selC = c; _selR = r; _selKnot = -1;
                 e.Use(); Repaint();
             }
@@ -1074,13 +1058,23 @@ namespace BlockShooter.Editor
                     }
             }
 
-            // ── FireRange ── (FIRE_Z'de sabit)
-            var frGo = Go(root, "FireRange");
-            frGo.transform.localPosition = new Vector3(0f, .5f, FIRE_Z);
-            var fc = frGo.AddComponent<BoxCollider>();
-            fc.isTrigger = true;
-            fc.size = new Vector3(cs * _gridCols + 2f, 2f, 3f);
-            lr.fireRange = frGo.AddComponent<FireRange>();
+            // ── FireRange ── (always anchored at FIRE_Z)
+            GameObject frGo;
+            if (_cfg.fireRangePrefab != null)
+            {
+                frGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.fireRangePrefab, root);
+                frGo.name = "FireRange";
+            }
+            else
+            {
+                frGo = Go(root, "FireRange");
+                var fc = frGo.AddComponent<BoxCollider>();
+                fc.isTrigger = true;
+                fc.size = new Vector3(1.8f, 2f, 0.8f);
+                frGo.AddComponent<FireRange>();
+            }
+            frGo.transform.localPosition = new Vector3(0f, 0f, FIRE_Z);
+            lr.fireRange = frGo.GetComponent<FireRange>();
 
             // ── SlotDeck ──
             var deckGo = Go(root, "SlotDeck");
@@ -1141,12 +1135,21 @@ namespace BlockShooter.Editor
             }
 
             // ── Ground ──
-            var gnd = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            gnd.name = "Ground";
-            gnd.transform.SetParent(root, false);
-            gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth*.3f);
-            gnd.transform.localScale    = new Vector3(2f, 1f, 2f);
-            DestroyImmediate(gnd.GetComponent<MeshCollider>());
+            if (_cfg.groundPrefab != null)
+            {
+                var gnd = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.groundPrefab, root);
+                gnd.name = "Ground";
+                gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth * .3f);
+            }
+            else
+            {
+                var gnd = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                gnd.name = "Ground";
+                gnd.transform.SetParent(root, false);
+                gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth * .3f);
+                gnd.transform.localScale    = new Vector3(2f, 1f, 2f);
+                DestroyImmediate(gnd.GetComponent<MeshCollider>());
+            }
         }
 
         // ── Test In Scene ─────────────────────────────────────────────────────
@@ -1158,6 +1161,9 @@ namespace BlockShooter.Editor
             string path = dir + $"/Level_{_levelIndex:000}.prefab";
             var prefab  = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) return;
+
+            // Kill all DOTween tweens first to prevent MissingReference on destroyed transforms
+            DOTween.KillAll();
 
             // Remove existing LevelRoot instances from scene
             foreach (var lr in FindObjectsByType<LevelRoot>(FindObjectsSortMode.None))
@@ -1174,7 +1180,6 @@ namespace BlockShooter.Editor
             }
             else
             {
-                // LevelManager yoksa direkt instantiate et
                 PrefabUtility.InstantiatePrefab(prefab);
             }
 

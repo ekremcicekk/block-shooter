@@ -37,6 +37,7 @@ namespace BlockShooter
 
         private void Awake()
         {
+            if (!Application.isPlaying) return;
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             _splineContainer = GetComponent<SplineContainer>();
@@ -52,6 +53,7 @@ namespace BlockShooter
         /// </summary>
         public void Initialize(float speedMultiplier = 1f)
         {
+            if (_splineContainer == null) _splineContainer = GetComponent<SplineContainer>();
             speed *= speedMultiplier;
             _splineWorldLength = SplineUtility.CalculateLength(
                 _splineContainer.Spline, transform.localToWorldMatrix);
