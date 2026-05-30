@@ -25,6 +25,7 @@ namespace BlockShooter.Editor
 
         // ── Config ────────────────────────────────────────────────────────────
         private LevelEditorConfig _cfg;
+        private GameConfig        _gameCfg;
 
         // ── Level list ────────────────────────────────────────────────────────
         private List<string> _paths  = new();
@@ -113,6 +114,12 @@ namespace BlockShooter.Editor
             _cfg = g.Length > 0
                 ? AssetDatabase.LoadAssetAtPath<LevelEditorConfig>(
                       AssetDatabase.GUIDToAssetPath(g[0]))
+                : null;
+
+            var gc = AssetDatabase.FindAssets("t:GameConfig");
+            _gameCfg = gc.Length > 0
+                ? AssetDatabase.LoadAssetAtPath<GameConfig>(
+                      AssetDatabase.GUIDToAssetPath(gc[0]))
                 : null;
         }
 
@@ -548,16 +555,20 @@ namespace BlockShooter.Editor
                 bool isSel    = (_selKnot == i);
                 float sz = HandleUtility.GetHandleSize(_knots[i]) * (isSel ? .18f : .13f);
 
-                // Renk
                 Handles.color = isAnchor ? new Color(1f, .4f, .4f, .95f)
                               : isSel    ? new Color(1f, .95f, .2f, .95f)
                               :            new Color(.9f, .9f, .9f, .8f);
 
-                // Click to select
-                if (Handles.Button(_knots[i], Quaternion.identity, sz * .9f, sz, Handles.SphereHandleCap))
+                // Screen-space click detection — fires before FreeMoveHandle so single clicks register
+                if (e.type == EventType.MouseDown && e.button == 0 && !e.shift)
                 {
-                    _selKnot = i;
-                    Repaint();
+                    Vector2 screenPt = HandleUtility.WorldToGUIPoint(_knots[i]);
+                    if (Vector2.Distance(screenPt, e.mousePosition) < 20f)
+                    {
+                        _selKnot = i;
+                        Repaint();
+                        // Don't e.Use() — let FreeMoveHandle also respond for dragging
+                    }
                 }
 
                 // Drag to move
@@ -569,7 +580,7 @@ namespace BlockShooter.Editor
                     if (EditorGUI.EndChangeCheck())
                     {
                         np.y = 0f;
-                        if (isAnchor) np.z = FIRE_Z; // Z locked
+                        if (isAnchor) np.z = FIRE_Z;
                         _knots[i] = np;
                         _selKnot  = i;
                         SyncPreviewSpline();
@@ -827,11 +838,13 @@ namespace BlockShooter.Editor
                 EditorGUI.LabelField(new Rect(cell.x, cell.y+cell.height*.5f, cell.width, cell.height*.5f-4), lbl2, st);
             }
 
-            // Click = select only, no type change
+            // Click = select + auto-promote empty to ShooterBlock for immediate color access
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
                 _selC = c; _selR = r; _selKnot = -1;
+                if (_type[c, r] == GridCellType.Empty)
+                    _type[c, r] = GridCellType.ShooterBlock;
                 e.Use(); Repaint();
             }
         }
@@ -942,42 +955,13 @@ namespace BlockShooter.Editor
             int c = _selC, r = _selR;
             Hdr($"CELL  ({c}, {r})");
 
-            bool isEmpty = _type[c, r] == GridCellType.Empty;
             bool isBlock = _type[c, r] == GridCellType.ShooterBlock;
             bool isDoor  = _type[c, r] == GridCellType.Door;
 
-            // ── Empty cell: show big assign buttons ───────────────────────────
-            if (isEmpty)
-            {
-                EditorGUILayout.HelpBox("Empty cell — assign a type below.", MessageType.None);
-                GUILayout.Space(6);
-                GUI.backgroundColor = new Color(.35f,.65f,1f);
-                if (GUILayout.Button("Shooter Block", GUILayout.Height(36)))
-                { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
-                GUI.backgroundColor = new Color(.6f,.4f,.9f);
-                if (GUILayout.Button("Door", GUILayout.Height(36)))
-                { _type[c, r] = GridCellType.Door; Repaint(); }
-                GUI.backgroundColor = Color.white;
-                return;
-            }
-
-            // ── Type toggle row ───────────────────────────────────────────────
-            EditorGUILayout.BeginHorizontal();
-            GUI.backgroundColor = isBlock ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
-            if (GUILayout.Button("Shooter Block", GUILayout.Height(22)))
-            { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
-            GUI.backgroundColor = isDoor ? new Color(.6f,.4f,.9f) : new Color(.28f,.28f,.3f);
-            if (GUILayout.Button("Door", GUILayout.Height(22)))
-            { _type[c, r] = GridCellType.Door; Repaint(); }
-            GUI.backgroundColor = Color.white;
-            EditorGUILayout.EndHorizontal();
-
-            GUILayout.Space(8);
-
-            // ── Shooter Block details ─────────────────────────────────────────
+            // ── Shooter Block ─────────────────────────────────────────────────
             if (isBlock)
             {
-                // Color palette
+                // Color palette — shown immediately, no extra click needed
                 GUILayout.Label("Color:", EditorStyles.miniLabel);
                 for (int i = 0; i < Pal.Length; i += 2)
                 {
@@ -986,10 +970,10 @@ namespace BlockShooter.Editor
                     {
                         var entry = Pal[j];
                         bool isSel = _color[c, r] == entry.t;
-                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .45f);
-                        var st = new GUIStyle(GUI.skin.button);
-                        if (isSel) { st.fontStyle = FontStyle.Bold; st.normal.textColor = Color.white; }
-                        if (GUILayout.Button(entry.n, st, GUILayout.Height(26)))
+                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .4f);
+                        var st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
+                        if (isSel) st.normal.textColor = Color.white;
+                        if (GUILayout.Button(entry.n, st, GUILayout.Height(28)))
                         { _color[c, r] = entry.t; Repaint(); }
                         GUI.backgroundColor = Color.white;
                     }
@@ -998,21 +982,28 @@ namespace BlockShooter.Editor
 
                 GUILayout.Space(6);
 
-                // Shot count
+                // Shot count: default 100, range 50-200
                 GUILayout.Label("Shot Count:", EditorStyles.miniLabel);
                 bool usedef = _shots[c, r] < 0;
                 bool nd = EditorGUILayout.Toggle("Default", usedef);
-                if (nd != usedef) _shots[c, r] = nd ? -1 : (_cfg?.defaultShots ?? 3);
-                if (!nd) _shots[c, r] = EditorGUILayout.IntSlider(_shots[c, r], 1, 20);
+                if (nd != usedef) _shots[c, r] = nd ? -1 : (_cfg?.defaultShots ?? 100);
+                if (!nd) _shots[c, r] = EditorGUILayout.IntSlider(_shots[c, r], 50, 200);
 
-                GUILayout.Space(10);
-                GUI.backgroundColor = new Color(.5f,.22f,.22f);
-                if (GUILayout.Button("Set Empty", GUILayout.Height(22)))
+                GUILayout.Space(8);
+
+                // Type/Clear — compact, at the bottom
+                EditorGUILayout.BeginHorizontal();
+                GUI.backgroundColor = new Color(.5f,.3f,.9f);
+                if (GUILayout.Button("→ Door", GUILayout.Height(20)))
+                { _type[c, r] = GridCellType.Door; Repaint(); }
+                GUI.backgroundColor = new Color(.5f,.18f,.18f);
+                if (GUILayout.Button("Set Empty", GUILayout.Height(20)))
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
                 GUI.backgroundColor = Color.white;
+                EditorGUILayout.EndHorizontal();
             }
 
-            // ── Door details ──────────────────────────────────────────────────
+            // ── Door ──────────────────────────────────────────────────────────
             else if (isDoor)
             {
                 GUILayout.Label("Blocks from door:", EditorStyles.miniLabel);
@@ -1027,21 +1018,27 @@ namespace BlockShooter.Editor
                     {
                         var entry = Pal[j];
                         bool isSel = _color[c, r] == entry.t;
-                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .45f);
-                        var st = new GUIStyle(GUI.skin.button);
-                        if (isSel) { st.fontStyle = FontStyle.Bold; st.normal.textColor = Color.white; }
-                        if (GUILayout.Button(entry.n, st, GUILayout.Height(26)))
+                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .4f);
+                        var st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
+                        if (isSel) st.normal.textColor = Color.white;
+                        if (GUILayout.Button(entry.n, st, GUILayout.Height(28)))
                         { _color[c, r] = entry.t; Repaint(); }
                         GUI.backgroundColor = Color.white;
                     }
                     EditorGUILayout.EndHorizontal();
                 }
 
-                GUILayout.Space(10);
-                GUI.backgroundColor = new Color(.5f,.22f,.22f);
-                if (GUILayout.Button("Set Empty", GUILayout.Height(22)))
+                GUILayout.Space(8);
+
+                EditorGUILayout.BeginHorizontal();
+                GUI.backgroundColor = new Color(.35f,.55f,1f);
+                if (GUILayout.Button("→ Shooter Block", GUILayout.Height(20)))
+                { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
+                GUI.backgroundColor = new Color(.5f,.18f,.18f);
+                if (GUILayout.Button("Set Empty", GUILayout.Height(20)))
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
                 GUI.backgroundColor = Color.white;
+                EditorGUILayout.EndHorizontal();
             }
         }
 
@@ -1152,6 +1149,9 @@ namespace BlockShooter.Editor
             WriteDesignData(lr);
             BuildHierarchy(root.transform, lr);
 
+            // Save generated track mesh as a persistent asset so prefab can reference it
+            SaveTrackMeshAsset(root.transform, dir, name);
+
             PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
             DestroyImmediate(root);
             AssetDatabase.SaveAssets();
@@ -1233,7 +1233,11 @@ namespace BlockShooter.Editor
             {
                 var tr = trackGo.AddComponent<ConveyorTrackRenderer>();
                 tr.segmentPrefab = _cfg.trackSegmentPrefab;
-                if (_cfg.arrowPrefab != null) tr.arrowPrefab = _cfg.arrowPrefab;
+                if (_cfg.arrowPrefab != null)
+                {
+                    tr.arrowPrefab  = _cfg.arrowPrefab;
+                    tr.arrowSpacing = _cfg.arrowSpacing;
+                }
             }
 
             // Block groups
@@ -1318,7 +1322,14 @@ namespace BlockShooter.Editor
                         var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.shooterBlockPrefab, sgGo.transform);
                         go.name = nm; go.transform.localPosition = pos;
                         int sh = _shots[c,r] >= 0 ? _shots[c,r] : _cfg.defaultShots;
-                        go.GetComponent<ShooterBlock>()?.EditorSetup(_color[c,r], sh, c, r);
+                        var sb = go.GetComponent<ShooterBlock>();
+                        sb?.EditorSetup(_color[c,r], sh, c, r);
+                        // Apply material directly so prefab shows colors in editor
+                        if (sb?.blockRenderer != null && _gameCfg != null)
+                        {
+                            var mat = _gameCfg.GetMaterial(_color[c,r]);
+                            if (mat != null) sb.blockRenderer.sharedMaterial = mat;
+                        }
                         break;
                     }
                     case GridCellType.Door:
@@ -1354,6 +1365,29 @@ namespace BlockShooter.Editor
                 gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth * .3f);
                 gnd.transform.localScale    = new Vector3(2f, 1f, 2f);
                 DestroyImmediate(gnd.GetComponent<MeshCollider>());
+            }
+        }
+
+        // ── Track mesh asset ──────────────────────────────────────────────────
+        private static void SaveTrackMeshAsset(Transform root, string dir, string name)
+        {
+            var track = root.Find("Track");
+            if (track == null) return;
+            var mf = track.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) return;
+
+            string meshPath = $"{dir}/{name}_TrackMesh.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            if (existing != null)
+            {
+                // Reuse existing asset to keep prefab references stable
+                existing.Clear();
+                EditorUtility.CopySerialized(mf.sharedMesh, existing);
+                mf.sharedMesh = existing;
+            }
+            else
+            {
+                AssetDatabase.CreateAsset(mf.sharedMesh, meshPath);
             }
         }
 
@@ -1405,7 +1439,7 @@ namespace BlockShooter.Editor
             _doors = new int           [_gridCols, _gridRows];
             for (int c=0;c<_gridCols;c++) for (int r=0;r<_gridRows;r++)
             {
-                _shots[c,r]=-1; _doors[c,r]=3;
+                _shots[c,r]=-1; _doors[c,r]=5;
                 if (pt==null||c>=pt.GetLength(0)||r>=pt.GetLength(1)) continue;
                 _type[c,r]=pt[c,r]; _color[c,r]=pc[c,r]; _shots[c,r]=ps[c,r]; _doors[c,r]=pd[c,r];
             }

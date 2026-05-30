@@ -37,7 +37,7 @@ namespace BlockShooter
         // ── State ──────────────────────────────────────────────────────────────
         // Serialized so the Level Editor can bake color/shots/position into the prefab.
         [SerializeField] private BlockColorType _colorType;
-        [SerializeField] private int   _shotCount = 3;
+        [SerializeField] private int   _shotCount = 100;
         [SerializeField] private int   _gridColumn;
         [SerializeField] private int   _gridRow;
         private bool  _isRainbowMode;
@@ -91,13 +91,25 @@ namespace BlockShooter
         }
 
 #if UNITY_EDITOR
-        /// <summary>Editor-only: bakes values into serialized fields without triggering runtime logic.</summary>
+        /// <summary>Editor-only: bakes values into serialized fields and applies the material so the prefab shows the correct color.</summary>
         public void EditorSetup(BlockColorType colorType, int shotCount, int col, int row)
         {
             _colorType  = colorType;
             _shotCount  = shotCount;
             _gridColumn = col;
             _gridRow    = row;
+            EditorApplyMaterial();
+        }
+
+        private void EditorApplyMaterial()
+        {
+            if (blockRenderer == null) return;
+            var guids = UnityEditor.AssetDatabase.FindAssets("t:GameConfig");
+            if (guids.Length == 0) return;
+            var cfg = UnityEditor.AssetDatabase.LoadAssetAtPath<GameConfig>(
+                UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]));
+            var mat = cfg?.GetMaterial(_colorType);
+            if (mat != null) blockRenderer.sharedMaterial = mat;
         }
 #endif
 
@@ -342,7 +354,10 @@ namespace BlockShooter
         public void SetRainbowMode(bool active)
         {
             _isRainbowMode = active;
-            if (!active) ApplyColor();
+            if (!active)
+            {
+                ApplyColor();
+            }
             else if (blockRenderer != null)
             {
                 var mpb = new MaterialPropertyBlock();
@@ -362,15 +377,26 @@ namespace BlockShooter
 
         private void ApplyColor()
         {
-            Color c = GameManager.Instance.config.GetColor(_colorType);
-            if (blockRenderer != null)
+            var config = GameManager.Instance?.config;
+            if (config == null) return;
+
+            var mat = config.GetMaterial(_colorType);
+            if (mat != null && blockRenderer != null)
             {
+                blockRenderer.sharedMaterial = mat;
+                blockRenderer.SetPropertyBlock(null);
+            }
+            else if (blockRenderer != null)
+            {
+                Color c = config.GetColor(_colorType);
                 var mpb = new MaterialPropertyBlock();
                 mpb.SetColor(ColorProp, c);
                 blockRenderer.SetPropertyBlock(mpb);
             }
+
             if (glowRenderer != null)
             {
+                Color c = config.GetColor(_colorType);
                 var mpb = new MaterialPropertyBlock();
                 mpb.SetColor(ColorProp, new Color(c.r, c.g, c.b, 0.4f));
                 mpb.SetColor(EmissionProp, c * 0.6f);

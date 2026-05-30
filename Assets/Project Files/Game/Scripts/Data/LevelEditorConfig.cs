@@ -35,7 +35,11 @@ namespace BlockShooter
 
         [Header("Grid Defaults")]
         public float gridCellSize  = 1.2f;
-        public int   defaultShots  = 3;
+        public int   defaultShots  = 100;
+
+        [Header("Arrow Settings")]
+        [Tooltip("World-unit spacing between arrows on the conveyor path")]
+        public float arrowSpacing = 2f;
 
         [Header("Track Materials")]
         [Tooltip("Slot 0 — wall/side material (M_ConveyorSide)")]
