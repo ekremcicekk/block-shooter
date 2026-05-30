@@ -5,52 +5,67 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Splines;
+using Unity.Mathematics;
 
 namespace BlockShooter.Editor
 {
     public class LevelEditorWindow : EditorWindow
     {
         // ── Layout ────────────────────────────────────────────────────────────
-        private const float ListW = 175f;
-        private const float RightW = 200f;
-        private const float CellSize = 66f;
+        private const float ListW    = 180f;
+        private const float RightW   = 210f;
+        private const float CellSize = 62f;
         private const float CellGap  = 4f;
         private const int   MaxCols  = 7;
         private const int   MaxRows  = 6;
+
+        // FireRange world Z — all splines pass through this point
+        private const float FIRE_Z = 1.5f;
 
         // ── Config ────────────────────────────────────────────────────────────
         private LevelEditorConfig _cfg;
 
         // ── Level list ────────────────────────────────────────────────────────
-        private List<string> _levelPaths  = new();
-        private List<string> _levelLabels = new();
-        private int          _activeIndex = -1;   // index in _levelPaths
+        private List<string> _paths  = new();
+        private List<string> _labels = new();
+        private int          _activeIdx = -1;
 
-        // ── Working state ─────────────────────────────────────────────────────
-        private int           _gridCols   = 4;
-        private int           _gridRows   = 2;
-        private int           _levelIndex = 1;
-        private string        _levelName  = "Level 1";
-        private LevelGoalType _goalType   = LevelGoalType.ClearAllBlocks;
-        private int           _goalAmount = 0;
+        // ── Design data ───────────────────────────────────────────────────────
+        private int           _levelIndex  = 1;
+        private string        _levelName   = "Level 1";
+        private LevelGoalType _goalType    = LevelGoalType.ClearAllBlocks;
+        private int           _goalAmount  = 0;
 
-        // [col, row]
+        private int   _gridCols = 4, _gridRows = 2;
         private GridCellType[,]   _type;
         private BlockColorType[,] _color;
-        private int[,]            _shots;   // -1 = default
-        private int[,]            _doors;   // door block count
+        private int[,]            _shots, _doors;
 
         private List<LevelConveyorGroup> _groups = new();
 
-        // ── Selection ─────────────────────────────────────────────────────────
+        // ── Spline ────────────────────────────────────────────────────────────
+        private List<Vector3> _knots       = new();
+        private float         _splineWidth = 6f;
+        private float         _splineDepth = 10f;
+        private int           _splinePreset = 0;  // 0=Oval 1=Wide 2=Rectangle
+
+        // Spline edit state
+        private bool         _editingSpline = false;
+        private bool         _addKnotMode   = false;
+        private int          _selKnot       = -1;
+        private GameObject   _previewGo     = null; // lightweight spline preview only
+
+        // Copy
+        private int _copyIdx = 0;
+
+        // ── Cell selection ────────────────────────────────────────────────────
         private int _selC = -1, _selR = -1;
 
         // ── Scroll ────────────────────────────────────────────────────────────
-        private Vector2 _listScroll;
-        private Vector2 _midScroll;
+        private Vector2 _listScroll, _midScroll;
 
         // ── Color palette ─────────────────────────────────────────────────────
-        private static readonly (BlockColorType type, Color color, string label)[] Colors =
+        private static readonly (BlockColorType t, Color c, string n)[] Pal =
         {
             (BlockColorType.Red,    new Color(.90f,.20f,.20f), "Red"   ),
             (BlockColorType.Blue,   new Color(.20f,.50f,.90f), "Blue"  ),
@@ -59,74 +74,95 @@ namespace BlockShooter.Editor
             (BlockColorType.Purple, new Color(.60f,.20f,.90f), "Purple"),
             (BlockColorType.Orange, new Color(1.00f,.55f,.10f),"Orange"),
         };
-
-        private static Color GetColor(BlockColorType t) =>
-            Colors.FirstOrDefault(x => x.type == t).color;
+        private static Color PC(BlockColorType t) =>
+            Pal.FirstOrDefault(x => x.t == t).c;
 
         // ── Menu ──────────────────────────────────────────────────────────────
         [MenuItem("BlockShooter/Level Editor", false, 10)]
         public static void Open()
         {
             var w = GetWindow<LevelEditorWindow>("Level Editor");
-            w.minSize = new Vector2(780, 520);
+            w.minSize = new Vector2(820, 560);
             w.Show();
         }
 
-        private void OnEnable() { LoadConfig(); Refresh(); }
+        private void OnEnable()
+        {
+            SceneView.duringSceneGui += OnSceneGUI;
+            LoadCfg();
+            RefreshList();
+            if (_type == null) InitGrid();
+            if (_knots.Count == 0) ApplyPreset();
+            if (_groups.Count == 0) DefaultGroups();
+        }
 
-        private void LoadConfig()
+        private void OnDisable()
+        {
+            SceneView.duringSceneGui -= OnSceneGUI;
+            DestroyPreview();
+        }
+
+        // ── Load config ───────────────────────────────────────────────────────
+        private void LoadCfg()
         {
             var g = AssetDatabase.FindAssets("t:LevelEditorConfig");
             _cfg = g.Length > 0
-                ? AssetDatabase.LoadAssetAtPath<LevelEditorConfig>(AssetDatabase.GUIDToAssetPath(g[0]))
+                ? AssetDatabase.LoadAssetAtPath<LevelEditorConfig>(
+                      AssetDatabase.GUIDToAssetPath(g[0]))
                 : null;
         }
 
-        private void Refresh()
+        private void RefreshList()
         {
-            _levelPaths.Clear(); _levelLabels.Clear();
+            _paths.Clear(); _labels.Clear();
             if (_cfg == null) return;
 
             string folder = _cfg.levelSavePath.TrimEnd('/');
-            var guids = AssetDatabase.FindAssets("t:Prefab", new[] { folder });
-            foreach (var gid in guids)
+            foreach (var gid in AssetDatabase.FindAssets("t:Prefab", new[] { folder }))
             {
                 string path = AssetDatabase.GUIDToAssetPath(gid);
                 var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (go == null || go.GetComponent<LevelRoot>() == null) continue;
-                _levelPaths.Add(path);
-                _levelLabels.Add(Path.GetFileNameWithoutExtension(path));
+                _paths.Add(path);
+                _labels.Add(Path.GetFileNameWithoutExtension(path));
             }
 
-            var sorted = _levelPaths.Zip(_levelLabels, (p, l) => (p, l))
-                                    .OrderBy(x => x.l).ToList();
-            _levelPaths  = sorted.Select(x => x.p).ToList();
-            _levelLabels = sorted.Select(x => x.l).ToList();
+            var s = _paths.Zip(_labels, (p, l) => (p, l)).OrderBy(x => x.l).ToList();
+            _paths  = s.Select(x => x.p).ToList();
+            _labels = s.Select(x => x.l).ToList();
         }
 
-        // ── Main GUI ──────────────────────────────────────────────────────────
+        private void DefaultGroups()
+        {
+            int rc = _cfg?.rowsPerGroup ?? 20;
+            int lc = _cfg?.laneCount ?? 5;
+            _groups.Add(new LevelConveyorGroup { color = BlockColorType.Red,  rowCount = rc, laneCount = lc });
+            _groups.Add(new LevelConveyorGroup { color = BlockColorType.Blue, rowCount = rc, laneCount = lc });
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  ANA GUI
+        // ═════════════════════════════════════════════════════════════════════
         private void OnGUI()
         {
-            if (_cfg == null) { DrawMissingConfig(); return; }
+            if (_cfg == null) { DrawNoCfg(); return; }
             DrawToolbar();
             EditorGUILayout.BeginHorizontal();
             DrawLeft();
-            Divider();
+            VDiv();
             DrawCenter();
-            Divider();
+            VDiv();
             DrawRight();
             EditorGUILayout.EndHorizontal();
         }
 
-        // ── Missing config ────────────────────────────────────────────────────
-        private void DrawMissingConfig()
+        private void DrawNoCfg()
         {
             GUILayout.Space(30);
             EditorGUILayout.HelpBox(
-                "LevelEditorConfig bulunamadı.\n\nOluşturmak için:\nAssets → Create → BlockShooter → Level Editor Config",
+                "LevelEditorConfig not found.\nAssets → Create → BlockShooter → Level Editor Config",
                 MessageType.Warning);
-            if (GUILayout.Button("Yenile", GUILayout.Height(28)))
-            { LoadConfig(); Refresh(); }
+            if (GUILayout.Button("Refresh", GUILayout.Height(28))) { LoadCfg(); RefreshList(); }
         }
 
         // ── Toolbar ───────────────────────────────────────────────────────────
@@ -135,48 +171,47 @@ namespace BlockShooter.Editor
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             GUILayout.Label("  BLOCK SHOOTER — LEVEL EDITOR", EditorStyles.boldLabel);
             GUILayout.FlexibleSpace();
-
-            if (GUILayout.Button("Config", EditorStyles.toolbarButton, GUILayout.Width(50)))
+            if (GUILayout.Button("Config",  EditorStyles.toolbarButton, GUILayout.Width(50)))
                 Selection.activeObject = _cfg;
             if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(55)))
-            { LoadConfig(); Refresh(); }
-
-            GUILayout.Space(8);
-            GUI.backgroundColor = new Color(.3f, .85f, .45f);
-            if (GUILayout.Button("  ▶  SAVE PREFAB  ", EditorStyles.toolbarButton, GUILayout.Height(18)))
+            { LoadCfg(); RefreshList(); }
+            GUILayout.Space(6);
+            GUI.backgroundColor = new Color(.25f,.6f,1f);
+            if (GUILayout.Button("  ▶ Test in Scene  ", EditorStyles.toolbarButton))
+                TestInScene();
+            GUI.backgroundColor = new Color(.3f,.85f,.45f);
+            if (GUILayout.Button("  ✓ Save Prefab  ", EditorStyles.toolbarButton))
                 SavePrefab();
             GUI.backgroundColor = Color.white;
             GUILayout.Space(4);
             EditorGUILayout.EndHorizontal();
         }
 
-        // ── LEFT panel ────────────────────────────────────────────────────────
+        // ── Left panel ────────────────────────────────────────────────────────
         private void DrawLeft()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(ListW), GUILayout.ExpandHeight(true));
-            Header("LEVELS");
-
-            GUI.backgroundColor = new Color(.45f, .85f, .5f);
-            if (GUILayout.Button("+ New Level", GUILayout.Height(24)))
-                NewLevel();
+            Hdr("LEVELS");
+            GUI.backgroundColor = new Color(.45f,.85f,.5f);
+            if (GUILayout.Button("+ New Level", GUILayout.Height(26))) NewLevel();
             GUI.backgroundColor = Color.white;
             GUILayout.Space(3);
 
             _listScroll = EditorGUILayout.BeginScrollView(_listScroll, GUILayout.ExpandHeight(true));
-            for (int i = 0; i < _levelLabels.Count; i++)
+            for (int i = 0; i < _labels.Count; i++)
             {
-                bool active = _activeIndex == i;
-                GUI.backgroundColor = active ? new Color(.4f, .65f, 1f) : new Color(.25f,.25f,.25f);
-                if (GUILayout.Button(_levelLabels[i], GUILayout.Height(22)))
-                { _activeIndex = i; LoadLevel(i); }
+                bool active = _activeIdx == i;
+                GUI.backgroundColor = active ? new Color(.4f,.65f,1f) : new Color(.24f,.24f,.26f);
+                if (GUILayout.Button(_labels[i], GUILayout.Height(22)))
+                { _activeIdx = i; LoadLevel(i); }
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndScrollView();
 
             GUILayout.Space(6);
-            Header("SETTINGS");
-            _levelIndex = EditorGUILayout.IntField("Index", _levelIndex);
-            _levelName  = EditorGUILayout.TextField("Name",  _levelName);
+            Hdr("SETTINGS");
+            _levelIndex = EditorGUILayout.IntField ("Index",  _levelIndex);
+            _levelName  = EditorGUILayout.TextField("Name",   _levelName);
             _goalType   = (LevelGoalType)EditorGUILayout.EnumPopup("Goal", _goalType);
             if (_goalType != LevelGoalType.ClearAllBlocks)
                 _goalAmount = EditorGUILayout.IntField("Amount", _goalAmount);
@@ -184,248 +219,728 @@ namespace BlockShooter.Editor
             EditorGUILayout.EndVertical();
         }
 
-        // ── CENTER panel ──────────────────────────────────────────────────────
+        // ── Center panel ──────────────────────────────────────────────────────
         private void DrawCenter()
         {
             _midScroll = EditorGUILayout.BeginScrollView(_midScroll,
                 GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
-            Header("SHOOTER GRID");
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Columns", GUILayout.Width(55));
-            int nc = EditorGUILayout.IntSlider(_gridCols, 1, MaxCols);
-            GUILayout.Label("Rows", GUILayout.Width(36));
-            int nr = EditorGUILayout.IntSlider(_gridRows, 1, MaxRows);
-            EditorGUILayout.EndHorizontal();
-            if (nc != _gridCols || nr != _gridRows) { _gridCols = nc; _gridRows = nr; ResizeGrid(); }
-
-            GUILayout.Space(6);
-            DrawGrid();
-            GUILayout.Space(4);
-            EditorGUILayout.LabelField("  LMB = Empty → Block → Door   |   Click = select cell",
-                EditorStyles.miniLabel);
-
-            Header("CONVEYOR GROUPS");
-            DrawGroups();
+            DrawSplineSection();
+            DrawGridSection();
+            DrawGroupsSection();
 
             EditorGUILayout.EndScrollView();
         }
 
-        // ── Grid ──────────────────────────────────────────────────────────────
-        private void DrawGrid()
+        // ═════════════════════════════════════════════════════════════════════
+        //  SPLINE SECTION
+        // ═════════════════════════════════════════════════════════════════════
+        private void DrawSplineSection()
         {
+            Hdr("TRACK SPLINE");
+
+            // Preset buttons
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Preset:", GUILayout.Width(46));
+            string[] presetNames = { "Oval", "Wide", "Rectangle" };
+            for (int i = 0; i < presetNames.Length; i++)
+            {
+                GUI.backgroundColor = _splinePreset == i ? new Color(.4f,.7f,1f) : new Color(.3f,.3f,.33f);
+                if (GUILayout.Button(presetNames[i], GUILayout.Height(22)))
+                { _splinePreset = i; ApplyPreset(); }
+            }
+            GUI.backgroundColor = Color.white;
+            EditorGUILayout.EndHorizontal();
+
+            // Size sliders
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Width", GUILayout.Width(56));
+            _splineWidth = EditorGUILayout.Slider(_splineWidth, 2f, 14f);
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Depth", GUILayout.Width(56));
+            _splineDepth = EditorGUILayout.Slider(_splineDepth, 4f, 22f);
+            EditorGUILayout.EndHorizontal();
+            if (EditorGUI.EndChangeCheck()) ApplyPreset();
+
+            GUILayout.Space(4);
+
+            // Edit button
+            if (!_editingSpline)
+            {
+                GUI.backgroundColor = new Color(.4f,.7f,1f);
+                if (GUILayout.Button("✏  Edit Spline  (Scene View)", GUILayout.Height(26)))
+                    StartSplineEdit();
+                GUI.backgroundColor = Color.white;
+            }
+            else
+            {
+                // Active mode: info + exit button
+                EditorGUILayout.HelpBox(
+                    "● Drag knots in the Scene View\n" +
+                    "● Shift+Click = add knot\n" +
+                    "● Delete = remove selected knot (min 3)",
+                    MessageType.None);
+
+                EditorGUILayout.BeginHorizontal();
+                GUI.backgroundColor = new Color(.3f,.85f,.45f);
+                if (GUILayout.Button("✓  Done Editing", GUILayout.Height(26)))
+                    StopSplineEdit(save: true);
+                GUI.backgroundColor = new Color(.9f,.35f,.35f);
+                if (GUILayout.Button("✕", GUILayout.Width(30), GUILayout.Height(26)))
+                    StopSplineEdit(save: false);
+                GUI.backgroundColor = Color.white;
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.LabelField($"  Knots: {_knots.Count}", EditorStyles.miniLabel);
+            }
+
+            GUILayout.Space(4);
+
+            // Copy spline
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Copy from:", GUILayout.Width(62));
+            if (_labels.Count > 0)
+            {
+                string[] copyOptions = _labels.ToArray();
+                _copyIdx = Mathf.Clamp(_copyIdx, 0, copyOptions.Length - 1);
+                _copyIdx = EditorGUILayout.Popup(_copyIdx, copyOptions);
+                if (GUILayout.Button("Copy", GUILayout.Width(50), GUILayout.Height(18)))
+                    CopySplineFrom(_paths[_copyIdx]);
+            }
+            else
+            {
+                EditorGUILayout.LabelField("(no saved levels)", EditorStyles.miniLabel);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(6);
+        }
+
+        // ── Start spline edit mode ────────────────────────────────────────────
+        private void StartSplineEdit()
+        {
+            _editingSpline = true;
+            _selKnot       = -1;
+            _addKnotMode   = false;
+
+            DestroyPreview();
+
+            // Lightweight preview: just a Track GO with SplineContainer
+            _previewGo = new GameObject("[SplinePreview]");
+            var track = new GameObject("Track");
+            track.transform.SetParent(_previewGo.transform, false);
+            var sc = track.AddComponent<SplineContainer>();
+            WriteKnotsToContainer(sc);
+
+            // Select track and frame it in the scene
+            Selection.activeGameObject = track;
+            SceneView.lastActiveSceneView?.FrameSelected();
+            SceneView.RepaintAll();
+        }
+
+        private void StopSplineEdit(bool save)
+        {
+            _editingSpline = false;
+            _addKnotMode   = false;
+
+            if (save && _previewGo != null)
+            {
+                var sc = _previewGo.GetComponentInChildren<SplineContainer>();
+                if (sc != null) ReadKnotsFromContainer(sc);
+            }
+
+            DestroyPreview();
+            SceneView.RepaintAll();
+            Repaint();
+        }
+
+        private void DestroyPreview()
+        {
+            if (_previewGo != null)
+            {
+                DestroyImmediate(_previewGo);
+                _previewGo = null;
+            }
+        }
+
+        // ── Scene View handles ────────────────────────────────────────────────
+        private void OnSceneGUI(SceneView sv)
+        {
+            if (!_editingSpline) return;
+
+            DrawSceneGuides();
+            HandleKnots(sv);
+
+            // Continuous repaint while editing
+            sv.Repaint();
+        }
+
+        private void DrawSceneGuides()
+        {
+            if (_cfg == null) return;
+            float cs = _cfg.gridCellSize;
+
+            // FireRange guide box (red)
+            float frWidth = _cfg.gridCellSize * Mathf.Max(_gridCols, 4) + 2f;
+            Handles.color = new Color(1f, .25f, .25f, .5f);
+            Handles.DrawWireCube(new Vector3(0f, .5f, FIRE_Z), new Vector3(frWidth, 1.5f, 3f));
+            Handles.color = new Color(1f, .25f, .25f, .2f);
+            var fc = GetWireCubeVerts(new Vector3(0, 0.01f, FIRE_Z), new Vector3(frWidth, 0, 3f));
+            Handles.DrawSolidRectangleWithOutline(fc, new Color(1f,.25f,.25f,.08f), Color.clear);
+
+            // Slot indicators (yellow)
+            int slots = _cfg.slotCount;
+            float tw = (slots - 1) * cs;
+            Handles.color = new Color(1f, .9f, .1f, .8f);
+            for (int i = 0; i < slots; i++)
+            {
+                var p = new Vector3(-tw * .5f + i * cs, 0f, FIRE_Z - 2f);
+                float sz = HandleUtility.GetHandleSize(p) * .12f;
+                Handles.SphereHandleCap(0, p, Quaternion.identity, sz, EventType.Repaint);
+            }
+
+            // Grid cell outlines
+            if (_type == null) return;
+            float hw = (_gridCols - 1) * cs * .5f;
+            float hd = (_gridRows - 1) * cs * .5f;
+            for (int r = 0; r < _gridRows; r++)
+            for (int c = 0; c < _gridCols; c++)
+            {
+                var pos = new Vector3(-hw + c * cs, 0f, FIRE_Z - 4f - hd + r * cs);
+                Color col = _type[c, r] == GridCellType.Empty
+                    ? new Color(.3f, .3f, .3f, .25f)
+                    : new Color(PC(_color[c, r]).r, PC(_color[c, r]).g, PC(_color[c, r]).b, .55f);
+                Handles.color = col;
+                Handles.DrawWireCube(pos, new Vector3(cs * .85f, .05f, cs * .85f));
+            }
+        }
+
+        private void HandleKnots(SceneView sv)
+        {
+            if (_knots.Count == 0) return;
+
+            Event e = Event.current;
+
+            // Shift+Click → yeni knot ekle
+            bool shiftHeld = e.shift;
+            if (shiftHeld && e.type == EventType.MouseDown && e.button == 0)
+            {
+                Vector3 hitPos = GetMouseGroundHit(e.mousePosition);
+                if (hitPos != Vector3.positiveInfinity)
+                {
+                    int insertAt = FindInsertIndex(hitPos);
+                    _knots.Insert(insertAt, hitPos);
+                    _selKnot = insertAt;
+                    SyncPreviewSpline();
+                    e.Use(); Repaint(); return;
+                }
+            }
+
+            // Delete → remove selected knot
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Delete)
+            {
+                if (_selKnot > 0 && _knots.Count > 3)
+                {
+                    _knots.RemoveAt(_selKnot);
+                    _selKnot = Mathf.Min(_selKnot, _knots.Count - 1);
+                    SyncPreviewSpline();
+                    e.Use(); Repaint(); return;
+                }
+            }
+
+            // Handle per knot
+            for (int i = 0; i < _knots.Count; i++)
+            {
+                bool isAnchor = (i == 0);
+                bool isSel    = (_selKnot == i);
+                float sz = HandleUtility.GetHandleSize(_knots[i]) * (isSel ? .18f : .13f);
+
+                // Renk
+                Handles.color = isAnchor ? new Color(1f, .4f, .4f, .95f)
+                              : isSel    ? new Color(1f, .95f, .2f, .95f)
+                              :            new Color(.9f, .9f, .9f, .8f);
+
+                // Click to select
+                if (Handles.Button(_knots[i], Quaternion.identity, sz * .9f, sz, Handles.SphereHandleCap))
+                {
+                    _selKnot = i;
+                    Repaint();
+                }
+
+                // Drag to move
+                if (!shiftHeld)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    Vector3 np = Handles.FreeMoveHandle(_knots[i], sz * 1.1f,
+                        Vector3.zero, Handles.SphereHandleCap);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        np.y = 0f;
+                        if (isAnchor) np.z = FIRE_Z; // Z locked
+                        _knots[i] = np;
+                        _selKnot  = i;
+                        SyncPreviewSpline();
+                        Repaint();
+                    }
+                }
+            }
+
+            // Draw spline curve
+            DrawSplineCurveHandles();
+        }
+
+        private void DrawSplineCurveHandles()
+        {
+            if (_knots.Count < 2) return;
+            Handles.color = new Color(.35f, .65f, 1f, .85f);
+
+            for (int i = 0; i < _knots.Count; i++)
+            {
+                int  nxt  = (i + 1) % _knots.Count;
+                int  prv  = (i - 1 + _knots.Count) % _knots.Count;
+                int  nxt2 = (nxt + 1) % _knots.Count;
+
+                Vector3 t0 = (_knots[nxt]  - _knots[prv])  * .33f;
+                Vector3 t1 = (_knots[nxt2] - _knots[i])    * .33f;
+
+                Handles.DrawBezier(_knots[i], _knots[nxt],
+                    _knots[i] + t0, _knots[nxt] - t1,
+                    new Color(.35f, .65f, 1f, .85f), null, 2.5f);
+            }
+        }
+
+        // ── Spline helpers ────────────────────────────────────────────────────
+        private void ApplyPreset()
+        {
+            float hw = _splineWidth * .5f;
+            float fz = FIRE_Z;
+            float d  = _splineDepth;
+
+            _knots.Clear();
+            switch (_splinePreset)
+            {
+                case 0: // Oval
+                    _knots.Add(new Vector3( 0,  0, fz      ));
+                    _knots.Add(new Vector3(+hw, 0, fz+d*.5f));
+                    _knots.Add(new Vector3( 0,  0, fz+d    ));
+                    _knots.Add(new Vector3(-hw, 0, fz+d*.5f));
+                    break;
+                case 1: // Wide
+                    _knots.Add(new Vector3( 0,  0, fz       ));
+                    _knots.Add(new Vector3(+hw, 0, fz+d*.25f));
+                    _knots.Add(new Vector3( 0,  0, fz+d     ));
+                    _knots.Add(new Vector3(-hw, 0, fz+d*.25f));
+                    break;
+                case 2: // Rectangle
+                    _knots.Add(new Vector3(-hw, 0, fz  ));
+                    _knots.Add(new Vector3(+hw, 0, fz  ));
+                    _knots.Add(new Vector3(+hw, 0, fz+d));
+                    _knots.Add(new Vector3(-hw, 0, fz+d));
+                    break;
+            }
+
+            SyncPreviewSpline();
+            SceneView.RepaintAll();
+        }
+
+        private void CopySplineFrom(string srcPath)
+        {
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(srcPath);
+            if (go == null) return;
+
+            List<Vector3> newKnots = null;
+
+            var lr = go.GetComponent<LevelRoot>();
+            if (lr != null && lr.splineKnots.Count >= 3)
+            {
+                newKnots = new List<Vector3>(lr.splineKnots);
+            }
+            else
+            {
+                var sc = go.GetComponentInChildren<SplineContainer>();
+                if (sc == null) return;
+                newKnots = new List<Vector3>();
+                var xform = sc.transform;
+                foreach (var k in sc.Spline)
+                    newKnots.Add(xform.TransformPoint(k.Position));
+            }
+
+            if (newKnots == null || newKnots.Count < 3) return;
+
+            // Shift front knot to FIRE_Z
+            float minZ = newKnots.Min(v => v.z);
+            float offset = FIRE_Z - minZ;
+            for (int i = 0; i < newKnots.Count; i++)
+                newKnots[i] = new Vector3(newKnots[i].x, 0f, newKnots[i].z + offset);
+
+            // Lock anchor Z exactly
+            if (newKnots.Count > 0)
+                newKnots[0] = new Vector3(newKnots[0].x, 0f, FIRE_Z);
+
+            _knots = newKnots;
+            SyncPreviewSpline();
+            SceneView.RepaintAll();
+            Repaint();
+        }
+
+        private void SyncPreviewSpline()
+        {
+            if (_previewGo == null) return;
+            var sc = _previewGo.GetComponentInChildren<SplineContainer>();
+            if (sc != null) WriteKnotsToContainer(sc);
+            SceneView.RepaintAll();
+        }
+
+        private void WriteKnotsToContainer(SplineContainer sc)
+        {
+            var spline = sc.Spline;
+            spline.Clear();
+            foreach (var k in _knots)
+                spline.Add(new BezierKnot(new float3(k.x, k.y, k.z)));
+            spline.Closed = true;
+        }
+
+        private void ReadKnotsFromContainer(SplineContainer sc)
+        {
+            var xform = sc.transform;
+            _knots.Clear();
+            foreach (var k in sc.Spline)
+            {
+                Vector3 w = xform.TransformPoint(k.Position);
+                w.y = 0f;
+                _knots.Add(w);
+            }
+            // Lock anchor Z
+            if (_knots.Count > 0)
+                _knots[0] = new Vector3(_knots[0].x, 0f, FIRE_Z);
+        }
+
+        // ── Mouse-to-ground ray ───────────────────────────────────────────────
+        private static Vector3 GetMouseGroundHit(Vector2 mousePos)
+        {
+            Ray ray = HandleUtility.GUIPointToWorldRay(mousePos);
+            if (Mathf.Abs(ray.direction.y) < 0.0001f) return Vector3.positiveInfinity;
+            float t = -ray.origin.y / ray.direction.y;
+            if (t < 0f) return Vector3.positiveInfinity;
+            return ray.origin + ray.direction * t;
+        }
+
+        private int FindInsertIndex(Vector3 pos)
+        {
+            int best = 0;
+            float bestDist = float.MaxValue;
+            for (int i = 0; i < _knots.Count; i++)
+            {
+                int nxt = (i + 1) % _knots.Count;
+                Vector3 mid = (_knots[i] + _knots[nxt]) * .5f;
+                float d = Vector3.Distance(pos, mid);
+                if (d < bestDist) { bestDist = d; best = nxt; }
+            }
+            return best;
+        }
+
+        private static Vector3[] GetWireCubeVerts(Vector3 center, Vector3 size)
+        {
+            float hx = size.x * .5f, hz = size.z * .5f;
+            return new[]
+            {
+                center + new Vector3(-hx, 0, -hz),
+                center + new Vector3(+hx, 0, -hz),
+                center + new Vector3(+hx, 0, +hz),
+                center + new Vector3(-hx, 0, +hz),
+            };
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  GRID SECTION
+        // ═════════════════════════════════════════════════════════════════════
+        private void DrawGridSection()
+        {
+            Hdr("SHOOTER GRID");
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Cols", GUILayout.Width(42));
+            int nc = EditorGUILayout.IntSlider(_gridCols, 1, MaxCols);
+            GUILayout.Label("Rows", GUILayout.Width(34));
+            int nr = EditorGUILayout.IntSlider(_gridRows, 1, MaxRows);
+            EditorGUILayout.EndHorizontal();
+            if (nc != _gridCols || nr != _gridRows)
+            { _gridCols = nc; _gridRows = nr; ResizeGrid(); }
+
+            GUILayout.Space(4);
+
             if (_type == null) InitGrid();
 
-            // Row 0 is "back" — display high rows at top
             for (int r = _gridRows - 1; r >= 0; r--)
             {
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Space(2);
-                for (int c = 0; c < _gridCols; c++)
-                    DrawCell(c, r);
+                for (int c = 0; c < _gridCols; c++) DrawCell(c, r);
                 GUILayout.FlexibleSpace();
                 EditorGUILayout.EndHorizontal();
             }
+
+            GUILayout.Space(3);
+            EditorGUILayout.LabelField("  LMB = cycle Empty→Block→Door   |   Click = select",
+                EditorStyles.miniLabel);
+            GUILayout.Space(6);
         }
 
         private void DrawCell(int c, int r)
         {
             GridCellType   t    = _type[c, r];
             BlockColorType col  = _color[c, r];
-            bool           isSel = _selC == c && _selR == r;
+            bool           sel  = _selC == c && _selR == r;
 
-            // Background
             Color bg = t == GridCellType.Empty
-                ? new Color(.18f,.18f,.20f)
-                : GetColor(col);
+                ? new Color(.17f,.17f,.19f)
+                : PC(col);
             if (t == GridCellType.Door) bg = Color.Lerp(bg, Color.black, .55f);
 
-            // Reserve rect
+            string lbl1 = t == GridCellType.Empty ? ""
+                        : t == GridCellType.Door   ? "DOOR"
+                        : col.ToString().Substring(0, 3).ToUpper();
+            string lbl2 = t == GridCellType.Empty ? ""
+                        : t == GridCellType.Door   ? $"×{_doors[c,r]}"
+                        : _shots[c,r] < 0 ? $"×{_cfg?.defaultShots ?? 3}"
+                        : $"×{_shots[c,r]}";
+
             Rect outer = GUILayoutUtility.GetRect(
                 CellSize + CellGap, CellSize + CellGap,
                 GUILayout.Width(CellSize + CellGap),
                 GUILayout.Height(CellSize + CellGap));
-            Rect cell = new Rect(outer.x + CellGap * .5f, outer.y + CellGap * .5f, CellSize, CellSize);
+            Rect cell = new Rect(outer.x + CellGap*.5f, outer.y + CellGap*.5f, CellSize, CellSize);
 
-            // Selection ring
-            if (isSel)
-                EditorGUI.DrawRect(new Rect(cell.x-2, cell.y-2, cell.width+4, cell.height+4), Color.white);
-
+            if (sel) EditorGUI.DrawRect(new Rect(cell.x-2,cell.y-2,cell.width+4,cell.height+4), Color.white);
             EditorGUI.DrawRect(cell, bg);
 
-            // Content
             if (t != GridCellType.Empty)
             {
-                string line1 = t == GridCellType.Door ? "DOOR" : col.ToString().ToUpper().Substring(0,3);
-                string line2 = t == GridCellType.Door
-                    ? $"×{_doors[c,r]}"
-                    : (_shots[c,r] < 0 ? $"×{_cfg?.defaultShots ?? 3}" : $"×{_shots[c,r]}");
-
-                var style = new GUIStyle(EditorStyles.boldLabel)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    fontSize  = 11,
-                    normal    = { textColor = Color.white }
-                };
-                EditorGUI.LabelField(
-                    new Rect(cell.x, cell.y + 4f, cell.width, cell.height * .5f - 2f),
-                    line1, style);
-                style.fontSize = 10;
-                EditorGUI.LabelField(
-                    new Rect(cell.x, cell.y + cell.height * .5f, cell.width, cell.height * .5f - 4f),
-                    line2, style);
+                var st = new GUIStyle(EditorStyles.boldLabel)
+                    { alignment = TextAnchor.MiddleCenter, fontSize = 10,
+                      normal = { textColor = Color.white } };
+                EditorGUI.LabelField(new Rect(cell.x, cell.y+4, cell.width, cell.height*.5f-2), lbl1, st);
+                st.fontSize = 9;
+                EditorGUI.LabelField(new Rect(cell.x, cell.y+cell.height*.5f, cell.width, cell.height*.5f-4), lbl2, st);
             }
 
-            // Click
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
                 if (e.button == 0)
-                {
                     _type[c, r] = _type[c, r] switch
                     {
                         GridCellType.Empty        => GridCellType.ShooterBlock,
                         GridCellType.ShooterBlock => GridCellType.Door,
                         _                         => GridCellType.Empty,
                     };
-                }
-                _selC = c; _selR = r;
+                _selC = c; _selR = r; _selKnot = -1;
                 e.Use(); Repaint();
             }
         }
 
-        // ── Groups ────────────────────────────────────────────────────────────
-        private void DrawGroups()
+        // ═════════════════════════════════════════════════════════════════════
+        //  GROUPS SECTION
+        // ═════════════════════════════════════════════════════════════════════
+        private void DrawGroupsSection()
         {
+            Hdr("CONVEYOR GROUPS");
             for (int i = _groups.Count - 1; i >= 0; i--)
             {
                 var g = _groups[i];
                 EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
-
-                // Color swatch
                 Color prev = GUI.backgroundColor;
-                GUI.backgroundColor = GetColor(g.color);
+                GUI.backgroundColor = PC(g.color);
                 GUILayout.Box("", GUILayout.Width(20), GUILayout.Height(20));
                 GUI.backgroundColor = prev;
-
-                g.color     = (BlockColorType)EditorGUILayout.EnumPopup(g.color, GUILayout.Width(70));
-                GUILayout.Label("Rows",  GUILayout.Width(32));
-                g.rowCount  = EditorGUILayout.IntField(g.rowCount,  GUILayout.Width(34));
-                GUILayout.Label("Lanes", GUILayout.Width(36));
-                g.laneCount = EditorGUILayout.IntField(g.laneCount, GUILayout.Width(26));
-
-                if (GUILayout.Button("✕", GUILayout.Width(20), GUILayout.Height(20)))
-                    _groups.RemoveAt(i);
-
+                g.color     = (BlockColorType)EditorGUILayout.EnumPopup(g.color, GUILayout.Width(72));
+                GUILayout.Label("Rows",  GUILayout.Width(32)); g.rowCount  = EditorGUILayout.IntField(g.rowCount,  GUILayout.Width(36));
+                GUILayout.Label("Lanes", GUILayout.Width(36)); g.laneCount = EditorGUILayout.IntField(g.laneCount, GUILayout.Width(28));
+                if (GUILayout.Button("✕", GUILayout.Width(20), GUILayout.Height(20))) _groups.RemoveAt(i);
                 EditorGUILayout.EndHorizontal();
             }
-
-            if (GUILayout.Button("+ Add Group", GUILayout.Height(22)))
+            if (GUILayout.Button("+ Group", GUILayout.Height(22)))
                 _groups.Add(new LevelConveyorGroup
                     { color = BlockColorType.Red,
-                      rowCount = _cfg?.rowsPerGroup ?? 20,
-                      laneCount = _cfg?.laneCount ?? 5 });
+                      rowCount  = _cfg?.rowsPerGroup ?? 20,
+                      laneCount = _cfg?.laneCount    ?? 5 });
+            GUILayout.Space(8);
         }
 
-        // ── RIGHT panel ───────────────────────────────────────────────────────
+        // ═════════════════════════════════════════════════════════════════════
+        //  RIGHT PANEL (inspector)
+        // ═════════════════════════════════════════════════════════════════════
         private void DrawRight()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(RightW), GUILayout.ExpandHeight(true));
-            Header("CELL INSPECTOR");
 
-            if (_selC < 0 || _selR < 0 || _type == null ||
-                _selC >= _gridCols || _selR >= _gridRows)
+            // Knot inspector (when in spline edit mode and a knot is selected)
+            if (_editingSpline && _selKnot >= 0 && _selKnot < _knots.Count)
             {
-                EditorGUILayout.HelpBox("Düzenlemek için\nbir hücreye tıkla.", MessageType.None);
+                DrawKnotInspector();
                 EditorGUILayout.EndVertical();
                 return;
             }
 
+            // Cell inspector
+            if (_selC >= 0 && _selR >= 0 && _type != null &&
+                _selC < _gridCols && _selR < _gridRows)
+            {
+                DrawCellInspector();
+                EditorGUILayout.EndVertical();
+                return;
+            }
+
+            // Nothing selected
+            GUILayout.Space(20);
+            EditorGUILayout.HelpBox(
+                "Click a grid cell or\na spline knot to inspect.", MessageType.None);
+            EditorGUILayout.EndVertical();
+        }
+
+        // ── Knot inspector ────────────────────────────────────────────────────
+        private void DrawKnotInspector()
+        {
+            int  i    = _selKnot;
+            bool anch = (i == 0);
+            Hdr($"KNOT #{i}{(anch ? "  🔒" : "")}");
+
+            Vector3 k = _knots[i];
+
+            EditorGUI.BeginChangeCheck();
+            float nx = EditorGUILayout.FloatField("X", k.x);
+            GUILayout.BeginHorizontal();
+            float nz = EditorGUILayout.FloatField("Z", anch ? FIRE_Z : k.z);
+            if (anch) EditorGUILayout.LabelField("(locked)", EditorStyles.miniLabel, GUILayout.Width(48));
+            GUILayout.EndHorizontal();
+
+            if (EditorGUI.EndChangeCheck() && !anch)
+            {
+                _knots[i] = new Vector3(nx, 0f, nz);
+                SyncPreviewSpline();
+                SceneView.RepaintAll();
+            }
+
+            if (anch) EditorGUILayout.HelpBox($"FireRange anchor\nZ = {FIRE_Z:F1} locked\nX is free", MessageType.None);
+
+            GUILayout.Space(8);
+
+            if (!anch && _knots.Count > 3)
+            {
+                GUI.backgroundColor = new Color(1f,.4f,.4f);
+                if (GUILayout.Button("Delete Knot", GUILayout.Height(24)))
+                {
+                    _knots.RemoveAt(i);
+                    _selKnot = Mathf.Min(i, _knots.Count - 1);
+                    SyncPreviewSpline();
+                    SceneView.RepaintAll(); Repaint();
+                }
+                GUI.backgroundColor = Color.white;
+            }
+        }
+
+        // ── Cell inspector ────────────────────────────────────────────────────
+        private void DrawCellInspector()
+        {
             int c = _selC, r = _selR;
-            GUILayout.Label($"Hücre  ({c}, {r})", EditorStyles.boldLabel);
-            GUILayout.Space(4);
+            Hdr($"CELL  ({c}, {r})");
 
             // Type buttons
-            GUILayout.Label("Tür:", EditorStyles.miniLabel);
+            GUILayout.Label("Type:", EditorStyles.miniLabel);
             EditorGUILayout.BeginHorizontal();
             foreach (GridCellType t in System.Enum.GetValues(typeof(GridCellType)))
             {
                 bool active = _type[c, r] == t;
-                GUI.backgroundColor = active ? new Color(.4f,.7f,1f) : new Color(.3f,.3f,.3f);
-                if (GUILayout.Button(t.ToString(), GUILayout.Height(22)))
-                    _type[c, r] = t;
+                GUI.backgroundColor = active ? new Color(.4f,.7f,1f) : new Color(.28f,.28f,.3f);
+                if (GUILayout.Button(t.ToString(), GUILayout.Height(22))) { _type[c, r] = t; Repaint(); }
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
 
-            if (_type[c, r] == GridCellType.Empty) { EditorGUILayout.EndVertical(); return; }
+            if (_type[c, r] == GridCellType.Empty) return;
 
             GUILayout.Space(8);
 
             // Color palette
-            GUILayout.Label("Renk:", EditorStyles.miniLabel);
+            GUILayout.Label("Color:", EditorStyles.miniLabel);
             int perRow = 2;
-            for (int i = 0; i < Colors.Length; i++)
+            for (int i = 0; i < Pal.Length; i++)
             {
                 if (i % perRow == 0) EditorGUILayout.BeginHorizontal();
-
-                var entry = Colors[i];
-                bool isSel = _color[c, r] == entry.type;
-
-                Color prev = GUI.backgroundColor;
-                GUI.backgroundColor = entry.color;
-                GUIStyle style = new GUIStyle(GUI.skin.button);
-                if (isSel) { style.fontStyle = FontStyle.Bold; style.normal.textColor = Color.white; }
-
-                if (GUILayout.Button(entry.label,
-                    style, GUILayout.Height(28), GUILayout.Width(90)))
-                {
-                    _color[c, r] = entry.type;
-                    Repaint();
-                }
-                GUI.backgroundColor = prev;
-
-                if (i % perRow == perRow - 1 || i == Colors.Length - 1)
-                    EditorGUILayout.EndHorizontal();
+                var entry = Pal[i];
+                bool isSel = _color[c, r] == entry.t;
+                GUI.backgroundColor = entry.c;
+                GUIStyle st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
+                if (isSel) st.normal.textColor = Color.white;
+                if (GUILayout.Button(entry.n, st, GUILayout.Height(26), GUILayout.Width(98)))
+                { _color[c, r] = entry.t; Repaint(); }
+                GUI.backgroundColor = Color.white;
+                if (i % perRow == perRow - 1 || i == Pal.Length - 1) EditorGUILayout.EndHorizontal();
             }
 
             GUILayout.Space(8);
 
             if (_type[c, r] == GridCellType.ShooterBlock)
             {
-                GUILayout.Label("Shot Sayısı:", EditorStyles.miniLabel);
-                bool useDefault = _shots[c, r] < 0;
-                bool nd = EditorGUILayout.Toggle("Default kullan", useDefault);
-                if (nd != useDefault)
-                    _shots[c, r] = nd ? -1 : (_cfg?.defaultShots ?? 3);
-                if (!nd)
-                    _shots[c, r] = EditorGUILayout.IntSlider(_shots[c, r], 1, 20);
+                GUILayout.Label("Shot Count:", EditorStyles.miniLabel);
+                bool usedef = _shots[c, r] < 0;
+                bool nd = EditorGUILayout.Toggle("Default", usedef);
+                if (nd != usedef) _shots[c, r] = nd ? -1 : (_cfg?.defaultShots ?? 3);
+                if (!nd) _shots[c, r] = EditorGUILayout.IntSlider(_shots[c, r], 1, 20);
             }
             else if (_type[c, r] == GridCellType.Door)
             {
-                GUILayout.Label("Kapıdan çıkacak blok:", EditorStyles.miniLabel);
+                GUILayout.Label("Blocks spawned from door:", EditorStyles.miniLabel);
                 _doors[c, r] = EditorGUILayout.IntSlider(_doors[c, r], 1, 15);
             }
-
-            EditorGUILayout.EndVertical();
         }
 
-        // ── Load level ────────────────────────────────────────────────────────
-        private void LoadLevel(int listIndex)
+        // ═════════════════════════════════════════════════════════════════════
+        //  LEVEL MANAGEMENT
+        // ═════════════════════════════════════════════════════════════════════
+        private void NewLevel()
         {
-            var go = AssetDatabase.LoadAssetAtPath<GameObject>(_levelPaths[listIndex]);
+            int maxIdx = 0;
+            foreach (var lbl in _labels)
+            {
+                var p = lbl.Split('_');
+                if (p.Length > 1 && int.TryParse(p[p.Length-1], out int n)) maxIdx = Mathf.Max(maxIdx, n);
+            }
+            _levelIndex = maxIdx + 1;
+            _levelName  = $"Level {_levelIndex}";
+            _goalType   = LevelGoalType.ClearAllBlocks;
+            _goalAmount = 0;
+            _gridCols   = 4; _gridRows = 2;
+            _splinePreset = 0; _splineWidth = 6f; _splineDepth = 10f;
+            _activeIdx  = -1; _selC = -1; _selR = -1; _selKnot = -1;
+            StopSplineEdit(save: false);
+            InitGrid();
+            _groups.Clear(); DefaultGroups();
+            ApplyPreset();
+            Repaint();
+        }
+
+        private void LoadLevel(int idx)
+        {
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(_paths[idx]);
             if (go == null) return;
             var lr = go.GetComponent<LevelRoot>();
             if (lr == null) return;
 
-            _levelIndex = lr.levelIndex;
-            _levelName  = lr.levelName;
-            _goalType   = lr.goalType;
-            _goalAmount = lr.goalAmount;
-            _gridCols   = Mathf.Clamp(lr.gridCols, 1, MaxCols);
-            _gridRows   = Mathf.Clamp(lr.gridRows, 1, MaxRows);
-            InitGrid();
+            StopSplineEdit(save: false);
 
+            _levelIndex   = lr.levelIndex;
+            _levelName    = lr.levelName;
+            _goalType     = lr.goalType;
+            _goalAmount   = lr.goalAmount;
+            _gridCols     = Mathf.Clamp(lr.gridCols, 1, MaxCols);
+            _gridRows     = Mathf.Clamp(lr.gridRows, 1, MaxRows);
+            _splineWidth  = lr.splineWidth;
+            _splineDepth  = lr.splineDepth;
+            _splinePreset = lr.splinePreset;
+
+            InitGrid();
             foreach (var cell in lr.cells)
             {
                 if (cell.col >= _gridCols || cell.row >= _gridRows) continue;
@@ -437,106 +952,90 @@ namespace BlockShooter.Editor
 
             _groups.Clear();
             foreach (var g in lr.groups)
-                _groups.Add(new LevelConveyorGroup
-                    { color = g.color, rowCount = g.rowCount, laneCount = g.laneCount });
+                _groups.Add(new LevelConveyorGroup { color=g.color, rowCount=g.rowCount, laneCount=g.laneCount });
 
-            _selC = -1; _selR = -1;
+            if (lr.splineKnots.Count >= 3)
+                _knots = new List<Vector3>(lr.splineKnots);
+            else
+                ApplyPreset();
+
+            _selC = -1; _selR = -1; _selKnot = -1;
             Repaint();
         }
 
-        // ── New level ─────────────────────────────────────────────────────────
-        private void NewLevel()
-        {
-            int maxIdx = 0;
-            foreach (var lbl in _levelLabels)
-            {
-                var p = lbl.Split('_');
-                if (p.Length > 1 && int.TryParse(p[p.Length - 1], out int n))
-                    maxIdx = Mathf.Max(maxIdx, n);
-            }
-            _levelIndex   = maxIdx + 1;
-            _levelName    = $"Level {_levelIndex}";
-            _goalType     = LevelGoalType.ClearAllBlocks;
-            _goalAmount   = 0;
-            _gridCols     = 4;
-            _gridRows     = 2;
-            _activeIndex  = -1;
-            _selC = -1; _selR = -1;
-            InitGrid();
-            _groups.Clear();
-            _groups.Add(new LevelConveyorGroup { color = BlockColorType.Red,
-                rowCount = _cfg?.rowsPerGroup ?? 20, laneCount = _cfg?.laneCount ?? 5 });
-            _groups.Add(new LevelConveyorGroup { color = BlockColorType.Blue,
-                rowCount = _cfg?.rowsPerGroup ?? 20, laneCount = _cfg?.laneCount ?? 5 });
-            Repaint();
-        }
-
-        // ── Save prefab ───────────────────────────────────────────────────────
+        // ═════════════════════════════════════════════════════════════════════
+        //  SAVE PREFAB
+        // ═════════════════════════════════════════════════════════════════════
         private void SavePrefab()
         {
-            if (_cfg == null) { EditorUtility.DisplayDialog("Hata", "LevelEditorConfig bulunamadı!", "OK"); return; }
+            if (_cfg == null) { EditorUtility.DisplayDialog("Error","LevelEditorConfig not found!","OK"); return; }
+
+            if (_editingSpline) StopSplineEdit(save: true);
 
             string dir  = _cfg.levelSavePath.TrimEnd('/');
             string name = $"Level_{_levelIndex:000}";
             string path = dir + "/" + name + ".prefab";
-
             EnsureDir(dir);
 
             var root = new GameObject(name);
             var lr   = root.AddComponent<LevelRoot>();
+            WriteDesignData(lr);
+            BuildHierarchy(root.transform, lr);
 
-            // Write design data
-            lr.levelIndex = _levelIndex;
-            lr.levelName  = _levelName;
-            lr.goalType   = _goalType;
-            lr.goalAmount = _goalAmount;
-            lr.gridCols   = _gridCols;
-            lr.gridRows   = _gridRows;
+            PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
+            DestroyImmediate(root);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            RefreshList();
+
+            if (ok)
+            {
+                _activeIdx = _paths.IndexOf(path);
+                Debug.Log($"[LevelEditor] Saved: {path}");
+            }
+            else Debug.LogError($"[LevelEditor] Failed: {path}");
+        }
+
+        private void WriteDesignData(LevelRoot lr)
+        {
+            lr.levelIndex   = _levelIndex;
+            lr.levelName    = _levelName;
+            lr.goalType     = _goalType;
+            lr.goalAmount   = _goalAmount;
+            lr.gridCols     = _gridCols;
+            lr.gridRows     = _gridRows;
+            lr.splineWidth  = _splineWidth;
+            lr.splineDepth  = _splineDepth;
+            lr.splinePreset = _splinePreset;
+            lr.splineKnots  = new List<Vector3>(_knots);
+
             lr.cells.Clear();
             for (int c = 0; c < _gridCols; c++)
             for (int r = 0; r < _gridRows; r++)
                 lr.cells.Add(new LevelGridCell
                 {
-                    col = c, row = r,
-                    type = _type[c,r], color = _color[c,r],
-                    shotCount = _shots[c,r], doorCount = _doors[c,r]
+                    col=c, row=r, type=_type[c,r], color=_color[c,r],
+                    shotCount=_shots[c,r], doorCount=_doors[c,r]
                 });
+
             lr.groups.Clear();
             foreach (var g in _groups)
-                lr.groups.Add(new LevelConveyorGroup
-                    { color = g.color, rowCount = g.rowCount, laneCount = g.laneCount });
-
-            // Build hierarchy
-            BuildHierarchy(root.transform, lr);
-
-            // Save
-            PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
-            Object.DestroyImmediate(root);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-
-            if (ok)
-            {
-                Refresh();
-                _activeIndex = _levelPaths.IndexOf(path);
-                Debug.Log($"[LevelEditor] Saved: {path}");
-                EditorUtility.DisplayDialog("Kaydedildi", $"{path}", "OK");
-            }
-            else
-            {
-                Debug.LogError($"[LevelEditor] Save failed: {path}");
-            }
+                lr.groups.Add(new LevelConveyorGroup { color=g.color, rowCount=g.rowCount, laneCount=g.laneCount });
         }
 
-        // ── Hierarchy builder ─────────────────────────────────────────────────
+        // ═════════════════════════════════════════════════════════════════════
+        //  BUILD HIERARCHY
+        // ═════════════════════════════════════════════════════════════════════
         private void BuildHierarchy(Transform root, LevelRoot lr)
         {
-            float cs = _cfg.gridCellSize;
+            float cs   = _cfg.gridCellSize;
+            float slotZ = FIRE_Z - 2f;
+            float gridZ = FIRE_Z - 4f;
 
-            // ── Track + Groups ──
+            // ── Track ──
             var trackGo = Go(root, "Track");
-            var sc      = trackGo.AddComponent<SplineContainer>();
-            BuildOvalSpline(sc);
+            var sc = trackGo.AddComponent<SplineContainer>();
+            WriteKnotsToContainer(sc);
             var cc = trackGo.AddComponent<ConveyorController>();
             cc.speed = _cfg.conveyorSpeed;
             lr.conveyorController = cc;
@@ -548,10 +1047,11 @@ namespace BlockShooter.Editor
                 if (_cfg.arrowPrefab != null) tr.arrowPrefab = _cfg.arrowPrefab;
             }
 
-            var groupsRoot = Go(trackGo.transform, "Groups");
+            // Block groups
+            var groupsGo = Go(trackGo.transform, "Groups");
             foreach (var gd in _groups)
             {
-                var gGo = Go(groupsRoot.transform, $"Group_{gd.color}");
+                var gGo = Go(groupsGo.transform, $"Group_{gd.color}");
                 var bg  = gGo.AddComponent<BlockGroup>();
                 bg.colorType   = gd.color;
                 bg.rowCount    = gd.rowCount;
@@ -560,7 +1060,6 @@ namespace BlockShooter.Editor
                 bg.rowSpacing  = _cfg.rowSpacing;
 
                 if (_cfg.conveyorBlockPrefab != null)
-                {
                     for (int row = 0; row < gd.rowCount; row++)
                     {
                         var rowGo = Go(gGo.transform, $"Row_{row}");
@@ -573,33 +1072,32 @@ namespace BlockShooter.Editor
                             bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
                         }
                     }
-                }
             }
 
-            // ── FireRange ──
+            // ── FireRange ── (FIRE_Z'de sabit)
             var frGo = Go(root, "FireRange");
-            frGo.transform.localPosition = new Vector3(0f, 0.5f, 2f);
+            frGo.transform.localPosition = new Vector3(0f, .5f, FIRE_Z);
             var fc = frGo.AddComponent<BoxCollider>();
             fc.isTrigger = true;
-            fc.size = new Vector3(cs * _gridCols + 1f, 2f, 3f);
+            fc.size = new Vector3(cs * _gridCols + 2f, 2f, 3f);
             lr.fireRange = frGo.AddComponent<FireRange>();
 
             // ── SlotDeck ──
             var deckGo = Go(root, "SlotDeck");
-            deckGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+            deckGo.transform.localPosition = new Vector3(0f, 0f, slotZ);
             var ss = deckGo.AddComponent<SlotSystem>();
             if (_cfg.slotIndicatorPrefab != null) ss.slotIndicatorPrefab = _cfg.slotIndicatorPrefab;
             lr.slotSystem = ss;
 
-            int slots = _cfg.slotCount;
-            float totalW = (slots - 1) * cs;
+            int   slots = _cfg.slotCount;
+            float tw    = (slots - 1) * cs;
             for (int i = 0; i < slots; i++)
                 Go(deckGo.transform, $"Slot_{i}").transform.localPosition =
-                    new Vector3(-totalW * .5f + i * cs, 0f, 0f);
+                    new Vector3(-tw*.5f + i*cs, 0f, 0f);
 
             // ── ShooterGrid ──
             var sgGo = Go(root, "ShooterGrid");
-            sgGo.transform.localPosition = new Vector3(0f, 0f, -2f);
+            sgGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
             var sg = sgGo.AddComponent<ShooterGrid>();
             if (_cfg.shooterBlockPrefab != null)
                 sg.shooterBlockPrefab = _cfg.shooterBlockPrefab.GetComponent<ShooterBlock>();
@@ -611,36 +1109,31 @@ namespace BlockShooter.Editor
             for (int r = 0; r < _gridRows; r++)
             for (int c = 0; c < _gridCols; c++)
             {
-                Vector3 pos = new Vector3(-hw + c * cs, 0f, -hd + r * cs);
-                string  nm  = $"Cell_r{r}_c{c}";
+                var pos = new Vector3(-hw + c*cs, 0f, -hd + r*cs);
+                string nm = $"Cell_r{r}_c{c}";
 
                 switch (_type[c, r])
                 {
                     case GridCellType.ShooterBlock when _cfg.shooterBlockPrefab != null:
                     {
-                        var go = (GameObject)PrefabUtility.InstantiatePrefab(
-                            _cfg.shooterBlockPrefab, sgGo.transform);
-                        go.name = nm;
-                        go.transform.localPosition = pos;
-                        int sh = _shots[c, r] >= 0 ? _shots[c, r] : _cfg.defaultShots;
-                        go.GetComponent<ShooterBlock>()?.EditorSetup(_color[c, r], sh, c, r);
+                        var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.shooterBlockPrefab, sgGo.transform);
+                        go.name = nm; go.transform.localPosition = pos;
+                        int sh = _shots[c,r] >= 0 ? _shots[c,r] : _cfg.defaultShots;
+                        go.GetComponent<ShooterBlock>()?.EditorSetup(_color[c,r], sh, c, r);
                         break;
                     }
                     case GridCellType.Door:
                     {
-                        var go = Go(sgGo.transform, nm);
-                        go.transform.localPosition = pos;
+                        var go = Go(sgGo.transform, nm); go.transform.localPosition = pos;
                         var d = go.AddComponent<BlockDoor>();
-                        d.blockCount  = _doors[c, r];
-                        d.spawnColors = new List<BlockColorType> { _color[c, r] };
+                        d.blockCount = _doors[c,r];
+                        d.spawnColors = new List<BlockColorType> { _color[c,r] };
                         break;
                     }
                     case GridCellType.Empty when _cfg.wallElementPrefab != null:
                     {
-                        var go = (GameObject)PrefabUtility.InstantiatePrefab(
-                            _cfg.wallElementPrefab, sgGo.transform);
-                        go.name = nm;
-                        go.transform.localPosition = pos;
+                        var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.wallElementPrefab, sgGo.transform);
+                        go.name = nm; go.transform.localPosition = pos;
                         go.GetComponent<WallElement>()?.SetGridPosition(c, r);
                         break;
                     }
@@ -651,78 +1144,92 @@ namespace BlockShooter.Editor
             var gnd = GameObject.CreatePrimitive(PrimitiveType.Plane);
             gnd.name = "Ground";
             gnd.transform.SetParent(root, false);
-            gnd.transform.localPosition = new Vector3(0f, -.01f, 0f);
-            gnd.transform.localScale    = new Vector3(1.5f, 1f, 1.5f);
-            Object.DestroyImmediate(gnd.GetComponent<MeshCollider>());
+            gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth*.3f);
+            gnd.transform.localScale    = new Vector3(2f, 1f, 2f);
+            DestroyImmediate(gnd.GetComponent<MeshCollider>());
         }
 
-        // ── Spline ────────────────────────────────────────────────────────────
-        private static void BuildOvalSpline(SplineContainer sc)
+        // ── Test In Scene ─────────────────────────────────────────────────────
+        private void TestInScene()
         {
-            var s = sc.Spline; s.Clear();
-            s.Add(new BezierKnot(new Unity.Mathematics.float3(-3f, 0f, 0f)));
-            s.Add(new BezierKnot(new Unity.Mathematics.float3( 0f, 0f, 5f)));
-            s.Add(new BezierKnot(new Unity.Mathematics.float3( 3f, 0f, 0f)));
-            s.Add(new BezierKnot(new Unity.Mathematics.float3( 0f, 0f,-5f)));
-            s.Closed = true;
+            SavePrefab();
+
+            string dir  = _cfg.levelSavePath.TrimEnd('/');
+            string path = dir + $"/Level_{_levelIndex:000}.prefab";
+            var prefab  = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) return;
+
+            // Remove existing LevelRoot instances from scene
+            foreach (var lr in FindObjectsByType<LevelRoot>(FindObjectsSortMode.None))
+                DestroyImmediate(lr.gameObject);
+
+            // Assign prefab to LevelManager if present
+            var lm = FindFirstObjectByType<LevelManager>();
+            if (lm != null)
+            {
+                if (lm.levelPrefabs == null || lm.levelPrefabs.Length == 0)
+                    lm.levelPrefabs = new LevelRoot[1];
+                lm.levelPrefabs[0] = prefab.GetComponent<LevelRoot>();
+                EditorUtility.SetDirty(lm);
+            }
+            else
+            {
+                // LevelManager yoksa direkt instantiate et
+                PrefabUtility.InstantiatePrefab(prefab);
+            }
+
+            EditorApplication.EnterPlaymode();
         }
 
-        // ── Grid helpers ──────────────────────────────────────────────────────
+        // ═════════════════════════════════════════════════════════════════════
+        //  HELPERS
+        // ═════════════════════════════════════════════════════════════════════
         private void InitGrid()
         {
-            var pt = _type; var pc = _color; var ps = _shots; var pd = _doors;
+            _gridCols = Mathf.Clamp(_gridCols, 1, MaxCols);
+            _gridRows = Mathf.Clamp(_gridRows, 1, MaxRows);
+            var pt=_type; var pc=_color; var ps=_shots; var pd=_doors;
             _type  = new GridCellType  [_gridCols, _gridRows];
             _color = new BlockColorType[_gridCols, _gridRows];
             _shots = new int           [_gridCols, _gridRows];
             _doors = new int           [_gridCols, _gridRows];
-            for (int c = 0; c < _gridCols; c++)
-            for (int r = 0; r < _gridRows; r++)
+            for (int c=0;c<_gridCols;c++) for (int r=0;r<_gridRows;r++)
             {
-                _shots[c, r] = -1; _doors[c, r] = 3;
-                if (pt == null || c >= pt.GetLength(0) || r >= pt.GetLength(1)) continue;
-                _type[c,r] = pt[c,r]; _color[c,r] = pc[c,r];
-                _shots[c,r] = ps[c,r]; _doors[c,r] = pd[c,r];
+                _shots[c,r]=-1; _doors[c,r]=3;
+                if (pt==null||c>=pt.GetLength(0)||r>=pt.GetLength(1)) continue;
+                _type[c,r]=pt[c,r]; _color[c,r]=pc[c,r]; _shots[c,r]=ps[c,r]; _doors[c,r]=pd[c,r];
             }
         }
 
-        private void ResizeGrid() { InitGrid(); _selC = -1; _selR = -1; }
+        private void ResizeGrid() { InitGrid(); _selC=-1; _selR=-1; }
 
-        // ── UI helpers ────────────────────────────────────────────────────────
-        private static void Header(string t)
+        private static void Hdr(string t)
         {
-            GUILayout.Space(6);
+            GUILayout.Space(7);
             EditorGUILayout.LabelField(t, EditorStyles.boldLabel);
-            EditorGUI.DrawRect(
-                GUILayoutUtility.GetRect(1, 1, GUILayout.ExpandWidth(true)),
-                new Color(.5f,.5f,.5f,.4f));
+            EditorGUI.DrawRect(GUILayoutUtility.GetRect(1,1,GUILayout.ExpandWidth(true)),
+                new Color(.5f,.5f,.5f,.35f));
             GUILayout.Space(3);
         }
 
-        private static void Divider()
+        private static void VDiv()
         {
             EditorGUI.DrawRect(
-                GUILayoutUtility.GetRect(1, float.MaxValue,
-                    GUILayout.Width(1), GUILayout.ExpandHeight(true)),
-                new Color(.25f,.25f,.25f));
+                GUILayoutUtility.GetRect(1,float.MaxValue,GUILayout.Width(1),GUILayout.ExpandHeight(true)),
+                new Color(.22f,.22f,.22f));
         }
 
         private static GameObject Go(Transform p, string n)
-        {
-            var g = new GameObject(n);
-            g.transform.SetParent(p, false);
-            return g;
-        }
+        { var g=new GameObject(n); g.transform.SetParent(p,false); return g; }
 
         private static void EnsureDir(string path)
         {
-            string[] parts = path.Split('/');
-            string cur = parts[0];
-            for (int i = 1; i < parts.Length; i++)
+            string[] pts=path.Split('/'); string cur=pts[0];
+            for (int i=1;i<pts.Length;i++)
             {
-                string nxt = cur + "/" + parts[i];
-                if (!AssetDatabase.IsValidFolder(nxt))
-                    AssetDatabase.CreateFolder(cur, parts[i]);
-                cur = nxt;
+                string nxt=cur+"/"+pts[i];
+                if (!AssetDatabase.IsValidFolder(nxt)) AssetDatabase.CreateFolder(cur,pts[i]);
+                cur=nxt;
             }
         }
     }
