@@ -568,7 +568,6 @@ namespace BlockShooter.Editor
             spline.Add(new BezierKnot(new Unity.Mathematics.float3( 3f, 0f,  0f)));
             spline.Add(new BezierKnot(new Unity.Mathematics.float3( 0f, 0f, -5f)));
             spline.Closed = true;
-            SplineUtility.SetTangentMode(spline, TangentMode.AutoSmooth);
         }
 
         private static void EnsureDirectory(string path)
