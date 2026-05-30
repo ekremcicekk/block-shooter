@@ -229,6 +229,7 @@ namespace BlockShooter
 
             if (muzzleFlash != null) muzzleFlash.Play();
             transform.DOKill(false);
+            transform.localScale = Vector3.one;
             transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);
 
             _shotCount--;
