@@ -133,6 +133,10 @@ namespace BlockShooter
         private void ReturnToPool()
         {
             _active = false;
+            // Release the claim so another shooter can target this block if the
+            // projectile timed out or was cancelled before landing.
+            if (_target != null && !_target.IsDestroyed)
+                _target.SetTargeted(false);
             _target = null;
             CancelInvoke(nameof(ReturnToPool));
             _pool?.Return(this);
@@ -141,6 +145,8 @@ namespace BlockShooter
         private void OnDisable()
         {
             _active = false;
+            if (_target != null && !_target.IsDestroyed)
+                _target.SetTargeted(false);
             _target = null;
             CancelInvoke(nameof(ReturnToPool));
         }

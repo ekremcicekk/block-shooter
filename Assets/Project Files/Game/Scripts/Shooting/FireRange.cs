@@ -49,6 +49,9 @@ namespace BlockShooter
             if (_blocksInRange.Remove(block))
             {
                 block.OnDestroyed -= HandleBlockDestroyed;
+                // Clear the targeting claim so shooters can re-target this block
+                // if it re-enters the fire range or if a projectile failed to land.
+                block.SetTargeted(false);
                 OnBlockExited?.Invoke(block);
             }
         }

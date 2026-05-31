@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using DG.Tweening;
@@ -195,53 +196,73 @@ namespace BlockShooter
 
         private IEnumerator ShootRoutine()
         {
+            // Time between rows creates the "Mexican wave" visual.
+            // Within a row all lanes fire in the same frame for a clean "pop" per row.
+            const float rowDelay = 0.07f;
+
             while (!IsDepleted)
             {
                 var targets = GetVolleyTargets();
-                if (targets.Count == 0) break; // No targets — OnFireRangeBlockEntered restarts us
+                if (targets.Count == 0) break;
 
-                // Adaptive wave: distribute fireRate time across all targets so the wave
-                // always finishes within one interval regardless of block count.
-                // Minimum 0.04s keeps the visual sequential ("Mexican wave" feel).
-                float fireRate  = GameManager.Instance.config.fireRate;
-                float shotDelay = Mathf.Max(0.04f, fireRate / targets.Count);
+                int  lastRow   = -1;
+                bool firedAny  = false;
 
                 foreach (var t in targets)
                 {
                     if (IsDepleted) break;
-                    if (t == null || t.IsDestroyed) continue;
+                    if (t == null || t.IsDestroyed || t.IsTargeted) continue;
+
+                    // Pause between rows — no pause before the first row or within a row
+                    if (lastRow >= 0 && t.RowIndex != lastRow)
+                        yield return new WaitForSeconds(rowDelay);
+
+                    lastRow = t.RowIndex;
                     FireAt(t);
-                    yield return new WaitForSeconds(shotDelay);
+                    firedAny = true;
                 }
+
+                if (!firedAny) break;
+
+                // Brief pause before re-scanning for newly entered blocks
+                yield return new WaitForSeconds(rowDelay);
             }
 
             _isShooting = false;
             _shootCoroutine = null;
         }
 
-        // Returns all matching-color blocks currently in FireRange, sorted closest-first.
-        private System.Collections.Generic.List<ConveyorBlock3D> GetVolleyTargets()
+        // Returns matching blocks in fire range, ordered by conveyor position (leading row first).
+        // Excludes blocks that already have a projectile heading toward them (IsTargeted).
+        private List<ConveyorBlock3D> GetVolleyTargets()
         {
-            var list = new System.Collections.Generic.List<ConveyorBlock3D>();
-            if (FireRange.Instance == null) return list;
+            var list = new List<ConveyorBlock3D>();
+            if (FireRange.Instance == null || ConveyorController.Instance == null) return list;
 
-            Vector3 origin = FireRange.Instance.transform.position;
-            foreach (var b in FireRange.Instance.BlocksInRange)
+            // O(1) lookup for what is currently inside the collider
+            var inRange = new HashSet<ConveyorBlock3D>(FireRange.Instance.BlocksInRange);
+            if (inRange.Count == 0) return list;
+
+            // ConveyorController already iterates groups and rows in the correct order:
+            // leading rows (highest RowIndex) first → row 0 last.
+            // This naturally produces the front-to-back Mexican wave.
+            var ordered = ConveyorController.Instance.GetOrderedBlocks(_colorType, _isRainbowMode);
+            foreach (var b in ordered)
             {
-                if (b == null || b.IsDestroyed) continue;
-                if (!_isRainbowMode && b.ColorType != _colorType) continue;
+                if (b == null || b.IsDestroyed || b.IsTargeted) continue;
+                if (!inRange.Contains(b)) continue;
                 list.Add(b);
             }
-            // Closest to FireRange centre first → front row shot before back rows
-            list.Sort((a, b) =>
-                Vector3.SqrMagnitude(a.transform.position - origin)
-                    .CompareTo(Vector3.SqrMagnitude(b.transform.position - origin)));
+
             return list;
         }
 
         private void FireAt(ConveyorBlock3D target)
         {
             if (ProjectilePool.Instance == null || target == null) return;
+
+            // Claim this block so no other shooter wastes a shot on it
+            target.SetTargeted(true);
 
             BlockColorType projColor = _isRainbowMode ? target.ColorType : _colorType;
 
