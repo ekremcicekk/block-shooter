@@ -131,7 +131,7 @@ namespace BlockShooter
                 if (entry.Group == null || entry.Group.IsEmpty) continue;
                 if (!anyColor && entry.Group.colorType != colorType) continue;
 
-                for (int row = entry.Group.RowCount - 1; row >= 0; row--)
+                for (int row = 0; row < entry.Group.RowCount; row++)
                     for (int lane = 0; lane < entry.Group.LaneCount; lane++)
                     {
                         var block = entry.Group.GetBlock(row, lane);
@@ -150,7 +150,9 @@ namespace BlockShooter
 
             for (int row = 0; row < group.RowCount; row++)
             {
-                float rowT = (headT + (float)row / group.RowCount * groupTLength) % 1f;
+                // Row_0 = leading edge (highest T offset → enters fire range first).
+                // Row_N-1 = trailing edge (T = headT → enters last).
+                float rowT = (headT + (float)(group.RowCount - 1 - row) / group.RowCount * groupTLength) % 1f;
                 _splineContainer.Spline.Evaluate(rowT, out var pos, out var tangent, out var up);
 
                 Vector3 worldPos = transform.TransformPoint(pos);

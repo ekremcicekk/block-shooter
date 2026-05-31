@@ -60,6 +60,8 @@ namespace BlockShooter
         /// <summary>Returns the world-space bounds of this trigger collider.</summary>
         public Bounds GetBounds() => GetComponent<Collider>().bounds;
 
+        public bool ContainsBlock(ConveyorBlock3D block) => _blocksInRange.Contains(block);
+
         public bool HasTargetFor(BlockColorType colorType)
         {
             foreach (var b in _blocksInRange)

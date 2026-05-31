@@ -156,18 +156,7 @@ namespace BlockShooter
         public void OnArrivedInSlot()
         {
             State = BlockState.InSlot;
-            if (FireRange.Instance != null)
-                FireRange.Instance.OnBlockEntered += OnFireRangeBlockEntered;
-            // Start shooting immediately if a target is already in range
-            if (HasTarget()) StartShooting();
-        }
-
-        // Called whenever a new block enters FireRange
-        private void OnFireRangeBlockEntered(ConveyorBlock3D block)
-        {
-            if (State != BlockState.InSlot || IsDepleted) return;
-            if (!_isRainbowMode && block.ColorType != _colorType) return;
-            if (!_isShooting) StartShooting();
+            TryStartGroupRoutine();
         }
 
         // ── Shooting (only active while InSlot) ───────────────────────────────
@@ -176,16 +165,28 @@ namespace BlockShooter
         {
             if (!GameManager.Instance.IsPlaying) return;
             if (State != BlockState.InSlot || IsDepleted) return;
-            // Safety net: restart if a target is available but coroutine stopped
-            if (!_isShooting && HasTarget()) StartShooting();
+            if (!_isShooting) TryStartGroupRoutine();
         }
 
-        private bool HasTarget() => GetVolleyTargets().Count > 0;
-
-        private void StartShooting()
+        private void TryStartGroupRoutine()
         {
+            if (_isShooting || IsDepleted) return;
+            var group = FindMatchingGroup();
+            if (group == null) return;
             _isShooting = true;
-            _shootCoroutine = StartCoroutine(ShootRoutine());
+            _shootCoroutine = StartCoroutine(ShootGroupRoutine(group));
+        }
+
+        private BlockGroup FindMatchingGroup()
+        {
+            if (ConveyorController.Instance == null) return null;
+            foreach (var bg in ConveyorController.Instance.GetComponentsInChildren<BlockGroup>(true))
+            {
+                if (bg.IsEmpty) continue;
+                if (!_isRainbowMode && bg.colorType != _colorType) continue;
+                return bg;
+            }
+            return null;
         }
 
         private void StopShooting()
@@ -194,80 +195,53 @@ namespace BlockShooter
             if (_shootCoroutine != null) { StopCoroutine(_shootCoroutine); _shootCoroutine = null; }
         }
 
-        private IEnumerator ShootRoutine()
+        // Fires at every block in the group, row-by-row, lane-by-lane, in strict order.
+        // Waits for each block to enter FireRange before shooting it.
+        private IEnumerator ShootGroupRoutine(BlockGroup group)
         {
-            const float laneDelay = 0.04f;
-            const float rowDelay  = 0.08f;
+            const float laneDelay    = 0.04f;
+            const float rowDelay     = 0.08f;
+            const float blockTimeout = 8f;
 
-            while (!IsDepleted)
+            for (int row = 0; row < group.RowCount && !IsDepleted; row++)
             {
-                var targets = GetVolleyTargets();
-                if (targets.Count == 0) break;
+                bool firedInRow = false;
 
-                // LOG: sorted target list for this wave
-                var sb = new System.Text.StringBuilder();
-                sb.Append($"[WAVE] Shooter={_colorType} shots={_shotCount} targets={targets.Count}: ");
-                foreach (var t in targets)
-                    sb.Append($"R{t.RowIndex}L{t.LaneIndex}({t.name}) ");
-                Debug.Log(sb.ToString());
-
-                int  lastRow   = -1;
-                bool firedAny  = false;
-
-                foreach (var t in targets)
+                for (int lane = 0; lane < group.LaneCount && !IsDepleted; lane++)
                 {
-                    if (IsDepleted) break;
-                    if (t == null || t.IsDestroyed || t.IsTargeted)
+                    var block = group.GetBlock(row, lane);
+                    if (block == null || block.IsDestroyed) continue;
+
+                    // Wait until the block enters FireRange (or times out / is destroyed)
+                    float waited = 0f;
+                    while (waited < blockTimeout && !block.IsDestroyed)
                     {
-                        Debug.Log($"[SKIP] R{t?.RowIndex}L{t?.LaneIndex} destroyed={t?.IsDestroyed} targeted={t?.IsTargeted}");
-                        continue;
+                        if (FireRange.Instance != null && FireRange.Instance.ContainsBlock(block)) break;
+                        yield return null;
+                        waited += Time.deltaTime;
                     }
 
-                    if (lastRow >= 0)
-                    {
-                        bool newRow = t.RowIndex != lastRow;
-                        yield return new WaitForSeconds(newRow ? rowDelay : laneDelay);
-                    }
+                    if (block.IsDestroyed || block.IsTargeted) continue;
+                    if (FireRange.Instance == null || !FireRange.Instance.ContainsBlock(block)) continue;
 
-                    lastRow = t.RowIndex;
-                    Debug.Log($"[FIRE] R{t.RowIndex}L{t.LaneIndex} ({t.name})  shots_left={_shotCount - 1}");
-                    FireAt(t);
-                    firedAny = true;
+                    if (firedInRow)
+                        yield return new WaitForSeconds(laneDelay);
+
+                    firedInRow = true;
+                    FireAt(block);
                 }
 
-                if (!firedAny) break;
-
-                yield return new WaitForSeconds(rowDelay);
+                if (firedInRow && row < group.RowCount - 1 && !IsDepleted)
+                    yield return new WaitForSeconds(rowDelay);
             }
 
             _isShooting = false;
             _shootCoroutine = null;
-        }
 
-        // Returns matching, un-targeted blocks currently in fire range.
-        // Order: Row_0 first (ascending RowIndex), Block_0 first within each row (ascending LaneIndex).
-        private List<ConveyorBlock3D> GetVolleyTargets()
-        {
-            var list = new List<ConveyorBlock3D>();
-            if (FireRange.Instance == null) return list;
-
-            foreach (var b in FireRange.Instance.BlocksInRange)
-            {
-                if (b == null || b.IsDestroyed || b.IsTargeted) continue;
-                if (!_isRainbowMode && b.ColorType != _colorType) continue;
-                list.Add(b);
-            }
-
-            if (list.Count < 2) return list;
-
-            list.Sort((a, b) =>
-            {
-                int rowCmp = a.RowIndex.CompareTo(b.RowIndex); // Row_0 first
-                if (rowCmp != 0) return rowCmp;
-                return a.LaneIndex.CompareTo(b.LaneIndex);     // Block_0 first within row
-            });
-
-            return list;
+            // If the group still has blocks remaining (e.g. another color group follows),
+            // try picking up the next matching group.
+            if (!IsDepleted)
+                TryStartGroupRoutine();
         }
 
         private void FireAt(ConveyorBlock3D target)
@@ -363,8 +337,6 @@ namespace BlockShooter
         {
             State = BlockState.Depleted;
             StopShooting();
-            if (FireRange.Instance != null)
-                FireRange.Instance.OnBlockEntered -= OnFireRangeBlockEntered;
 
             if (depletedParticle != null) depletedParticle.Play();
 
@@ -440,8 +412,6 @@ namespace BlockShooter
 
         private void OnDisable()
         {
-            if (FireRange.Instance != null)
-                FireRange.Instance.OnBlockEntered -= OnFireRangeBlockEntered;
             DOTween.Kill(transform);
             StopShooting();
         }
