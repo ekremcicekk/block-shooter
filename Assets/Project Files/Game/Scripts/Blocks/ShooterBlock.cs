@@ -276,9 +276,10 @@ namespace BlockShooter
             {
                 float da = Vector3.Dot(a.transform.position, _conveyorForward);
                 float db = Vector3.Dot(b.transform.position, _conveyorForward);
-                // Different rows → sort by proximity to fire-range entry (ascending dot)
-                if (Mathf.Abs(da - db) > RowGroupThreshold) return da.CompareTo(db);
-                // Same row → reversed lane order for the lateral wave direction
+                // Different rows → descending dot: Row_0 (deepest = first entered) comes first,
+                // Row_N (shallowest = just entered) comes last.
+                if (Mathf.Abs(da - db) > RowGroupThreshold) return db.CompareTo(da);
+                // Same row → descending LaneIndex: Block_4 → Block_0 lateral wave.
                 return b.LaneIndex.CompareTo(a.LaneIndex);
             });
 
