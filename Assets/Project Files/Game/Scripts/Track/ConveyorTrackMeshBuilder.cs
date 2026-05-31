@@ -225,21 +225,21 @@ namespace BlockShooter
                     }
                     else if (isFloor)
                     {
-                        trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
-                        trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
-                    }
-                    else if (openZoneEnabled)
-                    {
-                        // Circular distance from gap centre — no T=0 assumption
-                        int dist  = Mathf.Abs(s - gapCentre);
-                        if (dist > resolution / 2) dist = resolution - dist;
-                        if (dist < gapHalf) continue; // skip: inside gap
-
+                        // Floor closing edge always rendered — track underside is never visible
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
                     else
                     {
+                        // Edges 6–10 = player-facing right outer wall → skip inside gap zone.
+                        // Edges 0–4 = back left wall → always rendered, never cut.
+                        if (openZoneEnabled && e >= 6 && e <= 10)
+                        {
+                            int dist = Mathf.Abs(s - gapCentre);
+                            if (dist > resolution / 2) dist = resolution - dist;
+                            if (dist < gapHalf) continue;
+                        }
+
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
@@ -269,14 +269,12 @@ namespace BlockShooter
             return mesh;
         }
 
-        // Flat cap closing the full wall cross-section at sample s.
-        // Left wall: P0..P5 (outer bottom up to belt left edge).
-        // Right wall: P6..P11 (belt right edge down to outer bottom).
+        // Flat cap at sample s covering only the player-facing right wall (P6..P11).
+        // The back left wall is never cut so it needs no cap.
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s,  0,  5);
-            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s,  6, 11);
+            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 6, 11);
         }
 
         // Fan-triangulated flat polygon at sample s, double-sided, for profile[pStart..pEnd].
