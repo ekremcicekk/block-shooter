@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using DG.Tweening;
@@ -48,7 +47,6 @@ namespace BlockShooter
         private bool _isAccessible;
         private bool _isShooting;
         private Coroutine _shootCoroutine;
-        private Queue<ConveyorBlock3D> _targetQueue = new();
 
         private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
@@ -159,38 +157,15 @@ namespace BlockShooter
             State = BlockState.InSlot;
             if (FireRange.Instance != null)
                 FireRange.Instance.OnBlockEntered += OnFireRangeBlockEntered;
-            BuildTargetQueue();
-            if (_targetQueue.Count > 0) StartShooting();
+            // Start shooting immediately if a target is already in range
+            if (HasTarget()) StartShooting();
         }
 
-        // Builds queue from blocks CURRENTLY in FireRange, sorted by arrival order (highest RowIndex first).
-        private void BuildTargetQueue()
-        {
-            _targetQueue.Clear();
-            if (FireRange.Instance == null) return;
-
-            var sorted = new List<ConveyorBlock3D>();
-            foreach (var b in FireRange.Instance.BlocksInRange)
-            {
-                if (b == null || b.IsDestroyed || !b.gameObject.activeSelf) continue;
-                if (!_isRainbowMode && b.ColorType != _colorType) continue;
-                sorted.Add(b);
-            }
-            sorted.Sort((a, b) =>
-            {
-                int cmp = b.RowIndex.CompareTo(a.RowIndex);
-                return cmp != 0 ? cmp : a.LaneIndex.CompareTo(b.LaneIndex);
-            });
-            foreach (var b in sorted) _targetQueue.Enqueue(b);
-        }
-
-        // Called whenever a new block enters FireRange — adds it to the shoot queue.
+        // Called whenever a new block enters FireRange
         private void OnFireRangeBlockEntered(ConveyorBlock3D block)
         {
             if (State != BlockState.InSlot || IsDepleted) return;
             if (!_isRainbowMode && block.ColorType != _colorType) return;
-            if (block == null || block.IsDestroyed) return;
-            _targetQueue.Enqueue(block);
             if (!_isShooting) StartShooting();
         }
 
@@ -200,9 +175,14 @@ namespace BlockShooter
         {
             if (!GameManager.Instance.IsPlaying) return;
             if (State != BlockState.InSlot || IsDepleted) return;
-            // Safety net: restart if queue has items but shooting stopped (e.g. rainbow toggle)
-            if (_targetQueue.Count > 0 && !_isShooting) StartShooting();
+            // Safety net: restart if a target is available but coroutine stopped
+            if (!_isShooting && HasTarget()) StartShooting();
         }
+
+        private bool HasTarget() =>
+            _isRainbowMode
+                ? FireRange.Instance?.GetFirstTarget()               != null
+                : FireRange.Instance?.GetFirstTarget(_colorType)     != null;
 
         private void StartShooting()
         {
@@ -220,21 +200,14 @@ namespace BlockShooter
         {
             while (!IsDepleted)
             {
-                // Skip dead/inactive blocks at front of queue
-                while (_targetQueue.Count > 0)
-                {
-                    var front = _targetQueue.Peek();
-                    if (front == null || front.IsDestroyed || !front.gameObject.activeSelf)
-                        _targetQueue.Dequeue();
-                    else break;
-                }
+                // Always pick the physically closest block — no stale queue
+                ConveyorBlock3D target = _isRainbowMode
+                    ? FireRange.Instance?.GetFirstTarget()
+                    : FireRange.Instance?.GetFirstTarget(_colorType);
 
-                if (_targetQueue.Count == 0)
-                    break; // OnFireRangeBlockEntered will restart when next block enters
+                if (target == null) break; // OnFireRangeBlockEntered restarts when next block arrives
 
-                ConveyorBlock3D target = _targetQueue.Dequeue();
                 FireAt(target);
-
                 yield return new WaitForSeconds(GameManager.Instance.config.fireRate);
             }
 
@@ -337,8 +310,6 @@ namespace BlockShooter
 
             if (depletedParticle != null) depletedParticle.Play();
 
-            _targetQueue.Clear();
-
             // Notify systems immediately so slot/grid update right away
             SlotSystem.Instance?.ReleaseSlot(this);
             ShooterGrid.Instance?.OnBlockDepleted(this);
@@ -402,15 +373,6 @@ namespace BlockShooter
                 mpb.SetColor(EmissionProp, c * 0.6f);
                 glowRenderer.SetPropertyBlock(mpb);
             }
-        }
-
-        private BlockColorType GetAnyActiveColor()
-        {
-            if (_targetQueue.Count > 0) return _targetQueue.Peek().ColorType;
-            if (FireRange.Instance != null)
-                foreach (var b in FireRange.Instance.BlocksInRange)
-                    return b.ColorType;
-            return _colorType;
         }
 
         private void UpdateShotCountUI()

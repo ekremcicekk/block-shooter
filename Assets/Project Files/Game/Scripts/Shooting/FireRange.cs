@@ -64,37 +64,34 @@ namespace BlockShooter
         }
 
         /// <summary>
-        /// Returns the block in range with the lowest RowIndex (then LaneIndex) matching the color.
-        /// This targets blocks in BlockGroup spawn order: row 0 first, left lane first.
-        /// </summary>
-        /// <summary>
-        /// Row N-1 is placed at headT+groupTLength (leading edge) and enters FireRange first.
-        /// Targeting highest RowIndex first destroys them in physical arrival order.
+        /// Returns the block in range closest to this FireRange's transform (i.e. the
+        /// most "urgent" block — the one about to exit the zone). Sorting by actual
+        /// world distance is reliable regardless of RowIndex or group ordering.
         /// </summary>
         public ConveyorBlock3D GetFirstTarget(BlockColorType colorType)
         {
-            ConveyorBlock3D best = null;
+            ConveyorBlock3D best     = null;
+            float           bestDist = float.MaxValue;
+            Vector3         origin   = transform.position;
             foreach (var b in _blocksInRange)
             {
-                if (b.IsDestroyed || b.ColorType != colorType) continue;
-                if (best == null
-                    || b.RowIndex > best.RowIndex
-                    || (b.RowIndex == best.RowIndex && b.LaneIndex < best.LaneIndex))
-                    best = b;
+                if (b == null || b.IsDestroyed || b.ColorType != colorType) continue;
+                float d = Vector3.SqrMagnitude(b.transform.position - origin);
+                if (d < bestDist) { bestDist = d; best = b; }
             }
             return best;
         }
 
         public ConveyorBlock3D GetFirstTarget()
         {
-            ConveyorBlock3D best = null;
+            ConveyorBlock3D best     = null;
+            float           bestDist = float.MaxValue;
+            Vector3         origin   = transform.position;
             foreach (var b in _blocksInRange)
             {
-                if (b.IsDestroyed) continue;
-                if (best == null
-                    || b.RowIndex > best.RowIndex
-                    || (b.RowIndex == best.RowIndex && b.LaneIndex < best.LaneIndex))
-                    best = b;
+                if (b == null || b.IsDestroyed) continue;
+                float d = Vector3.SqrMagnitude(b.transform.position - origin);
+                if (d < bestDist) { bestDist = d; best = b; }
             }
             return best;
         }

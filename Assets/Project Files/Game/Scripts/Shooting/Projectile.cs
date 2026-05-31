@@ -2,6 +2,8 @@ using UnityEngine;
 
 namespace BlockShooter
 {
+    // Projectile moves via pure transform (no physics velocity) for frame-rate-independent
+    // reliable homing. Rigidbody is kept kinematic for smooth interpolated rendering only.
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(SphereCollider))]
     public class Projectile : MonoBehaviour
@@ -14,22 +16,23 @@ namespace BlockShooter
         private BlockColorType _colorType;
         private bool _active;
         private ProjectilePool _pool;
-        private Rigidbody _rb;
         private float _speed;
-        private ConveyorBlock3D _target; // homing target
+        private ConveyorBlock3D _target;
 
+        private Rigidbody _rb;
         private static readonly int ColorProp = Shader.PropertyToID("_BaseColor");
 
         private void Awake()
         {
             _rb = GetComponent<Rigidbody>();
-            _rb.useGravity = false;
-            _rb.isKinematic = false;
-            _rb.constraints = RigidbodyConstraints.FreezeRotation;
+            _rb.useGravity    = false;
+            _rb.isKinematic   = true;
+            _rb.interpolation = RigidbodyInterpolation.Interpolate;
+            _rb.constraints   = RigidbodyConstraints.FreezeRotation;
 
             var col = GetComponent<SphereCollider>();
             col.isTrigger = true;
-            col.radius = 0.12f;
+            col.radius    = 0.12f;
         }
 
         public void Launch(BlockColorType colorType, float speed, ProjectilePool pool, Vector3 direction,
@@ -41,24 +44,21 @@ namespace BlockShooter
             _target    = target;
             _active    = true;
 
-            Color c = GameManager.Instance.config.GetColor(colorType);
-            if (ballRenderer != null)
-            {
-                var mpb = new MaterialPropertyBlock();
-                mpb.SetColor(ColorProp, c);
-                ballRenderer.SetPropertyBlock(mpb);
-            }
-            if (trail != null) { trail.Clear(); trail.startColor = c; }
+            ApplyColor(colorType);
 
-            _rb.linearVelocity = direction.normalized * speed;
-            Invoke(nameof(ReturnToPool), 4f);
+            // Face initial direction
+            if (direction.sqrMagnitude > 0.001f)
+                transform.rotation = Quaternion.LookRotation(direction.normalized);
+
+            CancelInvoke(nameof(ReturnToPool));
+            Invoke(nameof(ReturnToPool), 5f); // safety timeout
         }
 
         private void Update()
         {
             if (!_active) return;
 
-            // Target already destroyed before projectile arrived
+            // Target gone before arrival
             if (_target == null || _target.IsDestroyed)
             {
                 ReturnToPool();
@@ -66,56 +66,75 @@ namespace BlockShooter
             }
 
             Vector3 toTarget = _target.transform.position - transform.position;
-            float dist = toTarget.magnitude;
+            float   dist     = toTarget.magnitude;
+            float   step     = _speed * Time.deltaTime;
 
-            float stepDist = _speed * Time.deltaTime;
-            if (stepDist >= dist)
+            // Arrived (or would overshoot this frame)
+            if (step >= dist || dist < 0.1f)
             {
                 transform.position = _target.transform.position;
-                _target.TakeHit();
-                ReturnToPool();
+                HandleHit();
                 return;
             }
 
-            // Normal homing steering
-            _rb.linearVelocity = toTarget.normalized * _speed;
-
-            if (dist < 0.2f)
-            {
-                _target.TakeHit();
-                ReturnToPool();
-            }
+            // Pure transform movement — frame-rate-independent, no physics forces
+            transform.position += toTarget.normalized * step;
+            transform.rotation  = Quaternion.LookRotation(toTarget.normalized);
         }
 
-        private void OnTriggerEnter(Collider other)
+        private void HandleHit()
         {
             if (!_active) return;
-            if (!other.TryGetComponent<ConveyorBlock3D>(out var block)) return;
-            if (_target != null && block != _target) return; // only hit assigned target
-            if (block.ColorType != _colorType) return;
-
             _active = false;
-            _rb.linearVelocity = Vector3.zero;
             CancelInvoke(nameof(ReturnToPool));
 
-            if (hitParticle != null)
+            PlayHitFX();
+            _target.TakeHit();
+            _target = null;
+            ReturnToPool();
+        }
+
+        private void PlayHitFX()
+        {
+            if (hitParticle == null) return;
+            hitParticle.transform.SetParent(null);
+            hitParticle.Play();
+        }
+
+        private void ApplyColor(BlockColorType colorType)
+        {
+            var config = GameManager.Instance?.config;
+            var mat    = config?.GetMaterial(colorType);
+
+            if (ballRenderer != null)
             {
-                hitParticle.transform.SetParent(null);
-                hitParticle.Play();
+                if (mat != null)
+                {
+                    ballRenderer.sharedMaterial = mat;
+                    ballRenderer.SetPropertyBlock(null);
+                }
+                else
+                {
+                    Color c = config?.GetColor(colorType) ?? Color.white;
+                    var mpb = new MaterialPropertyBlock();
+                    mpb.SetColor(ColorProp, c);
+                    ballRenderer.SetPropertyBlock(mpb);
+                }
             }
 
-            block.TakeHit();
-            ReturnToPool();
+            if (trail != null)
+            {
+                Color c = config?.GetColor(colorType) ?? Color.white;
+                trail.Clear();
+                trail.startColor = c;
+            }
         }
 
         private void ReturnToPool()
         {
             _active = false;
-            // If target survived (shouldn't happen with homing), free it so another shot can claim it
-            if (_target != null && !_target.IsDestroyed)
-                _target.SetTargeted(false);
             _target = null;
-            _rb.linearVelocity = Vector3.zero;
+            CancelInvoke(nameof(ReturnToPool));
             _pool?.Return(this);
         }
 
@@ -124,7 +143,6 @@ namespace BlockShooter
             _active = false;
             _target = null;
             CancelInvoke(nameof(ReturnToPool));
-            if (_rb != null) _rb.linearVelocity = Vector3.zero;
         }
     }
 }
