@@ -527,7 +527,7 @@ namespace BlockShooter.Editor
             Handles.color = new Color(1f, .9f, .1f, .8f);
             for (int i = 0; i < slots; i++)
             {
-                var p = new Vector3(-tw * .5f + i * cs, 0f, FIRE_Z - 2f);
+                var p = new Vector3(-tw * .5f + i * cs, 0f, FIRE_Z - 1.5f);
                 float sz = HandleUtility.GetHandleSize(p) * .12f;
                 Handles.SphereHandleCap(0, p, Quaternion.identity, sz, EventType.Repaint);
             }
@@ -539,7 +539,7 @@ namespace BlockShooter.Editor
             for (int r = 0; r < _gridRows; r++)
             for (int c = 0; c < _gridCols; c++)
             {
-                var pos = new Vector3(-hw + c * cs, 0f, FIRE_Z - 4f - hd + r * cs);
+                var pos = new Vector3(-hw + c * cs, 0f, FIRE_Z - 3.5f - hd + r * cs);
                 Color col = _type[c, r] == GridCellType.Empty
                     ? new Color(.3f, .3f, .3f, .25f)
                     : new Color(PC(_color[c, r]).r, PC(_color[c, r]).g, PC(_color[c, r]).b, .55f);
@@ -1560,8 +1560,8 @@ namespace BlockShooter.Editor
         private void BuildHierarchy(Transform root, LevelRoot lr)
         {
             float cs   = _cfg.gridCellSize;
-            float slotZ = FIRE_Z - 2f;
-            float gridZ = FIRE_Z - 4f;
+            float slotZ = FIRE_Z - 1.5f;
+            float gridZ = FIRE_Z - 3.5f;
 
             // ── Track ──
             var trackGo = Go(root, "Track");
