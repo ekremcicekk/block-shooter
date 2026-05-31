@@ -196,13 +196,20 @@ namespace BlockShooter
 
         private IEnumerator ShootRoutine()
         {
-            const float laneDelay = 0.04f; // stagger between lanes within a row
-            const float rowDelay  = 0.08f; // gap between rows — the Mexican-wave timing
+            const float laneDelay = 0.04f;
+            const float rowDelay  = 0.08f;
 
             while (!IsDepleted)
             {
                 var targets = GetVolleyTargets();
                 if (targets.Count == 0) break;
+
+                // LOG: sorted target list for this wave
+                var sb = new System.Text.StringBuilder();
+                sb.Append($"[WAVE] Shooter={_colorType} shots={_shotCount} targets={targets.Count}: ");
+                foreach (var t in targets)
+                    sb.Append($"R{t.RowIndex}L{t.LaneIndex}({t.name}) ");
+                Debug.Log(sb.ToString());
 
                 int  lastRow   = -1;
                 bool firedAny  = false;
@@ -210,7 +217,11 @@ namespace BlockShooter
                 foreach (var t in targets)
                 {
                     if (IsDepleted) break;
-                    if (t == null || t.IsDestroyed || t.IsTargeted) continue;
+                    if (t == null || t.IsDestroyed || t.IsTargeted)
+                    {
+                        Debug.Log($"[SKIP] R{t?.RowIndex}L{t?.LaneIndex} destroyed={t?.IsDestroyed} targeted={t?.IsTargeted}");
+                        continue;
+                    }
 
                     if (lastRow >= 0)
                     {
@@ -219,6 +230,7 @@ namespace BlockShooter
                     }
 
                     lastRow = t.RowIndex;
+                    Debug.Log($"[FIRE] R{t.RowIndex}L{t.LaneIndex} ({t.name})  shots_left={_shotCount - 1}");
                     FireAt(t);
                     firedAny = true;
                 }
