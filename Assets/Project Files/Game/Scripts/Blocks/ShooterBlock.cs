@@ -195,24 +195,25 @@ namespace BlockShooter
             if (_shootCoroutine != null) { StopCoroutine(_shootCoroutine); _shootCoroutine = null; }
         }
 
-        // Fires at every block in the group, row-by-row, lane-by-lane, in strict order.
-        // Waits for each block to enter FireRange before shooting it.
+        // Fires at every block in the group, row-by-row (Row_0 first), lane-by-lane
+        // (highest lane index first for the wave direction). Waits for each block to
+        // enter FireRange before firing — the natural conveyor speed creates the inter-row gap.
         private IEnumerator ShootGroupRoutine(BlockGroup group)
         {
             const float laneDelay    = 0.04f;
-            const float rowDelay     = 0.08f;
             const float blockTimeout = 8f;
 
             for (int row = 0; row < group.RowCount && !IsDepleted; row++)
             {
                 bool firedInRow = false;
 
-                for (int lane = 0; lane < group.LaneCount && !IsDepleted; lane++)
+                // Lane_N-1 → Lane_0 so the highest-index lane is destroyed first.
+                for (int lane = group.LaneCount - 1; lane >= 0 && !IsDepleted; lane--)
                 {
                     var block = group.GetBlock(row, lane);
                     if (block == null || block.IsDestroyed) continue;
 
-                    // Wait until the block enters FireRange (or times out / is destroyed)
+                    // Wait until the block enters FireRange (or times out / is destroyed).
                     float waited = 0f;
                     while (waited < blockTimeout && !block.IsDestroyed)
                     {
@@ -230,9 +231,8 @@ namespace BlockShooter
                     firedInRow = true;
                     FireAt(block);
                 }
-
-                if (firedInRow && row < group.RowCount - 1 && !IsDepleted)
-                    yield return new WaitForSeconds(rowDelay);
+                // No explicit rowDelay — the physical gap between rows on the conveyor
+                // naturally produces the inter-row pause as the next row enters FireRange.
             }
 
             _isShooting = false;
