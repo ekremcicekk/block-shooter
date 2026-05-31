@@ -63,6 +63,18 @@ namespace BlockShooter.Editor
         private int          _selKnot       = -1;
         private GameObject   _previewGo     = null; // lightweight spline preview only
 
+        // Spline edit cancel backup (restored when user presses ✕)
+        private List<Vector3>     _splineEditBackupKnots  = null;
+        private List<Vector3>     _splineEditBackupTanIn  = null;
+        private List<Vector3>     _splineEditBackupTanOut = null;
+        private List<TangentMode> _splineEditBackupModes  = null;
+
+        // Preset undo backup (restored via "↩ Restore" button)
+        private List<Vector3>     _presetBackupKnots  = null;
+        private List<Vector3>     _presetBackupTanIn  = null;
+        private List<Vector3>     _presetBackupTanOut = null;
+        private List<TangentMode> _presetBackupModes  = null;
+
         // Copy
         private int _copyIdx = 0;
 
@@ -197,6 +209,15 @@ namespace BlockShooter.Editor
         private void DrawLeft()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(ListW), GUILayout.ExpandHeight(true));
+
+            // Active prefab reference — always at top, click to ping/select in Project
+            if (_activeIdx >= 0 && _activeIdx < _paths.Count)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_paths[_activeIdx]);
+                EditorGUILayout.ObjectField(prefab, typeof(GameObject), false);
+                GUILayout.Space(3);
+            }
+
             Hdr("LEVELS");
             GUI.backgroundColor = new Color(.45f,.85f,.5f);
             if (GUILayout.Button("+ New Level", GUILayout.Height(26))) NewLevel();
@@ -204,6 +225,8 @@ namespace BlockShooter.Editor
             GUILayout.Space(3);
 
             _listScroll = EditorGUILayout.BeginScrollView(_listScroll, GUILayout.ExpandHeight(true));
+            var dupIcon = EditorGUIUtility.IconContent("d_TreeEditor.Duplicate");
+            if (dupIcon == null || dupIcon.image == null) dupIcon = new GUIContent("⊕");
             for (int i = 0; i < _labels.Count; i++)
             {
                 bool active = _activeIdx == i;
@@ -212,7 +235,7 @@ namespace BlockShooter.Editor
                 if (GUILayout.Button(_labels[i], GUILayout.Height(22)))
                 { _activeIdx = i; LoadLevel(i); }
                 GUI.backgroundColor = new Color(.55f,.75f,.4f);
-                if (GUILayout.Button("⧉", GUILayout.Width(22), GUILayout.Height(22)))
+                if (GUILayout.Button(dupIcon, GUILayout.Width(22), GUILayout.Height(22)))
                     DuplicateLevel(i);
                 GUI.backgroundColor = new Color(.9f,.3f,.3f);
                 if (GUILayout.Button("✕", GUILayout.Width(22), GUILayout.Height(22)))
@@ -222,17 +245,6 @@ namespace BlockShooter.Editor
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndScrollView();
-
-            if (_activeIdx >= 0 && _activeIdx < _paths.Count)
-            {
-                GUILayout.Space(4);
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_paths[_activeIdx]);
-                using (new EditorGUI.DisabledScope(true))
-                    EditorGUILayout.ObjectField(prefab, typeof(GameObject), false);
-                if (GUILayout.Button("Select Prefab Asset", EditorStyles.miniButton))
-                    Selection.activeObject = prefab;
-                GUILayout.Space(4);
-            }
 
             GUILayout.Space(6);
             Hdr("SETTINGS");
@@ -298,6 +310,25 @@ namespace BlockShooter.Editor
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
 
+            // Restore button — only visible after an accidental preset click
+            if (_presetBackupKnots != null && _presetBackupKnots.Count >= 3)
+            {
+                GUI.backgroundColor = new Color(1f, .75f, .2f);
+                if (GUILayout.Button("↩  Restore Previous Spline", EditorStyles.miniButton, GUILayout.Height(20)))
+                {
+                    _knots        = new List<Vector3>(_presetBackupKnots);
+                    _tangentsIn   = new List<Vector3>(_presetBackupTanIn);
+                    _tangentsOut  = new List<Vector3>(_presetBackupTanOut);
+                    _tangentModes = new List<TangentMode>(_presetBackupModes);
+                    _presetBackupKnots = null;
+                    EnsureTangentLists();
+                    SyncPreviewSpline();
+                    SceneView.RepaintAll();
+                    Repaint();
+                }
+                GUI.backgroundColor = Color.white;
+            }
+
             GUILayout.Space(4);
 
             // Edit button
@@ -360,6 +391,13 @@ namespace BlockShooter.Editor
         // ── Start spline edit mode ────────────────────────────────────────────
         private void StartSplineEdit()
         {
+            // Save state so ✕ Cancel can restore exactly what we started with
+            EnsureTangentLists();
+            _splineEditBackupKnots  = new List<Vector3>(_knots);
+            _splineEditBackupTanIn  = new List<Vector3>(_tangentsIn);
+            _splineEditBackupTanOut = new List<Vector3>(_tangentsOut);
+            _splineEditBackupModes  = new List<TangentMode>(_tangentModes);
+
             _editingSpline = true;
             _selKnot       = -1;
             _addKnotMode   = false;
@@ -384,11 +422,19 @@ namespace BlockShooter.Editor
             _editingSpline = false;
             _addKnotMode   = false;
 
-            if (save && _previewGo != null)
+            if (!save && _splineEditBackupKnots != null)
             {
-                var sc = _previewGo.GetComponentInChildren<SplineContainer>();
-                if (sc != null) ReadKnotsFromContainer(sc);
+                // Cancel: restore state from before edit started
+                _knots        = _splineEditBackupKnots;
+                _tangentsIn   = _splineEditBackupTanIn;
+                _tangentsOut  = _splineEditBackupTanOut;
+                _tangentModes = _splineEditBackupModes;
+                EnsureTangentLists();
             }
+            // On save: _knots/_tangentsIn/_tangentsOut/_tangentModes are already
+            // up-to-date (kept in sync live via HandleKnots → SyncPreviewSpline).
+            // Do NOT read back from SplineContainer — it resets tangent modes to AutoSmooth.
+            _splineEditBackupKnots = null;
 
             DestroyPreview();
             SceneView.RepaintAll();
@@ -684,6 +730,16 @@ namespace BlockShooter.Editor
         // ── Spline helpers ────────────────────────────────────────────────────
         private void ApplyPreset()
         {
+            // Save current spline as backup so "↩ Restore" can undo accidental preset clicks
+            if (_knots.Count >= 3)
+            {
+                EnsureTangentLists();
+                _presetBackupKnots  = new List<Vector3>(_knots);
+                _presetBackupTanIn  = new List<Vector3>(_tangentsIn);
+                _presetBackupTanOut = new List<Vector3>(_tangentsOut);
+                _presetBackupModes  = new List<TangentMode>(_tangentModes);
+            }
+
             float hw = _splineWidth * .5f;
             float fz = FIRE_Z;
             float d  = _splineDepth;
@@ -904,8 +960,9 @@ namespace BlockShooter.Editor
             // Background color
             Color bg = t == GridCellType.Empty
                 ? (sel ? new Color(.26f,.26f,.30f) : new Color(.17f,.17f,.19f))
+                : t == GridCellType.Door
+                ? new Color(.58f,.60f,.65f)   // light gray for door
                 : PC(col);
-            if (t == GridCellType.Door) bg = Color.Lerp(bg, Color.black, .5f);
 
             // Labels
             string lbl1 = t == GridCellType.Empty ? "+"
@@ -913,7 +970,7 @@ namespace BlockShooter.Editor
                         : col.ToString().Substring(0, 3).ToUpper();
             string lbl2 = t == GridCellType.Empty ? ""
                         : t == GridCellType.Door   ? $"×{_doors[c,r]}"
-                        : _shots[c,r] < 0 ? $"×{_cfg?.defaultShots ?? 3}"
+                        : _shots[c,r] < 0 ? $"×{_cfg?.defaultShots ?? 100}"
                         : $"×{_shots[c,r]}";
 
             Rect outer = GUILayoutUtility.GetRect(
@@ -1144,9 +1201,6 @@ namespace BlockShooter.Editor
 
                 // Bottom row — compact action buttons
                 EditorGUILayout.BeginHorizontal();
-                GUI.backgroundColor = new Color(.5f,.3f,.9f);
-                if (GUILayout.Button("→ Door", GUILayout.Height(20)))
-                { _type[c, r] = GridCellType.Door; Repaint(); }
                 GUI.backgroundColor = new Color(.5f,.18f,.18f);
                 if (GUILayout.Button("Clear", GUILayout.Height(20)))
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; Repaint(); }
@@ -1195,6 +1249,12 @@ namespace BlockShooter.Editor
                     }
                     EditorGUILayout.EndHorizontal();
                 }
+
+                GUILayout.Space(6);
+                GUI.backgroundColor = new Color(.5f,.3f,.9f);
+                if (GUILayout.Button("→ Set as Door", GUILayout.Height(22)))
+                { _type[c, r] = GridCellType.Door; Repaint(); }
+                GUI.backgroundColor = Color.white;
             }
         }
 
