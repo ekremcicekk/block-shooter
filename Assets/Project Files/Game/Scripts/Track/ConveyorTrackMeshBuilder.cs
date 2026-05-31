@@ -154,8 +154,8 @@ namespace BlockShooter
         private Mesh Sweep()
         {
             Vector2[] profile = BuildProfile();
-            int pCount    = profile.Length;
-            int edgeCount = pCount - 1;
+            int pCount    = profile.Length;          // 12 profile vertices
+            int edgeCount = pCount;                  // 12 edges — includes closing P11→P0 (floor)
             int sCount    = resolution + 1;
 
             var wPos   = new Vector3[sCount];
@@ -166,21 +166,22 @@ namespace BlockShooter
             float[] perimU  = ComputeProfilePerimU(profile);
             float[] splineV = ComputeSplineV(wPos, sCount);
 
-            const int beltEdge    = 5;
-            const int innerLeftE  = 4;  // P4→P5: left inner face (visible inside gap)
-            const int innerRightE = 6;  // P6→P7: right inner face (visible inside gap)
+            const int beltEdge  = 5;
+            int       floorEdge = pCount - 1;        // edge 11: P11→P0, closes the bottom
             int       sweepVCount = edgeCount * 2 * sCount;
 
-            var verts    = new List<Vector3>(sweepVCount + 128);
-            var uvs      = new List<Vector2>(sweepVCount + 128);
-            var trisWall = new List<int>((edgeCount - 1) * resolution * 6 + 128);
+            var verts    = new List<Vector3>(sweepVCount + 64);
+            var uvs      = new List<Vector2>(sweepVCount + 64);
+            var trisWall = new List<int>((edgeCount - 1) * resolution * 6 + 64);
             var trisBelt = new List<int>(resolution * 6);
 
             // ── Sweep vertices ────────────────────────────────────────────────
             for (int e = 0; e < edgeCount; e++)
             {
-                Vector2 pa = profile[e], pb = profile[e + 1];
-                float uA = perimU[e], uB = perimU[e + 1];
+                Vector2 pa = profile[e];
+                Vector2 pb = profile[(e + 1) % pCount]; // closing edge wraps to P0
+
+                float uA = perimU[e], uB = perimU[(e + 1) % pCount];
 
                 for (int s = 0; s < sCount; s++)
                 {
@@ -192,19 +193,19 @@ namespace BlockShooter
                 }
             }
 
-            // ── Triangles + open-zone detection ───────────────────────────────
-            // T-based: gap spans T∈[0,halfT]∪[1-halfT,1]. T=0 and T=1 are the same
-            // physical point (spline seam = knot[0] = FIRE_Z front). This guarantees
-            // exactly ONE gap at the front; the back (T≈0.5) is never touched.
-            // Inner faces (e=4,6) are kept even inside the gap so the channel walls
-            // remain visible when looking through the opening.
+            // ── Triangles ─────────────────────────────────────────────────────
+            // Belt (e=5) and floor (e=11) always rendered.
+            // All other edges (outer/inner walls) skipped inside the open zone.
+            // T-based: gap = T∈[0,halfT]∪[1-halfT,1] — the spline seam (T=0=T=1 = knot[0]
+            // = FIRE_Z front). Back (T≈0.5) is never affected.
             int s_capFirst = -1, s_capLast = -1;
 
             for (int e = 0; e < edgeCount; e++)
             {
-                int  stripBase = e * 2 * sCount;
-                bool isBelt    = (e == beltEdge);
-                bool isInner   = (e == innerLeftE || e == innerRightE);
+                int  stripBase  = e * 2 * sCount;
+                bool isBelt     = (e == beltEdge);
+                bool isFloor    = (e == floorEdge);
+                bool isAlwaysOn = isBelt || isFloor;
 
                 for (int s = 0; s < resolution; s++)
                 {
@@ -215,14 +216,18 @@ namespace BlockShooter
                         trisBelt.Add(b);   trisBelt.Add(b+2); trisBelt.Add(b+1);
                         trisBelt.Add(b+1); trisBelt.Add(b+2); trisBelt.Add(b+3);
                     }
+                    else if (isFloor)
+                    {
+                        trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
+                        trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
+                    }
                     else
                     {
-                        if (openZoneEnabled && !isInner)
+                        if (openZoneEnabled)
                         {
                             float midT  = (s + 0.5f) / resolution;
                             bool  inGap = midT < openZoneHalfT || midT > (1f - openZoneHalfT);
 
-                            // Track boundary samples (once, using edge 0)
                             if (e == 0 && !inGap)
                             {
                                 if (s_capFirst < 0) s_capFirst = s;
@@ -238,17 +243,13 @@ namespace BlockShooter
                 }
             }
 
-            // ── Gap closing geometry ──────────────────────────────────────────
+            // ── End caps at gap edges ─────────────────────────────────────────
+            // Cap = flat polygon closing the hollow wall cross-section (P0..P5 left, P6..P11 right).
             if (openZoneEnabled && s_capFirst >= 0)
             {
                 int sB = (s_capLast + 1) % resolution;
-
-                // End caps: full wall cross-section from bottom to belt edge (double-sided)
                 AddWallCap(profile, wPos, wRight, wUp, verts, uvs, trisWall, s_capFirst);
                 AddWallCap(profile, wPos, wRight, wUp, verts, uvs, trisWall, sB);
-
-                // Floor panel: closes the bottom of the gap opening (P0 → P11 across gap)
-                AddGapFloor(profile, wPos, wRight, wUp, verts, uvs, trisWall, s_capFirst, sB);
             }
 
             // ── Assemble mesh ─────────────────────────────────────────────────
@@ -267,17 +268,17 @@ namespace BlockShooter
             return mesh;
         }
 
-        // Closes the hollow wall cross-section at sample s.
-        // Left wall: P0..P5 (bottom → wall → belt left edge)
-        // Right wall: P6..P11 (belt right edge → wall → bottom)
+        // Flat cap closing the full wall cross-section at sample s.
+        // Left wall: P0..P5 (outer bottom up to belt left edge).
+        // Right wall: P6..P11 (belt right edge down to outer bottom).
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 0,  5);
-            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 6, 11);
+            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s,  0,  5);
+            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s,  6, 11);
         }
 
-        // Fan-triangulated flat polygon, double-sided, for profile vertices pStart..pEnd at sample s.
+        // Fan-triangulated flat polygon at sample s, double-sided, for profile[pStart..pEnd].
         private static void AddCapPolygon(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall,
             int s, int pStart, int pEnd)
@@ -297,27 +298,6 @@ namespace BlockShooter
                 trisWall.Add(a); trisWall.Add(b); trisWall.Add(c);
                 trisWall.Add(a); trisWall.Add(c); trisWall.Add(b); // double-sided
             }
-        }
-
-        // Adds a quad panel spanning the gap at the bottom (Y = -railHeight),
-        // connecting the outer-bottom corners of both end caps.
-        private static void AddGapFloor(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
-            List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int sA, int sB)
-        {
-            int baseIdx = verts.Count;
-
-            // Four corners: left-bottom and right-bottom at each cap edge
-            verts.Add(ToWorld(profile[0],  sA, wPos, wRight, wUp)); // 0: left-bottom, edge A
-            verts.Add(ToWorld(profile[11], sA, wPos, wRight, wUp)); // 1: right-bottom, edge A
-            verts.Add(ToWorld(profile[11], sB, wPos, wRight, wUp)); // 2: right-bottom, edge B
-            verts.Add(ToWorld(profile[0],  sB, wPos, wRight, wUp)); // 3: left-bottom, edge B
-            for (int i = 0; i < 4; i++) uvs.Add(new Vector2(0.5f, 0.5f));
-
-            // Quad — double-sided
-            trisWall.Add(baseIdx);   trisWall.Add(baseIdx+1); trisWall.Add(baseIdx+2);
-            trisWall.Add(baseIdx);   trisWall.Add(baseIdx+2); trisWall.Add(baseIdx+3);
-            trisWall.Add(baseIdx);   trisWall.Add(baseIdx+2); trisWall.Add(baseIdx+1);
-            trisWall.Add(baseIdx);   trisWall.Add(baseIdx+3); trisWall.Add(baseIdx+2);
         }
 
         // ─────────────────────────────────────────────────────────────────────
