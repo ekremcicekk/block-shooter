@@ -44,9 +44,9 @@ namespace BlockShooter
 
         // ── Sweep Parameters ──────────────────────────────────────────────────
         [Header("Sweep Quality")]
-        [Range(60, 800)]
+        [Range(20, 800)]
         [Tooltip("Number of cross-section rings along the spline")]
-        public int resolution = 180;
+        public int resolution = 60;
 
         [Header("UV Tiling")]
         [Tooltip("How many times the texture tiles along the spline length")]
