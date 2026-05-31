@@ -1733,7 +1733,7 @@ namespace BlockShooter.Editor
             var mf = track.GetComponent<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return;
 
-            const string meshDir = "Assets/Game/Models/LevelMesh";
+            const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
             EnsureDir(meshDir);
             string meshPath = $"{meshDir}/{name}_TrackMesh.asset";
             var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
