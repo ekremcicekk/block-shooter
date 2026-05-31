@@ -26,7 +26,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BaseMap:
-        m_Texture: {fileID: 2800000, guid: a4e6fc570b57b8a4fb8e71b87497f73b, type: 3}
+        m_Texture: {fileID: 2800000, guid: 9bf159989eed9e94ea7903e32e672400, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
@@ -50,7 +50,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: a4e6fc570b57b8a4fb8e71b87497f73b, type: 3}
+        m_Texture: {fileID: 2800000, guid: 9bf159989eed9e94ea7903e32e672400, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MatCapMask:
@@ -174,7 +174,7 @@ Material:
     - _ShnRange: 0.15
     - _ShnSmooth: 1
     - _SingleIndirectColor: 0
-    - _Smoothness: 0.5
+    - _Smoothness: 0
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SpecularMapType: 0
@@ -205,8 +205,8 @@ Material:
     - _WorkflowMode: 1
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _BaseColor: {r: 1, g: 0.5240262, b: 0, a: 1}
+    - _Color: {r: 1, g: 0.5240262, b: 0, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _HColor: {r: 0.46226418, g: 0.46226418, b: 0.46226418, a: 1}
     - _MatCapColor: {r: 1, g: 1, b: 1, a: 1}

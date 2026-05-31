@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dac043bd9476d814fab82a65da6a3716, type: 3}
+  m_Name: LevelEditorConfig
+  m_EditorClassIdentifier: 
+  levelSavePath: Assets\Project Files\Data\Levels\
+  shooterBlockPrefab: {fileID: 9104099848893320791, guid: d352cff43f63e444da50c3c9e6f33540, type: 3}
+  wallElementPrefab: {fileID: 0}
+  conveyorBlockPrefab: {fileID: 6901060413654150086, guid: 12fe760b4c1250b49834abbac9208222, type: 3}
+  slotIndicatorPrefab: {fileID: 0}
+  trackSegmentPrefab: {fileID: 0}
+  arrowPrefab: {fileID: 5382590712880826785, guid: 67e4f67177226804cb7a5efb43e82c93, type: 3}
+  fireRangePrefab: {fileID: 926021276733090944, guid: 811b749e63bcb5142976d5f4f148bba8, type: 3}
+  groundPrefab: {fileID: 4410554955158570461, guid: 2eae52573d036f847ad2dd78ff003d47, type: 3}
+  conveyorSpeed: 0.75
+  laneCount: 5
+  laneSpacing: 0.18
+  rowSpacing: 0.18
+  rowsPerGroup: 20
+  slotCount: 4
+  gridCellSize: 1.2
+  defaultShots: 3
+  trackSideMaterial: {fileID: 2100000, guid: 4b4f972e845c754428d7d8f762e7f4ee, type: 2}
+  trackBeltMaterial: {fileID: 2100000, guid: fb0a40a42cd09724dbb5ec66b917d204, type: 2}

@@ -27,8 +27,8 @@ Transform:
   m_GameObject: {fileID: 1394936033213387327}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.119, z: 0}
-  m_LocalScale: {x: 0.4175635, y: 0.4175635, z: 0.4175635}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.39896, y: 0.39896, z: 0.39896}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 5655684702468073853}
@@ -41,7 +41,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1394936033213387327}
-  m_Mesh: {fileID: -3262789968867269347, guid: 4234327055fbc4e4580eed193cbf97bd, type: 3}
+  m_Mesh: {fileID: 1684460883708638651, guid: 067bfd2f5818fe2449f8bb4a13caa06b, type: 3}
 --- !u!23 &2979231550936303734
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -50,7 +50,7 @@ MeshRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1394936033213387327}
   m_Enabled: 1
-  m_CastShadows: 0
+  m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
@@ -216,8 +216,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 30.41
-  m_fontSizeBase: 30.41
+  m_fontSize: 42
+  m_fontSizeBase: 42
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -288,8 +288,8 @@ Transform:
   m_GameObject: {fileID: 2755183677879777169}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0.4}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: 0, y: 1.2532585, z: 0.7519551}
+  m_LocalScale: {x: 2.506517, y: 2.506517, z: 2.506517}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3107719286104500061}
@@ -329,7 +329,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0.65}
-  m_SizeDelta: {x: 100, y: 50}
+  m_SizeDelta: {x: 13.7428, y: 6.8714}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &930284269994885026
 Canvas:
@@ -450,7 +450,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8891650280715535815}
   - component: {fileID: 4430930358108203425}
-  - component: {fileID: 5002273185421219673}
+  - component: {fileID: 6509380305470084059}
   m_Layer: 0
   m_Name: ShooterBlock
   m_TagString: Untagged
@@ -496,7 +496,11 @@ MonoBehaviour:
   accessibleIndicator: {fileID: 0}
   bodyMesh: {fileID: 3107719286104500061}
   shootPoint: {fileID: 5655684702468073853}
---- !u!65 &5002273185421219673
+  _colorType: 0
+  _shotCount: 3
+  _gridColumn: 0
+  _gridRow: 0
+--- !u!65 &6509380305470084059
 BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}

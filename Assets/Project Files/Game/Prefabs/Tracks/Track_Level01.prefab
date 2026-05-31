@@ -68,13 +68,13 @@ MonoBehaviour:
     - Position:
         x: 0
         y: 0
-        z: 1.75
+        z: 1.4
       TangentIn:
-        x: -1.0134705
+        x: -1.038324
         y: 0
         z: 0
       TangentOut:
-        x: 1.0134705
+        x: 1.038324
         y: 0
         z: 0
       Rotation:
@@ -84,17 +84,17 @@ MonoBehaviour:
           z: 0
           w: 1
     - Position:
-        x: 1.835
+        x: 1.88
         y: 0
         z: 0
       TangentIn:
         x: 0
         y: 0
-        z: 0.96652496
+        z: 0.77321994
       TangentOut:
         x: 0
         y: 0
-        z: -0.96652496
+        z: -0.77321994
       Rotation:
         value:
           x: 0
@@ -104,13 +104,13 @@ MonoBehaviour:
     - Position:
         x: 0
         y: 0
-        z: -1.75
+        z: -1.4
       TangentIn:
-        x: 1.0134705
+        x: 1.038324
         y: 0
         z: 0
       TangentOut:
-        x: -1.0134705
+        x: -1.038324
         y: 0
         z: 0
       Rotation:
@@ -120,17 +120,17 @@ MonoBehaviour:
           z: 0
           w: 1
     - Position:
-        x: -1.835
+        x: -1.88
         y: 0
         z: 0
       TangentIn:
         x: 0
         y: 0
-        z: -0.96652496
+        z: -0.77321994
       TangentOut:
         x: 0
         y: 0
-        z: 0.96652496
+        z: 0.77321994
       Rotation:
         value:
           x: 0
@@ -172,7 +172,6 @@ MonoBehaviour:
   segmentPrefab: {fileID: 0}
   arrowPrefab: {fileID: 5382590712880826785, guid: 67e4f67177226804cb7a5efb43e82c93, type: 3}
   arrowSpacing: 2
-  blockSpeed: 1.5
 --- !u!114 &3671645959574192092
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -190,8 +189,8 @@ MonoBehaviour:
   rowsPerGroup: 20
   laneSpacing: 0.18
   rowSpacing: 0.18
-  groupColors: 0100000002000000
-  speed: 1
+  groupColors: 010000000200000003000000
+  speed: 0.75
   loop: 1
 --- !u!33 &6075694745439415910
 MeshFilter:
