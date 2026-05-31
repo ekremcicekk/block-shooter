@@ -195,57 +195,44 @@ namespace BlockShooter
             if (_shootCoroutine != null) { StopCoroutine(_shootCoroutine); _shootCoroutine = null; }
         }
 
-        // Fires at every block in the group, row-by-row (Row_0 first), lane-by-lane
-        // (highest lane index first for the wave direction). Waits for each block to
-        // enter FireRange before firing — the natural conveyor speed creates the inter-row gap.
+        // Fires at every block in the group row-by-row (Row_0 first), lane N-1 → 0.
+        // Waits at the ROW level: as soon as any block from the row enters FireRange,
+        // fires all lanes in order. This eliminates diagonal-entry timing issues
+        // (outer lanes that exit slightly before inner lanes are still caught by the
+        // homing projectile within the laneDelay window). Rows that looped past wait
+        // for natural re-entry rather than being chased across the track.
         private IEnumerator ShootGroupRoutine(BlockGroup group)
         {
-            const float laneDelay    = 0.04f;
-            const float blockTimeout = 8f;
+            const float laneDelay  = 0.04f;
+            const float rowTimeout = 15f;
 
-            // If the shooter arrived late (some rows already exited FireRange),
-            // skip ahead to the earliest row that is currently inside FireRange.
             int startRow = FindStartRow(group);
 
             for (int row = startRow; row < group.RowCount && !IsDepleted; row++)
             {
-                bool firedInRow = false;
+                // Wait until at least one live block from this row is in FireRange.
+                float waited = 0f;
+                while (!RowHasBlockInRange(group, row) && waited < rowTimeout && !IsDepleted)
+                {
+                    yield return null;
+                    waited += Time.deltaTime;
+                }
 
-                // Lane_N-1 → Lane_0 so the highest-index lane is destroyed first.
+                if (!RowHasBlockInRange(group, row)) continue;
+
+                // Fire all lanes in the row — highest index first.
+                bool firedAny = false;
                 for (int lane = group.LaneCount - 1; lane >= 0 && !IsDepleted; lane--)
                 {
                     var block = group.GetBlock(row, lane);
-                    if (block == null || block.IsDestroyed) continue;
+                    if (block == null || block.IsDestroyed || block.IsTargeted) continue;
 
-                    // Wait until the block enters FireRange (or times out / is destroyed).
-                    float waited = 0f;
-                    while (waited < blockTimeout && !block.IsDestroyed)
-                    {
-                        if (FireRange.Instance != null && FireRange.Instance.ContainsBlock(block)) break;
-                        // Block already entered and exited FireRange (diagonal path entry causes
-                        // outer lanes to pass through before inner lanes). Fire at it immediately —
-                        // the homing projectile will track it wherever it is on the conveyor.
-                        if (block.HasEnteredFireRange) break;
-                        yield return null;
-                        waited += Time.deltaTime;
-                    }
-
-                    if (block.IsDestroyed || block.IsTargeted) continue;
-                    bool inRange = FireRange.Instance != null && FireRange.Instance.ContainsBlock(block);
-                    // A block may exit FireRange slightly early due to the diagonal conveyor approach.
-                    // Allow firing if the block is still very close to the range (< 1 m from bounds).
-                    // Blocks that looped far away (other side of the track) are rejected by this check.
-                    bool justExited = block.HasEnteredFireRange && !inRange && IsNearFireRange(block.transform.position, 1f);
-                    if (!inRange && !justExited) continue;
-
-                    if (firedInRow)
+                    if (firedAny)
                         yield return new WaitForSeconds(laneDelay);
 
-                    firedInRow = true;
+                    firedAny = true;
                     FireAt(block);
                 }
-                // No explicit rowDelay — the physical gap between rows on the conveyor
-                // naturally produces the inter-row pause as the next row enters FireRange.
             }
 
             _isShooting = false;
@@ -253,18 +240,21 @@ namespace BlockShooter
 
             if (!IsDepleted)
             {
-                yield return null; // defer one frame to prevent synchronous recursion
+                yield return null;
                 TryStartGroupRoutine();
             }
         }
 
-        // Returns true if pos is within maxDistance of FireRange's collider bounds.
-        // Used to distinguish "just exited due to diagonal path" from "looped far away."
-        private bool IsNearFireRange(Vector3 pos, float maxDistance)
+        private bool RowHasBlockInRange(BlockGroup group, int row)
         {
             if (FireRange.Instance == null) return false;
-            var bounds = FireRange.Instance.GetBounds();
-            return Vector3.Distance(pos, bounds.ClosestPoint(pos)) < maxDistance;
+            for (int lane = 0; lane < group.LaneCount; lane++)
+            {
+                var b = group.GetBlock(row, lane);
+                if (b != null && !b.IsDestroyed && FireRange.Instance.ContainsBlock(b))
+                    return true;
+            }
+            return false;
         }
 
         // Returns the smallest RowIndex of this group's blocks that are currently in FireRange.
