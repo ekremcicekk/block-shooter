@@ -222,14 +222,20 @@ namespace BlockShooter
                     while (waited < blockTimeout && !block.IsDestroyed)
                     {
                         if (FireRange.Instance != null && FireRange.Instance.ContainsBlock(block)) break;
-                        // Block entered and then exited FireRange without being destroyed → it passed through.
+                        // Block already entered and exited FireRange (diagonal path entry causes
+                        // outer lanes to pass through before inner lanes). Fire at it immediately —
+                        // the homing projectile will track it wherever it is on the conveyor.
                         if (block.HasEnteredFireRange) break;
                         yield return null;
                         waited += Time.deltaTime;
                     }
 
                     if (block.IsDestroyed || block.IsTargeted) continue;
-                    if (FireRange.Instance == null || !FireRange.Instance.ContainsBlock(block)) continue;
+                    // Fire if in range OR if the block already passed through (homing projectile tracks it).
+                    // Only skip if the block never entered at all (timeout = wrong group / never arriving).
+                    bool canFire = (FireRange.Instance != null && FireRange.Instance.ContainsBlock(block))
+                                || block.HasEnteredFireRange;
+                    if (!canFire) continue;
 
                     if (firedInRow)
                         yield return new WaitForSeconds(laneDelay);
