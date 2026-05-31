@@ -222,8 +222,8 @@ namespace BlockShooter
                     while (waited < blockTimeout && !block.IsDestroyed)
                     {
                         if (FireRange.Instance != null && FireRange.Instance.ContainsBlock(block)) break;
-                        // A later row from this group entered range → this row already passed.
-                        if (HasLaterRowInRange(group, row)) break;
+                        // Block entered and then exited FireRange without being destroyed → it passed through.
+                        if (block.HasEnteredFireRange) break;
                         yield return null;
                         waited += Time.deltaTime;
                     }
@@ -245,7 +245,10 @@ namespace BlockShooter
             _shootCoroutine = null;
 
             if (!IsDepleted)
+            {
+                yield return null; // defer one frame to prevent synchronous recursion
                 TryStartGroupRoutine();
+            }
         }
 
         // Returns the smallest RowIndex of this group's blocks that are currently in FireRange.
@@ -263,19 +266,6 @@ namespace BlockShooter
             return minRow < int.MaxValue ? minRow : 0;
         }
 
-        // Returns true when a row with index > currentRow from this group is already in FireRange,
-        // meaning currentRow has already passed through and should be skipped.
-        private bool HasLaterRowInRange(BlockGroup group, int currentRow)
-        {
-            if (FireRange.Instance == null) return false;
-            foreach (var b in FireRange.Instance.BlocksInRange)
-            {
-                if (b == null || b.IsDestroyed) continue;
-                if (b.RowIndex > currentRow && b.transform.IsChildOf(group.transform))
-                    return true;
-            }
-            return false;
-        }
 
         private void FireAt(ConveyorBlock3D target)
         {

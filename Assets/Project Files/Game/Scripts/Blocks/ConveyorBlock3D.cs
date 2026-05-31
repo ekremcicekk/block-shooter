@@ -18,11 +18,13 @@ namespace BlockShooter
         private bool _isDestroyed;
         private static readonly int ColorProp = Shader.PropertyToID("_BaseColor");
 
-        public BlockColorType ColorType => _colorType;
-        public bool IsDestroyed => _isDestroyed;
-        public bool IsTargeted  { get; private set; }
+        public BlockColorType ColorType      => _colorType;
+        public bool IsDestroyed              => _isDestroyed;
+        public bool IsTargeted               { get; private set; }
+        public bool HasEnteredFireRange      { get; private set; }
 
-        public void SetTargeted(bool v) => IsTargeted = v;
+        public void SetTargeted(bool v)      => IsTargeted = v;
+        public void MarkEnteredFireRange()   => HasEnteredFireRange = true;
 
         // Serialized so the Level Editor can bake row/lane into the prefab hierarchy.
         [SerializeField] private int _rowIndex;

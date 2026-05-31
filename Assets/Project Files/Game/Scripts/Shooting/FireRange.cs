@@ -32,6 +32,7 @@ namespace BlockShooter
             if (!other.TryGetComponent<ConveyorBlock3D>(out var block)) return;
             if (_blocksInRange.Contains(block)) return;
             _blocksInRange.Add(block);
+            block.MarkEnteredFireRange();
             OnBlockEntered?.Invoke(block);
             block.OnDestroyed += HandleBlockDestroyed;
         }
