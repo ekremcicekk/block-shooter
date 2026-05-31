@@ -224,11 +224,9 @@ namespace BlockShooter
                     }
                     else
                     {
-                        // e=6..9  : player-facing right wall (upper section) → skip inside gap.
-                        // e=10    : right outer wall LOWER (P10→P11) → kept even in gap,
-                        //           so the bottom edge of the opening has a visible face.
+                        // e=6..10 : entire player-facing right wall → skip inside gap.
                         // e=0..4  : back left wall → always rendered, never cut.
-                        if (openZoneEnabled && e >= 6 && e <= 9)
+                        if (openZoneEnabled && e >= 6 && e <= 10)
                         {
                             int dist = Mathf.Abs(s - gapCentre);
                             if (dist > resolution / 2) dist = resolution - dist;
@@ -238,6 +236,34 @@ namespace BlockShooter
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
+                }
+            }
+
+            // ── Gap outer face strip ──────────────────────────────────────────
+            // The entire right wall (e=6..10) is removed in the gap zone.
+            // Add a dedicated strip at x=outerX, from y=0 (belt level) to y=floorY,
+            // facing the player. This replaces e=10 but starts exactly at belt level.
+            if (openZoneEnabled)
+            {
+                float outerX = profile[11].x;   // hw + railWidth
+                float floorY = profile[11].y;   // -railHeight
+
+                int gapStripBase = verts.Count;
+                for (int s = 0; s <= resolution; s++)
+                {
+                    verts.Add(ToWorld(new Vector2(outerX, 0f),    s, wPos, wRight, wUp));
+                    verts.Add(ToWorld(new Vector2(outerX, floorY),s, wPos, wRight, wUp));
+                    uvs.Add(Vector2.zero); uvs.Add(Vector2.zero);
+                }
+                for (int s = 0; s < resolution; s++)
+                {
+                    int dist = Mathf.Abs(s - gapCentre);
+                    if (dist > resolution / 2) dist = resolution - dist;
+                    if (dist >= gapHalf) continue;
+
+                    int b = gapStripBase + s * 2;
+                    trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
+                    trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                 }
             }
 
@@ -264,19 +290,20 @@ namespace BlockShooter
             return mesh;
         }
 
-        // Flat quad cap at sample s for the gap opening.
-        // Inner top  = P6  (belt-right level, x=hw, y=0)     — "inner edge" side
-        // Outer top  = P10 (x=hw+rw, y=wa-bv)               — snaps flush to e=10 start
-        // Outer bot  = P11 (x=hw+rw, y=-rh)
-        // Inner bot  = virtual (x=hw, y=-rh)
-        // This cap stays at or just below belt level and closes from the inner edge.
+        // Flat rectangular cap at sample s, spanning exactly from belt level (y=0) to
+        // floor level (y=floorY), inner edge at x=innerX, outer edge at x=outerX.
+        // No profile contour followed — pure rectangle, never above belt level.
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            var a = ToWorld(profile[6],                                       s, wPos, wRight, wUp); // P6  inner top
-            var b = ToWorld(profile[10],                                      s, wPos, wRight, wUp); // P10 outer top
-            var c = ToWorld(profile[11],                                      s, wPos, wRight, wUp); // P11 outer bot
-            var d = ToWorld(new Vector2(profile[6].x, profile[11].y),        s, wPos, wRight, wUp); // virtual inner bot
+            float innerX = profile[6].x;    // hw  (belt-right inner edge)
+            float outerX = profile[11].x;   // hw + railWidth
+            float floorY = profile[11].y;   // -railHeight
+
+            var a = ToWorld(new Vector2(innerX, 0f),     s, wPos, wRight, wUp); // top-inner  (belt level)
+            var b = ToWorld(new Vector2(outerX, 0f),     s, wPos, wRight, wUp); // top-outer  (belt level)
+            var c = ToWorld(new Vector2(outerX, floorY), s, wPos, wRight, wUp); // bot-outer  (floor level)
+            var d = ToWorld(new Vector2(innerX, floorY), s, wPos, wRight, wUp); // bot-inner  (floor level)
 
             int bi = verts.Count;
             verts.Add(a); verts.Add(b); verts.Add(c); verts.Add(d);
