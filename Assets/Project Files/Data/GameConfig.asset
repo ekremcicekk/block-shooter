@@ -12,23 +12,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 20aa57086e8a2df4da81cf03472bc9e7, type: 3}
   m_Name: GameConfig
   m_EditorClassIdentifier: 
-  defaultShotCount: 100
   fireRate: 0.1
-  projectileSpeed: 12
-  conveyorSpeed: 2
-  columnCount: 5
-  blockSpacing: 1.1
-  gridColumns: 4
-  gridRows: 2
-  gridCellSize: 1.2
-  redColor: {r: 0.9, g: 0.2, b: 0.2, a: 1}
-  blueColor: {r: 0.2, g: 0.5, b: 0.9, a: 1}
-  greenColor: {r: 0.2, g: 0.8, b: 0.3, a: 1}
-  yellowColor: {r: 1, g: 0.85, b: 0.1, a: 1}
-  purpleColor: {r: 0.6, g: 0.2, b: 0.9, a: 1}
-  orangeColor: {r: 1, g: 0.55, b: 0.1, a: 1}
-  bombBoosterUnlockLevel: 5
-  rainbowBoosterUnlockLevel: 10
-  freezeBoosterUnlockLevel: 15
+  projectileSpeed: 18
+  redMaterial: {fileID: 2100000, guid: 33257ab040a58eb4bbcd20bc6f183a1a, type: 2}
+  blueMaterial: {fileID: 2100000, guid: 34378ae5269e41041a904673f4f0bc67, type: 2}
+  greenMaterial: {fileID: 2100000, guid: 18f9dd7617a8de54da7342ef6fbf37bf, type: 2}
+  yellowMaterial: {fileID: 2100000, guid: 87ec0a7fff5e49e41943f6b095027aa2, type: 2}
+  purpleMaterial: {fileID: 2100000, guid: 5f01a1d54c8fb42439ca9cd73d3a7ec0, type: 2}
+  orangeMaterial: {fileID: 2100000, guid: 25b93ace3fb5c344bb38ab9de0136cd7, type: 2}
+  extraSlotUnlockLevel: 1
+  freePickUnlockLevel: 3
+  colorBlastUnlockLevel: 5
   scorePerBlock: 10
   scoreComboMultiplier: 2

@@ -1582,7 +1582,7 @@ namespace BlockShooter.Editor
             // Track mesh — ConveyorTrackMeshBuilder (RequireComponent auto-adds MeshFilter + MeshRenderer)
             var meshBuilder = trackGo.AddComponent<ConveyorTrackMeshBuilder>();
             meshBuilder.beltHalfWidth = 0.45f;
-            meshBuilder.wallAboveBelt = 0.18f;
+            meshBuilder.wallAboveBelt = 0.3f;
             meshBuilder.railHeight    = 1f;
             meshBuilder.railWidth     = 0.1f;
             meshBuilder.bevelSize     = 0.02f;
