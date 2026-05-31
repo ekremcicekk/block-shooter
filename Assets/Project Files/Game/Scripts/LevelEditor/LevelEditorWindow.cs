@@ -521,14 +521,6 @@ namespace BlockShooter.Editor
             // Safe area guide
             if (_showSafeArea) DrawSafeAreaGuide();
 
-            // FireRange guide box (red)
-            float frWidth = _cfg.gridCellSize * Mathf.Max(_gridCols, 4) + 2f;
-            Handles.color = new Color(1f, .25f, .25f, .5f);
-            Handles.DrawWireCube(new Vector3(0f, .5f, FIRE_Z), new Vector3(frWidth, 1.5f, 3f));
-            Handles.color = new Color(1f, .25f, .25f, .2f);
-            var fc = GetWireCubeVerts(new Vector3(0, 0.01f, FIRE_Z), new Vector3(frWidth, 0, 3f));
-            Handles.DrawSolidRectangleWithOutline(fc, new Color(1f,.25f,.25f,.08f), Color.clear);
-
             // Slot indicators (yellow)
             int slots = _cfg.slotCount;
             float tw = (slots - 1) * cs;
