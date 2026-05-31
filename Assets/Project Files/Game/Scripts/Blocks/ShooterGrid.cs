@@ -150,13 +150,13 @@ namespace BlockShooter
         {
             if (shooterBlockPrefab == null) return;
 
-            float cellSize = _config != null ? _config.gridCellSize : 1.2f;
+            const float cellSize = 1.2f;
             Vector3 origin = transform.position;
             int col = Mathf.RoundToInt((position.x - origin.x) / cellSize);
             int row = Mathf.RoundToInt((position.z - origin.z) / cellSize);
 
             ShooterBlock block = Instantiate(shooterBlockPrefab, position, Quaternion.identity, transform);
-            block.Initialize(colorType, _config != null ? _config.defaultShotCount : 3, col, row);
+            block.Initialize(colorType, 100, col, row);
             RegisterBlock(block);
             RefreshColumnAccessibility(col);
 

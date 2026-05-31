@@ -6,14 +6,10 @@ namespace BlockShooter
     public class GameConfig : ScriptableObject
     {
         [Header("Block Settings")]
-        public int defaultShotCount = 100;
         public float fireRate = 0.15f;
         public float projectileSpeed = 12f;
 
-        [Header("Grid Settings")]
-        public float gridCellSize = 1.2f;
-
-        [Header("Block Materials")]
+[Header("Block Materials")]
         public Material redMaterial;
         public Material blueMaterial;
         public Material greenMaterial;
