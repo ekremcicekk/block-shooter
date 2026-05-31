@@ -52,14 +52,23 @@ namespace BlockShooter
 
         public void Initialize(BlockColorType colorType, Color color)
         {
-            _colorType = colorType;
+            _colorType   = colorType;
             _isDestroyed = false;
 
             if (blockRenderer != null)
             {
-                var mpb = new MaterialPropertyBlock();
-                mpb.SetColor(ColorProp, color);
-                blockRenderer.SetPropertyBlock(mpb);
+                var mat = GameManager.Instance?.config?.GetMaterial(colorType);
+                if (mat != null)
+                {
+                    blockRenderer.sharedMaterial = mat;
+                    blockRenderer.SetPropertyBlock(null);
+                }
+                else
+                {
+                    var mpb = new MaterialPropertyBlock();
+                    mpb.SetColor(ColorProp, color);
+                    blockRenderer.SetPropertyBlock(mpb);
+                }
             }
         }
 
