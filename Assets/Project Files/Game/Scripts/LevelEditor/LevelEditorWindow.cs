@@ -21,7 +21,7 @@ namespace BlockShooter.Editor
         private const int   MaxRows  = 6;
 
         // FireRange world Z — all splines pass through this point
-        private const float FIRE_Z = 1.5f;
+        private const float FIRE_Z = 1f;
 
         // ── Config ────────────────────────────────────────────────────────────
         private LevelEditorConfig _cfg;
