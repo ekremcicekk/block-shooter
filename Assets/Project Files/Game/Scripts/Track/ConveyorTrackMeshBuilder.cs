@@ -264,13 +264,29 @@ namespace BlockShooter
             return mesh;
         }
 
-        // Flat cap at sample s covering the removed upper right wall section (P6..P10).
-        // e=10 (P10→P11) is still rendered so no cap needed at the very bottom.
-        // The back left wall is never cut so it needs no cap.
+        // Flat quad cap at sample s for the gap opening.
+        // Inner top  = P6  (belt-right level, x=hw, y=0)     — "inner edge" side
+        // Outer top  = P10 (x=hw+rw, y=wa-bv)               — snaps flush to e=10 start
+        // Outer bot  = P11 (x=hw+rw, y=-rh)
+        // Inner bot  = virtual (x=hw, y=-rh)
+        // This cap stays at or just below belt level and closes from the inner edge.
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 6, 10);
+            var a = ToWorld(profile[6],                                       s, wPos, wRight, wUp); // P6  inner top
+            var b = ToWorld(profile[10],                                      s, wPos, wRight, wUp); // P10 outer top
+            var c = ToWorld(profile[11],                                      s, wPos, wRight, wUp); // P11 outer bot
+            var d = ToWorld(new Vector2(profile[6].x, profile[11].y),        s, wPos, wRight, wUp); // virtual inner bot
+
+            int bi = verts.Count;
+            verts.Add(a); verts.Add(b); verts.Add(c); verts.Add(d);
+            uvs.Add(Vector2.zero); uvs.Add(Vector2.zero);
+            uvs.Add(Vector2.zero); uvs.Add(Vector2.zero);
+
+            trisWall.Add(bi);   trisWall.Add(bi+1); trisWall.Add(bi+2);
+            trisWall.Add(bi);   trisWall.Add(bi+2); trisWall.Add(bi+3);
+            trisWall.Add(bi);   trisWall.Add(bi+2); trisWall.Add(bi+1); // double-sided
+            trisWall.Add(bi);   trisWall.Add(bi+3); trisWall.Add(bi+2);
         }
 
         // Fan-triangulated flat polygon at sample s, double-sided, for profile[pStart..pEnd].
