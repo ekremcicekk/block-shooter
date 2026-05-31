@@ -54,12 +54,11 @@ namespace BlockShooter
         public float vTiling = 8f;
 
         [Header("Open Zone (FireRange)")]
-        [Tooltip("Skip wall triangles near Z = openZoneCenter so the track appears open at the shooting area")]
-        public bool  openZoneEnabled    = true;
-        [Tooltip("Local-space Z center of the open zone (should match FIRE_Z = 0)")]
-        public float openZoneCenter     = 0f;
-        [Tooltip("Half-length of the wall-free zone along Z")]
-        public float openZoneHalfLength = 2f;
+        [Tooltip("Skip wall triangles near the spline seam (T=0) so the track is open at the shooting area")]
+        public bool  openZoneEnabled = true;
+        [Tooltip("Fraction of spline (0–1) kept open on each side of T=0. E.g. 0.04 = 4% per side")]
+        [Range(0f, 0.25f)]
+        public float openZoneHalfT   = 0.04f;
 
         // ── Private ───────────────────────────────────────────────────────────
         private SplineContainer _spline;
@@ -155,93 +154,133 @@ namespace BlockShooter
         private Mesh Sweep()
         {
             Vector2[] profile = BuildProfile();
-            int pCount    = profile.Length;   // 12 vertices (open profile)
-            int edgeCount = pCount - 1;       // 11 edges — skip closing edge → no bottom face
+            int pCount    = profile.Length;
+            int edgeCount = pCount - 1;
             int sCount    = resolution + 1;
 
-            // ── Step 1: sample spline frames ──────────────────────────────────
             var wPos   = new Vector3[sCount];
             var wRight = new Vector3[sCount];
             var wUp    = new Vector3[sCount];
             SampleFrames(sCount, wPos, wRight, wUp);
 
-            // ── Step 2: compute UV coordinates ───────────────────────────────
             float[] perimU  = ComputeProfilePerimU(profile);
             float[] splineV = ComputeSplineV(wPos, sCount);
 
-            // ── Step 3: allocate buffers ──────────────────────────────────────
-            // Per edge strip: 2 verts/ring × sCount rings
-            // Two submeshes: submesh 0 = wall faces, submesh 1 = belt face (P5→P6)
-            const int beltEdge = 5;   // index of the P5→P6 belt edge in the profile
-            int totalVerts     = edgeCount * 2 * sCount;
-            int beltTriCount   = resolution * 6;
+            const int beltEdge     = 5;
+            int       sweepVCount  = edgeCount * 2 * sCount;
 
-            var verts    = new Vector3[totalVerts];
-            var uvs      = new Vector2[totalVerts];
-            var trisWall = new List<int>(capacity: (edgeCount - 1) * resolution * 6);
-            var trisBelt = new int[beltTriCount];
-            int tiBelt   = 0;
+            var verts    = new List<Vector3>(sweepVCount + 64);
+            var uvs      = new List<Vector2>(sweepVCount + 64);
+            var trisWall = new List<int>((edgeCount - 1) * resolution * 6 + 96);
+            var trisBelt = new List<int>(resolution * 6);
 
-            // ── Step 4: fill vertices + UVs, build triangles ──────────────────
+            // ── Sweep vertices ────────────────────────────────────────────────
             for (int e = 0; e < edgeCount; e++)
             {
-                Vector2 pa = profile[e];
-                Vector2 pb = profile[e + 1];   // no modulo — open profile
-
-                float uA = perimU[e];
-                float uB = perimU[e + 1];
-
-                int stripBase = e * 2 * sCount;
-                bool isBelt   = (e == beltEdge);
+                Vector2 pa = profile[e], pb = profile[e + 1];
+                float uA = perimU[e], uB = perimU[e + 1];
 
                 for (int s = 0; s < sCount; s++)
                 {
-                    int vi = stripBase + s * 2;
-                    verts[vi    ] = ToWorld(pa, s, wPos, wRight, wUp);
-                    verts[vi + 1] = ToWorld(pb, s, wPos, wRight, wUp);
+                    verts.Add(ToWorld(pa, s, wPos, wRight, wUp));
+                    verts.Add(ToWorld(pb, s, wPos, wRight, wUp));
                     float v = splineV[s];
-                    uvs[vi    ] = new Vector2(uA, v);
-                    uvs[vi + 1] = new Vector2(uB, v);
+                    uvs.Add(new Vector2(uA, v));
+                    uvs.Add(new Vector2(uB, v));
                 }
+            }
+
+            // ── Triangles + open-zone detection ───────────────────────────────
+            // T-based check: gap spans T∈[0, halfT] ∪ [1-halfT, 1] — the spline seam
+            // (T=0 and T=1 are the same point). This guarantees ONE clean front gap.
+            int s_capFirst = -1, s_capLast = -1;
+
+            for (int e = 0; e < edgeCount; e++)
+            {
+                int stripBase = e * 2 * sCount;
+                bool isBelt   = (e == beltEdge);
 
                 for (int s = 0; s < resolution; s++)
                 {
                     int b = stripBase + s * 2;
-                    // Winding (A,C,B)+(B,C,D) → outward normals for CCW profile
+
                     if (isBelt)
                     {
-                        trisBelt[tiBelt++] = b;   trisBelt[tiBelt++] = b+2; trisBelt[tiBelt++] = b+1;
-                        trisBelt[tiBelt++] = b+1; trisBelt[tiBelt++] = b+2; trisBelt[tiBelt++] = b+3;
+                        trisBelt.Add(b);   trisBelt.Add(b+2); trisBelt.Add(b+1);
+                        trisBelt.Add(b+1); trisBelt.Add(b+2); trisBelt.Add(b+3);
                     }
                     else
                     {
-                        // Skip wall triangles inside the open zone
                         if (openZoneEnabled)
                         {
-                            float midZ = (wPos[s].z + wPos[s + 1].z) * 0.5f;
-                            if (Mathf.Abs(midZ - openZoneCenter) < openZoneHalfLength)
-                                continue;
+                            float midT = (s + 0.5f) / resolution;
+                            bool  inGap = midT < openZoneHalfT || midT > (1f - openZoneHalfT);
+
+                            if (e == 0)
+                            {
+                                if (!inGap) { if (s_capFirst < 0) s_capFirst = s; s_capLast = s; }
+                            }
+
+                            if (inGap) continue;
                         }
+
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
                 }
             }
 
-            // ── Step 5: assemble mesh ─────────────────────────────────────────
+            // ── Cap faces at gap edges (closes hollow wall cross-section) ──────
+            if (openZoneEnabled && s_capFirst >= 0)
+            {
+                AddWallCap(profile, wPos, wRight, wUp, verts, uvs, trisWall, s_capFirst);
+                AddWallCap(profile, wPos, wRight, wUp, verts, uvs, trisWall, (s_capLast + 1) % resolution);
+            }
+
+            // ── Assemble mesh ─────────────────────────────────────────────────
             var mesh = new Mesh
             {
                 name        = "ConveyorTrack_Swept",
                 indexFormat = UnityEngine.Rendering.IndexFormat.UInt32,
             };
-            mesh.vertices     = verts;
-            mesh.uv           = uvs;
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
             mesh.subMeshCount = 2;
-            mesh.SetTriangles(trisWall, 0);  // Material slot 0 — walls
-            mesh.SetTriangles(trisBelt, 1);   // Material slot 1 — belt surface
+            mesh.SetTriangles(trisWall, 0);
+            mesh.SetTriangles(trisBelt, 1);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
+            List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
+        {
+            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 0, 4);   // left wall P0..P4
+            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 7, 11);  // right wall P7..P11
+        }
+
+        // Adds a flat cap polygon (fan-triangulated, double-sided) that closes the
+        // hollow wall cross-section at sample s.
+        private static void AddCapPolygon(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
+            List<Vector3> verts, List<Vector2> uvs, List<int> trisWall,
+            int s, int pStart, int pEnd)
+        {
+            int count   = pEnd - pStart + 1;
+            int baseIdx = verts.Count;
+
+            for (int i = pStart; i <= pEnd; i++)
+            {
+                verts.Add(ToWorld(profile[i], s, wPos, wRight, wUp));
+                uvs.Add(new Vector2(0.5f, 0.5f));
+            }
+
+            for (int i = 1; i < count - 1; i++)
+            {
+                int a = baseIdx, b = baseIdx + i, c = baseIdx + i + 1;
+                trisWall.Add(a); trisWall.Add(b); trisWall.Add(c); // front
+                trisWall.Add(a); trisWall.Add(c); trisWall.Add(b); // back (double-sided)
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────────
