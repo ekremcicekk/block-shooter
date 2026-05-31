@@ -194,18 +194,12 @@ namespace BlockShooter
             }
 
             // ── Gap centre detection ──────────────────────────────────────────
-            // Find the segment with minimum world-Z — that is always the FireRange
-            // front of the track regardless of where T=0 falls in the spline.
-            int   gapCentre = 0;
-            float minZ      = float.MaxValue;
-            for (int s = 0; s < resolution; s++)
-            {
-                float z = (wPos[s].z + wPos[s + 1].z) * 0.5f;
-                if (z < minZ) { minZ = z; gapCentre = s; }
-            }
+            // T=0 on the spline is always placed at the FireRange by the level editor.
+            // s=0 corresponds to T=0, so we centre the gap there directly.
+            int gapCentre  = 0;
             int gapHalf    = Mathf.Max(1, Mathf.RoundToInt(openZoneHalfT * resolution));
-            int s_capFirst = ((gapCentre + gapHalf)          % resolution + resolution) % resolution;
-            int s_capB     = ((gapCentre - gapHalf)          % resolution + resolution) % resolution;
+            int s_capFirst = gapHalf % resolution;
+            int s_capB     = (resolution - gapHalf) % resolution;
 
             // ── Triangles ─────────────────────────────────────────────────────
             for (int e = 0; e < edgeCount; e++)
@@ -225,15 +219,16 @@ namespace BlockShooter
                     }
                     else if (isFloor)
                     {
-                        // Floor closing edge always rendered — track underside is never visible
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
                     else
                     {
-                        // Edges 6–10 = player-facing right outer wall → skip inside gap zone.
-                        // Edges 0–4 = back left wall → always rendered, never cut.
-                        if (openZoneEnabled && e >= 6 && e <= 10)
+                        // e=6..9  : player-facing right wall (upper section) → skip inside gap.
+                        // e=10    : right outer wall LOWER (P10→P11) → kept even in gap,
+                        //           so the bottom edge of the opening has a visible face.
+                        // e=0..4  : back left wall → always rendered, never cut.
+                        if (openZoneEnabled && e >= 6 && e <= 9)
                         {
                             int dist = Mathf.Abs(s - gapCentre);
                             if (dist > resolution / 2) dist = resolution - dist;
@@ -269,12 +264,13 @@ namespace BlockShooter
             return mesh;
         }
 
-        // Flat cap at sample s covering only the player-facing right wall (P6..P11).
+        // Flat cap at sample s covering the removed upper right wall section (P6..P10).
+        // e=10 (P10→P11) is still rendered so no cap needed at the very bottom.
         // The back left wall is never cut so it needs no cap.
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 6, 11);
+            AddCapPolygon(profile, wPos, wRight, wUp, verts, uvs, trisWall, s, 6, 10);
         }
 
         // Fan-triangulated flat polygon at sample s, double-sided, for profile[pStart..pEnd].
