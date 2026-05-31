@@ -62,6 +62,7 @@ namespace BlockShooter.Editor
         private bool         _addKnotMode   = false;
         private int          _selKnot       = -1;
         private GameObject   _previewGo     = null; // lightweight spline preview only
+        private GameObject   _levelPreviewGo = null; // scene preview of selected level prefab
 
         // Spline edit cancel backup (restored when user presses ✕)
         private List<Vector3>     _splineEditBackupKnots  = null;
@@ -120,6 +121,7 @@ namespace BlockShooter.Editor
         {
             SceneView.duringSceneGui -= OnSceneGUI;
             DestroyPreview();
+            DestroyLevelPreview();
         }
 
         // ── Load config ───────────────────────────────────────────────────────
@@ -402,6 +404,7 @@ namespace BlockShooter.Editor
             _selKnot       = -1;
             _addKnotMode   = false;
 
+            DestroyLevelPreview(); // hide mesh preview while editing knots
             DestroyPreview();
 
             // Lightweight preview: just a Track GO with SplineContainer
@@ -447,6 +450,39 @@ namespace BlockShooter.Editor
             {
                 DestroyImmediate(_previewGo);
                 _previewGo = null;
+            }
+        }
+
+        private void ShowLevelPreview(string path)
+        {
+            DestroyLevelPreview();
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) return;
+
+            _levelPreviewGo = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            if (_levelPreviewGo == null) return;
+            _levelPreviewGo.name = "[LevelPreview]";
+            _levelPreviewGo.hideFlags = HideFlags.DontSave | HideFlags.NotEditable;
+            foreach (Transform t in _levelPreviewGo.GetComponentsInChildren<Transform>(true))
+                t.gameObject.hideFlags = HideFlags.DontSave | HideFlags.NotEditable;
+
+            // Frame the track in scene view
+            var sv = SceneView.lastActiveSceneView;
+            if (sv != null)
+            {
+                Selection.activeGameObject = _levelPreviewGo;
+                sv.FrameSelected();
+                Selection.activeGameObject = null;
+            }
+            SceneView.RepaintAll();
+        }
+
+        private void DestroyLevelPreview()
+        {
+            if (_levelPreviewGo != null)
+            {
+                DestroyImmediate(_levelPreviewGo);
+                _levelPreviewGo = null;
             }
         }
 
@@ -780,38 +816,44 @@ namespace BlockShooter.Editor
         private void CopySplineFrom(string srcPath)
         {
             var go = AssetDatabase.LoadAssetAtPath<GameObject>(srcPath);
-            if (go == null) return;
-
-            List<Vector3> newKnots = null;
+            if (go == null)
+            {
+                Debug.LogWarning("[LevelEditor] CopySplineFrom: prefab not found");
+                return;
+            }
 
             var lr = go.GetComponent<LevelRoot>();
-            if (lr != null && lr.splineKnots.Count >= 3)
+            if (lr == null || lr.splineKnots.Count < 3)
             {
-                newKnots = new List<Vector3>(lr.splineKnots);
-            }
-            else
-            {
-                var sc = go.GetComponentInChildren<SplineContainer>();
-                if (sc == null) return;
-                newKnots = new List<Vector3>();
-                var xform = sc.transform;
-                foreach (var k in sc.Spline)
-                    newKnots.Add(xform.TransformPoint(k.Position));
+                Debug.LogWarning($"[LevelEditor] CopySplineFrom: no spline data saved in {srcPath}. Save the source level first.");
+                return;
             }
 
-            if (newKnots == null || newKnots.Count < 3) return;
+            int n = lr.splineKnots.Count;
 
-            // Shift front knot to FIRE_Z
-            float minZ = newKnots.Min(v => v.z);
-            float offset = FIRE_Z - minZ;
-            for (int i = 0; i < newKnots.Count; i++)
-                newKnots[i] = new Vector3(newKnots[i].x, 0f, newKnots[i].z + offset);
+            var newKnots  = new List<Vector3>(lr.splineKnots);
 
-            // Lock anchor Z exactly
-            if (newKnots.Count > 0)
-                newKnots[0] = new Vector3(newKnots[0].x, 0f, FIRE_Z);
+            // Copy tangents — fall back to zeroes if lists are mismatched (legacy prefab)
+            var newTanIn  = lr.splineTangentsIn.Count  == n
+                ? new List<Vector3>(lr.splineTangentsIn)
+                : new List<Vector3>(new Vector3[n]);
+            var newTanOut = lr.splineTangentsOut.Count == n
+                ? new List<Vector3>(lr.splineTangentsOut)
+                : new List<Vector3>(new Vector3[n]);
+            var newModes  = lr.splineTangentModes.Count == n
+                ? lr.splineTangentModes.Select(m => (TangentMode)m).ToList()
+                : Enumerable.Repeat(TangentMode.AutoSmooth, n).ToList();
 
-            _knots = newKnots;
+            // Shift all knots so knot[0] aligns to FIRE_Z (knot 0 is always the FireRange anchor)
+            float zOffset = FIRE_Z - newKnots[0].z;
+            for (int i = 0; i < n; i++)
+                newKnots[i] = new Vector3(newKnots[i].x, 0f, newKnots[i].z + zOffset);
+            newKnots[0] = new Vector3(newKnots[0].x, 0f, FIRE_Z); // exact lock
+
+            _knots        = newKnots;
+            _tangentsIn   = newTanIn;
+            _tangentsOut  = newTanOut;
+            _tangentModes = newModes;
             EnsureTangentLists();
             SyncPreviewSpline();
             SceneView.RepaintAll();
@@ -970,7 +1012,6 @@ namespace BlockShooter.Editor
                         : col.ToString().Substring(0, 3).ToUpper();
             string lbl2 = t == GridCellType.Empty ? ""
                         : t == GridCellType.Door   ? $"×{_doors[c,r]}"
-                        : _shots[c,r] < 0 ? $"×{_cfg?.defaultShots ?? 100}"
                         : $"×{_shots[c,r]}";
 
             Rect outer = GUILayoutUtility.GetRect(
@@ -1193,7 +1234,7 @@ namespace BlockShooter.Editor
 
                 // Shot count — IntField only, no toggle/slider
                 GUILayout.Label("Shot Count:", EditorStyles.miniLabel);
-                int displayVal = _shots[c, r] < 0 ? (_cfg?.defaultShots ?? 100) : _shots[c, r];
+                int displayVal = _shots[c, r] <= 0 ? 100 : _shots[c, r];
                 int newVal = EditorGUILayout.IntField(displayVal);
                 _shots[c, r] = Mathf.Max(1, newVal);
 
@@ -1263,6 +1304,8 @@ namespace BlockShooter.Editor
         // ═════════════════════════════════════════════════════════════════════
         private void NewLevel()
         {
+            if (_cfg == null) return;
+
             int maxIdx = 0;
             foreach (var lbl in _labels)
             {
@@ -1275,12 +1318,32 @@ namespace BlockShooter.Editor
             _goalAmount = 0;
             _gridCols   = 4; _gridRows = 2;
             _splinePreset = 0; _splineWidth = 3.5f; _splineDepth = 5f;
-            _activeIdx  = -1; _selC = -1; _selR = -1; _selKnot = -1;
+            _selC = -1; _selR = -1; _selKnot = -1;
             StopSplineEdit(save: false);
+            DestroyLevelPreview();
             InitGrid();
             _groups.Clear(); DefaultGroups();
-            _tangentsIn.Clear(); _tangentsOut.Clear(); _tangentModes.Clear();
-            ApplyPreset(); // calls EnsureTangentLists internally
+            _knots.Clear(); _tangentsIn.Clear(); _tangentsOut.Clear(); _tangentModes.Clear();
+            ApplyPreset();
+
+            // Create a minimal placeholder prefab so it appears in the list immediately.
+            // "Save Prefab" will later rebuild it with the full hierarchy.
+            string dir  = _cfg.levelSavePath.TrimEnd('/');
+            string name = $"Level_{_levelIndex:000}";
+            string path = dir + "/" + name + ".prefab";
+            EnsureDir(dir);
+
+            var stub = new GameObject(name);
+            var lr   = stub.AddComponent<LevelRoot>();
+            lr.levelIndex = _levelIndex;
+            lr.levelName  = _levelName;
+            PrefabUtility.SaveAsPrefabAsset(stub, path);
+            DestroyImmediate(stub);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            RefreshList();
+
+            _activeIdx = _paths.IndexOf(path);
             Repaint();
         }
 
@@ -1292,6 +1355,7 @@ namespace BlockShooter.Editor
             if (lr == null) return;
 
             StopSplineEdit(save: false);
+            DestroyLevelPreview();
 
             _levelIndex   = lr.levelIndex;
             _levelName    = lr.levelName;
@@ -1309,7 +1373,8 @@ namespace BlockShooter.Editor
                 if (cell.col >= _gridCols || cell.row >= _gridRows) continue;
                 _type [cell.col, cell.row] = cell.type;
                 _color[cell.col, cell.row] = cell.color;
-                _shots[cell.col, cell.row] = cell.shotCount;
+                // -1 is the legacy "use default" sentinel → convert to explicit 100
+                _shots[cell.col, cell.row] = cell.shotCount <= 0 ? 100 : cell.shotCount;
                 _doors[cell.col, cell.row] = cell.doorCount;
             }
 
@@ -1320,9 +1385,15 @@ namespace BlockShooter.Editor
             if (lr.splineKnots.Count >= 3)
             {
                 _knots = new List<Vector3>(lr.splineKnots);
-                _tangentsIn   = new List<Vector3>(lr.splineTangentsIn);
-                _tangentsOut  = new List<Vector3>(lr.splineTangentsOut);
-                _tangentModes = lr.splineTangentModes.Select(m => (TangentMode)m).ToList();
+                _tangentsIn   = lr.splineTangentsIn.Count == lr.splineKnots.Count
+                    ? new List<Vector3>(lr.splineTangentsIn)
+                    : new List<Vector3>(new Vector3[lr.splineKnots.Count]);
+                _tangentsOut  = lr.splineTangentsOut.Count == lr.splineKnots.Count
+                    ? new List<Vector3>(lr.splineTangentsOut)
+                    : new List<Vector3>(new Vector3[lr.splineKnots.Count]);
+                _tangentModes = lr.splineTangentModes.Count == lr.splineKnots.Count
+                    ? lr.splineTangentModes.Select(m => (TangentMode)m).ToList()
+                    : Enumerable.Repeat(TangentMode.AutoSmooth, lr.splineKnots.Count).ToList();
             }
             else
             {
@@ -1331,6 +1402,9 @@ namespace BlockShooter.Editor
             EnsureTangentLists();
 
             _selC = -1; _selR = -1; _selKnot = -1;
+
+            // Show the saved prefab mesh in the scene view
+            ShowLevelPreview(_paths[idx]);
             Repaint();
         }
 
@@ -1440,6 +1514,7 @@ namespace BlockShooter.Editor
             {
                 _activeIdx = _paths.IndexOf(path);
                 Debug.Log($"[LevelEditor] Saved: {path}");
+                ShowLevelPreview(path);
             }
             else Debug.LogError($"[LevelEditor] Failed: {path}");
         }
@@ -1603,7 +1678,7 @@ namespace BlockShooter.Editor
                     {
                         var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.shooterBlockPrefab, sgGo.transform);
                         go.name = nm; go.transform.localPosition = pos;
-                        int sh = _shots[c,r] >= 0 ? _shots[c,r] : _cfg.defaultShots;
+                        int sh = Mathf.Max(1, _shots[c,r]);
                         var sb = go.GetComponent<ShooterBlock>();
                         sb?.EditorSetup(_color[c,r], sh, c, r);
                         // Apply material directly so prefab shows colors in editor
@@ -1723,7 +1798,7 @@ namespace BlockShooter.Editor
             _doors = new int           [_gridCols, _gridRows];
             for (int c=0;c<_gridCols;c++) for (int r=0;r<_gridRows;r++)
             {
-                _shots[c,r]=-1; _doors[c,r]=5;
+                _shots[c,r]=100; _doors[c,r]=5;
                 if (pt==null||c>=pt.GetLength(0)||r>=pt.GetLength(1)) continue;
                 _type[c,r]=pt[c,r]; _color[c,r]=pc[c,r]; _shots[c,r]=ps[c,r]; _doors[c,r]=pd[c,r];
             }
