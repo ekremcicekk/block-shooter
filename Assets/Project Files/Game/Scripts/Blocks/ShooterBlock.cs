@@ -2,8 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Splines;
-using Unity.Mathematics;
 using TMPro;
 using DG.Tweening;
 
@@ -50,13 +48,6 @@ namespace BlockShooter
         private bool    _isAccessible;
         private bool    _isShooting;
         private Coroutine _shootCoroutine;
-
-        // Cached conveyor direction at the fire range — updated each wave.
-        // Blocks with LOWER dot product are closest to the fire-range entry (just entered).
-        private Vector3 _conveyorForward = Vector3.forward;
-
-        // World-unit gap that separates two different rows in the _conveyorForward projection.
-        private const float RowGroupThreshold = 0.1f;
 
         private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
@@ -205,41 +196,35 @@ namespace BlockShooter
 
         private IEnumerator ShootRoutine()
         {
-            // laneDelay : stagger between individual shots within the same row
-            // rowDelay  : gap between rows — this IS the Mexican-wave visual
-            const float laneDelay = 0.04f;
-            const float rowDelay  = 0.08f;
+            const float laneDelay = 0.04f; // stagger between lanes within a row
+            const float rowDelay  = 0.08f; // gap between rows — the Mexican-wave timing
 
             while (!IsDepleted)
             {
-                var targets = GetVolleyTargets(); // also refreshes _conveyorForward
+                var targets = GetVolleyTargets();
                 if (targets.Count == 0) break;
 
-                float lastDot  = float.NaN;
-                bool  firedAny = false;
+                int  lastRow   = -1;
+                bool firedAny  = false;
 
                 foreach (var t in targets)
                 {
                     if (IsDepleted) break;
                     if (t == null || t.IsDestroyed || t.IsTargeted) continue;
 
-                    float dot = Vector3.Dot(t.transform.position, _conveyorForward);
-
-                    if (!float.IsNaN(lastDot))
+                    if (lastRow >= 0)
                     {
-                        // Decide delay: large dot gap → new row (bigger pause), else within-row stagger
-                        bool newRow = Mathf.Abs(dot - lastDot) > RowGroupThreshold;
+                        bool newRow = t.RowIndex != lastRow;
                         yield return new WaitForSeconds(newRow ? rowDelay : laneDelay);
                     }
 
-                    lastDot = dot;
+                    lastRow = t.RowIndex;
                     FireAt(t);
                     firedAny = true;
                 }
 
                 if (!firedAny) break;
 
-                // Brief pause before re-scanning for newly entered blocks
                 yield return new WaitForSeconds(rowDelay);
             }
 
@@ -247,23 +232,14 @@ namespace BlockShooter
             _shootCoroutine = null;
         }
 
-        // Returns matching, un-targeted blocks currently inside the fire range.
-        // Order: ascending dot with conveyor forward = rows nearest to fire-range ENTRY first
-        //        (wave travels outward from shooter toward far end of range).
-        // Within the same row: reversed LaneIndex so wave sweeps right→left (or left→right
-        //        depending on track orientation — flip b/a to invert).
+        // Returns matching, un-targeted blocks currently in fire range.
+        // Order: Row_0 first (ascending RowIndex), Block_0 first within each row (ascending LaneIndex).
         private List<ConveyorBlock3D> GetVolleyTargets()
         {
             var list = new List<ConveyorBlock3D>();
             if (FireRange.Instance == null) return list;
 
-            var inRange = new HashSet<ConveyorBlock3D>(FireRange.Instance.BlocksInRange);
-            if (inRange.Count == 0) return list;
-
-            // Refresh the cached conveyor forward so curved-path levels sort correctly
-            _conveyorForward = ComputeConveyorForward();
-
-            foreach (var b in inRange)
+            foreach (var b in FireRange.Instance.BlocksInRange)
             {
                 if (b == null || b.IsDestroyed || b.IsTargeted) continue;
                 if (!_isRainbowMode && b.ColorType != _colorType) continue;
@@ -274,36 +250,12 @@ namespace BlockShooter
 
             list.Sort((a, b) =>
             {
-                float da = Vector3.Dot(a.transform.position, _conveyorForward);
-                float db = Vector3.Dot(b.transform.position, _conveyorForward);
-                // Different rows → descending dot: Row_0 (deepest = first entered) comes first,
-                // Row_N (shallowest = just entered) comes last.
-                if (Mathf.Abs(da - db) > RowGroupThreshold) return db.CompareTo(da);
-                // Same row → descending LaneIndex: Block_4 → Block_0 lateral wave.
-                return b.LaneIndex.CompareTo(a.LaneIndex);
+                int rowCmp = a.RowIndex.CompareTo(b.RowIndex); // Row_0 first
+                if (rowCmp != 0) return rowCmp;
+                return a.LaneIndex.CompareTo(b.LaneIndex);     // Block_0 first within row
             });
 
             return list;
-        }
-
-        // Evaluates the spline tangent at the fire range center to get the conveyor's
-        // movement direction. This is reliable on curved paths; falls back to Vector3.forward.
-        private Vector3 ComputeConveyorForward()
-        {
-            var cc = ConveyorController.Instance;
-            if (cc?.SplineContainer == null || FireRange.Instance == null)
-                return Vector3.forward;
-
-            var     spline   = cc.SplineContainer.Spline;
-            Vector3 localV3  = cc.transform.InverseTransformPoint(FireRange.Instance.transform.position);
-            float3  localPos = new float3(localV3.x, localV3.y, localV3.z);
-
-            SplineUtility.GetNearestPoint(spline, localPos, out _, out float nearestT);
-            spline.Evaluate(nearestT, out _, out var tangent, out _);
-
-            Vector3 fwd = cc.transform.TransformDirection((Vector3)tangent).normalized;
-            // Guard against degenerate spline evaluation
-            return fwd.sqrMagnitude > 0.001f ? fwd : Vector3.forward;
         }
 
         private void FireAt(ConveyorBlock3D target)

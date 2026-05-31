@@ -49,9 +49,10 @@ namespace BlockShooter
             if (_blocksInRange.Remove(block))
             {
                 block.OnDestroyed -= HandleBlockDestroyed;
-                // Clear the targeting claim so shooters can re-target this block
-                // if it re-enters the fire range or if a projectile failed to land.
-                block.SetTargeted(false);
+                // Do NOT clear IsTargeted here. If a projectile is already in flight toward
+                // this block, clearing the flag would let another shooter re-target the same
+                // block, causing a wasted shot when the first projectile destroys it first.
+                // The in-flight projectile's ReturnToPool() clears IsTargeted if it misses.
                 OnBlockExited?.Invoke(block);
             }
         }
