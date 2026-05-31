@@ -193,19 +193,26 @@ namespace BlockShooter
                 }
             }
 
-            // ── Triangles ─────────────────────────────────────────────────────
-            // Belt (e=5) and floor (e=11) always rendered.
-            // All other edges (outer/inner walls) skipped inside the open zone.
-            // T-based: gap = T∈[0,halfT]∪[1-halfT,1] — the spline seam (T=0=T=1 = knot[0]
-            // = FIRE_Z front). Back (T≈0.5) is never affected.
-            int s_capFirst = -1, s_capLast = -1;
+            // ── Gap centre detection ──────────────────────────────────────────
+            // Find the segment with minimum world-Z — that is always the FireRange
+            // front of the track regardless of where T=0 falls in the spline.
+            int   gapCentre = 0;
+            float minZ      = float.MaxValue;
+            for (int s = 0; s < resolution; s++)
+            {
+                float z = (wPos[s].z + wPos[s + 1].z) * 0.5f;
+                if (z < minZ) { minZ = z; gapCentre = s; }
+            }
+            int gapHalf    = Mathf.Max(1, Mathf.RoundToInt(openZoneHalfT * resolution));
+            int s_capFirst = ((gapCentre + gapHalf)          % resolution + resolution) % resolution;
+            int s_capB     = ((gapCentre - gapHalf)          % resolution + resolution) % resolution;
 
+            // ── Triangles ─────────────────────────────────────────────────────
             for (int e = 0; e < edgeCount; e++)
             {
-                int  stripBase  = e * 2 * sCount;
-                bool isBelt     = (e == beltEdge);
-                bool isFloor    = (e == floorEdge);
-                bool isAlwaysOn = isBelt || isFloor;
+                int  stripBase = e * 2 * sCount;
+                bool isBelt    = (e == beltEdge);
+                bool isFloor   = (e == floorEdge);
 
                 for (int s = 0; s < resolution; s++)
                 {
@@ -221,22 +228,18 @@ namespace BlockShooter
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
+                    else if (openZoneEnabled)
+                    {
+                        // Circular distance from gap centre — no T=0 assumption
+                        int dist  = Mathf.Abs(s - gapCentre);
+                        if (dist > resolution / 2) dist = resolution - dist;
+                        if (dist < gapHalf) continue; // skip: inside gap
+
+                        trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
+                        trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
+                    }
                     else
                     {
-                        if (openZoneEnabled)
-                        {
-                            float midT  = (s + 0.5f) / resolution;
-                            bool  inGap = midT < openZoneHalfT || midT > (1f - openZoneHalfT);
-
-                            if (e == 0 && !inGap)
-                            {
-                                if (s_capFirst < 0) s_capFirst = s;
-                                s_capLast = s;
-                            }
-
-                            if (inGap) continue;
-                        }
-
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
@@ -244,12 +247,10 @@ namespace BlockShooter
             }
 
             // ── End caps at gap edges ─────────────────────────────────────────
-            // Cap = flat polygon closing the hollow wall cross-section (P0..P5 left, P6..P11 right).
-            if (openZoneEnabled && s_capFirst >= 0)
+            if (openZoneEnabled)
             {
-                int sB = (s_capLast + 1) % resolution;
                 AddWallCap(profile, wPos, wRight, wUp, verts, uvs, trisWall, s_capFirst);
-                AddWallCap(profile, wPos, wRight, wUp, verts, uvs, trisWall, sB);
+                AddWallCap(profile, wPos, wRight, wUp, verts, uvs, trisWall, s_capB);
             }
 
             // ── Assemble mesh ─────────────────────────────────────────────────
