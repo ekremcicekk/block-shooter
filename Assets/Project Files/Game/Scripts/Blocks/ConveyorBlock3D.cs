@@ -90,7 +90,6 @@ namespace BlockShooter
         private void DestroyBlock()
         {
             _isDestroyed = true;
-            Debug.Log($"[DESTROY] {name}  R{_rowIndex}L{_laneIndex}  color={_colorType}");
 
             ScoreManager.Instance?.AddBlockDestroyed();
 
