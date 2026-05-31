@@ -203,7 +203,11 @@ namespace BlockShooter
             const float laneDelay    = 0.04f;
             const float blockTimeout = 8f;
 
-            for (int row = 0; row < group.RowCount && !IsDepleted; row++)
+            // If the shooter arrived late (some rows already exited FireRange),
+            // skip ahead to the earliest row that is currently inside FireRange.
+            int startRow = FindStartRow(group);
+
+            for (int row = startRow; row < group.RowCount && !IsDepleted; row++)
             {
                 bool firedInRow = false;
 
@@ -218,6 +222,8 @@ namespace BlockShooter
                     while (waited < blockTimeout && !block.IsDestroyed)
                     {
                         if (FireRange.Instance != null && FireRange.Instance.ContainsBlock(block)) break;
+                        // A later row from this group entered range → this row already passed.
+                        if (HasLaterRowInRange(group, row)) break;
                         yield return null;
                         waited += Time.deltaTime;
                     }
@@ -238,10 +244,37 @@ namespace BlockShooter
             _isShooting = false;
             _shootCoroutine = null;
 
-            // If the group still has blocks remaining (e.g. another color group follows),
-            // try picking up the next matching group.
             if (!IsDepleted)
                 TryStartGroupRoutine();
+        }
+
+        // Returns the smallest RowIndex of this group's blocks that are currently in FireRange.
+        // Falls back to 0 if none are in range yet (group hasn't arrived).
+        private int FindStartRow(BlockGroup group)
+        {
+            if (FireRange.Instance == null) return 0;
+            int minRow = int.MaxValue;
+            foreach (var b in FireRange.Instance.BlocksInRange)
+            {
+                if (b == null || b.IsDestroyed) continue;
+                if (b.transform.IsChildOf(group.transform))
+                    minRow = Mathf.Min(minRow, b.RowIndex);
+            }
+            return minRow < int.MaxValue ? minRow : 0;
+        }
+
+        // Returns true when a row with index > currentRow from this group is already in FireRange,
+        // meaning currentRow has already passed through and should be skipped.
+        private bool HasLaterRowInRange(BlockGroup group, int currentRow)
+        {
+            if (FireRange.Instance == null) return false;
+            foreach (var b in FireRange.Instance.BlocksInRange)
+            {
+                if (b == null || b.IsDestroyed) continue;
+                if (b.RowIndex > currentRow && b.transform.IsChildOf(group.transform))
+                    return true;
+            }
+            return false;
         }
 
         private void FireAt(ConveyorBlock3D target)
