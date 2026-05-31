@@ -231,11 +231,12 @@ namespace BlockShooter
                     }
 
                     if (block.IsDestroyed || block.IsTargeted) continue;
-                    // Fire if in range OR if the block already passed through (homing projectile tracks it).
-                    // Only skip if the block never entered at all (timeout = wrong group / never arriving).
-                    bool canFire = (FireRange.Instance != null && FireRange.Instance.ContainsBlock(block))
-                                || block.HasEnteredFireRange;
-                    if (!canFire) continue;
+                    bool inRange = FireRange.Instance != null && FireRange.Instance.ContainsBlock(block);
+                    // A block may exit FireRange slightly early due to the diagonal conveyor approach.
+                    // Allow firing if the block is still very close to the range (< 1 m from bounds).
+                    // Blocks that looped far away (other side of the track) are rejected by this check.
+                    bool justExited = block.HasEnteredFireRange && !inRange && IsNearFireRange(block.transform.position, 1f);
+                    if (!inRange && !justExited) continue;
 
                     if (firedInRow)
                         yield return new WaitForSeconds(laneDelay);
@@ -255,6 +256,15 @@ namespace BlockShooter
                 yield return null; // defer one frame to prevent synchronous recursion
                 TryStartGroupRoutine();
             }
+        }
+
+        // Returns true if pos is within maxDistance of FireRange's collider bounds.
+        // Used to distinguish "just exited due to diagonal path" from "looped far away."
+        private bool IsNearFireRange(Vector3 pos, float maxDistance)
+        {
+            if (FireRange.Instance == null) return false;
+            var bounds = FireRange.Instance.GetBounds();
+            return Vector3.Distance(pos, bounds.ClosestPoint(pos)) < maxDistance;
         }
 
         // Returns the smallest RowIndex of this group's blocks that are currently in FireRange.
