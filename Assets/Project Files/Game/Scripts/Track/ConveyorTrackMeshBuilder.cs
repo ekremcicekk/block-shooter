@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Splines;
 
@@ -51,6 +52,14 @@ namespace BlockShooter
         [Header("UV Tiling")]
         [Tooltip("How many times the texture tiles along the spline length")]
         public float vTiling = 8f;
+
+        [Header("Open Zone (FireRange)")]
+        [Tooltip("Skip wall triangles near Z = openZoneCenter so the track appears open at the shooting area")]
+        public bool  openZoneEnabled    = true;
+        [Tooltip("Local-space Z center of the open zone (should match FIRE_Z = 0)")]
+        public float openZoneCenter     = 0f;
+        [Tooltip("Half-length of the wall-free zone along Z")]
+        public float openZoneHalfLength = 2f;
 
         // ── Private ───────────────────────────────────────────────────────────
         private SplineContainer _spline;
@@ -163,16 +172,15 @@ namespace BlockShooter
             // ── Step 3: allocate buffers ──────────────────────────────────────
             // Per edge strip: 2 verts/ring × sCount rings
             // Two submeshes: submesh 0 = wall faces, submesh 1 = belt face (P5→P6)
-            const int beltEdge     = 5;   // index of the P5→P6 belt edge in the profile
-            int totalVerts         = edgeCount * 2 * sCount;
-            int beltTriCount       = resolution * 6;
-            int wallTriCount       = (edgeCount - 1) * resolution * 6;
+            const int beltEdge = 5;   // index of the P5→P6 belt edge in the profile
+            int totalVerts     = edgeCount * 2 * sCount;
+            int beltTriCount   = resolution * 6;
 
             var verts    = new Vector3[totalVerts];
             var uvs      = new Vector2[totalVerts];
-            var trisWall = new int[wallTriCount];
+            var trisWall = new List<int>(capacity: (edgeCount - 1) * resolution * 6);
             var trisBelt = new int[beltTriCount];
-            int tiWall = 0, tiBelt = 0;
+            int tiBelt   = 0;
 
             // ── Step 4: fill vertices + UVs, build triangles ──────────────────
             for (int e = 0; e < edgeCount; e++)
@@ -198,17 +206,24 @@ namespace BlockShooter
 
                 for (int s = 0; s < resolution; s++)
                 {
-                    int b  = stripBase + s * 2;
+                    int b = stripBase + s * 2;
                     // Winding (A,C,B)+(B,C,D) → outward normals for CCW profile
                     if (isBelt)
                     {
-                        trisBelt[tiBelt++] = b;     trisBelt[tiBelt++] = b+2; trisBelt[tiBelt++] = b+1;
-                        trisBelt[tiBelt++] = b+1;   trisBelt[tiBelt++] = b+2; trisBelt[tiBelt++] = b+3;
+                        trisBelt[tiBelt++] = b;   trisBelt[tiBelt++] = b+2; trisBelt[tiBelt++] = b+1;
+                        trisBelt[tiBelt++] = b+1; trisBelt[tiBelt++] = b+2; trisBelt[tiBelt++] = b+3;
                     }
                     else
                     {
-                        trisWall[tiWall++] = b;     trisWall[tiWall++] = b+2; trisWall[tiWall++] = b+1;
-                        trisWall[tiWall++] = b+1;   trisWall[tiWall++] = b+2; trisWall[tiWall++] = b+3;
+                        // Skip wall triangles inside the open zone
+                        if (openZoneEnabled)
+                        {
+                            float midZ = (wPos[s].z + wPos[s + 1].z) * 0.5f;
+                            if (Mathf.Abs(midZ - openZoneCenter) < openZoneHalfLength)
+                                continue;
+                        }
+                        trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
+                        trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
                 }
             }
@@ -222,7 +237,7 @@ namespace BlockShooter
             mesh.vertices     = verts;
             mesh.uv           = uvs;
             mesh.subMeshCount = 2;
-            mesh.SetTriangles(trisWall, 0);   // Material slot 0 — walls
+            mesh.SetTriangles(trisWall, 0);  // Material slot 0 — walls
             mesh.SetTriangles(trisBelt, 1);   // Material slot 1 — belt surface
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
