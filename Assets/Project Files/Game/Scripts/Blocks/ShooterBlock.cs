@@ -179,10 +179,7 @@ namespace BlockShooter
             if (!_isShooting && HasTarget()) StartShooting();
         }
 
-        private bool HasTarget() =>
-            _isRainbowMode
-                ? FireRange.Instance?.GetFirstTarget()               != null
-                : FireRange.Instance?.GetFirstTarget(_colorType)     != null;
+        private bool HasTarget() => GetVolleyTargets().Count > 0;
 
         private void StartShooting()
         {
@@ -200,19 +197,46 @@ namespace BlockShooter
         {
             while (!IsDepleted)
             {
-                // Always pick the physically closest block — no stale queue
-                ConveyorBlock3D target = _isRainbowMode
-                    ? FireRange.Instance?.GetFirstTarget()
-                    : FireRange.Instance?.GetFirstTarget(_colorType);
+                var targets = GetVolleyTargets();
+                if (targets.Count == 0) break; // No targets — OnFireRangeBlockEntered restarts us
 
-                if (target == null) break; // OnFireRangeBlockEntered restarts when next block arrives
+                // Adaptive wave: distribute fireRate time across all targets so the wave
+                // always finishes within one interval regardless of block count.
+                // Minimum 0.04s keeps the visual sequential ("Mexican wave" feel).
+                float fireRate  = GameManager.Instance.config.fireRate;
+                float shotDelay = Mathf.Max(0.04f, fireRate / targets.Count);
 
-                FireAt(target);
-                yield return new WaitForSeconds(GameManager.Instance.config.fireRate);
+                foreach (var t in targets)
+                {
+                    if (IsDepleted) break;
+                    if (t == null || t.IsDestroyed) continue;
+                    FireAt(t);
+                    yield return new WaitForSeconds(shotDelay);
+                }
             }
 
             _isShooting = false;
             _shootCoroutine = null;
+        }
+
+        // Returns all matching-color blocks currently in FireRange, sorted closest-first.
+        private System.Collections.Generic.List<ConveyorBlock3D> GetVolleyTargets()
+        {
+            var list = new System.Collections.Generic.List<ConveyorBlock3D>();
+            if (FireRange.Instance == null) return list;
+
+            Vector3 origin = FireRange.Instance.transform.position;
+            foreach (var b in FireRange.Instance.BlocksInRange)
+            {
+                if (b == null || b.IsDestroyed) continue;
+                if (!_isRainbowMode && b.ColorType != _colorType) continue;
+                list.Add(b);
+            }
+            // Closest to FireRange centre first → front row shot before back rows
+            list.Sort((a, b) =>
+                Vector3.SqrMagnitude(a.transform.position - origin)
+                    .CompareTo(Vector3.SqrMagnitude(b.transform.position - origin)));
+            return list;
         }
 
         private void FireAt(ConveyorBlock3D target)
