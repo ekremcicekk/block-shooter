@@ -115,6 +115,9 @@ namespace BlockShooter.Editor
             if (_type == null) InitGrid();
             if (_knots.Count == 0) ApplyPreset();
             if (_groups.Count == 0) DefaultGroups();
+            // Auto-select first level on open if nothing is already selected
+            if (_activeIdx < 0 && _paths.Count > 0)
+            { _activeIdx = 0; LoadLevel(0); }
         }
 
         private void OnDisable()
@@ -1321,7 +1324,11 @@ namespace BlockShooter.Editor
             _selC = -1; _selR = -1; _selKnot = -1;
             StopSplineEdit(save: false);
             DestroyLevelPreview();
+
+            // Null arrays first so InitGrid() starts completely fresh (no copy from previous level)
+            _type = null; _color = null; _shots = null; _doors = null;
             InitGrid();
+
             _groups.Clear(); DefaultGroups();
             _knots.Clear(); _tangentsIn.Clear(); _tangentsOut.Clear(); _tangentModes.Clear();
             ApplyPreset();
@@ -1337,6 +1344,8 @@ namespace BlockShooter.Editor
             var lr   = stub.AddComponent<LevelRoot>();
             lr.levelIndex = _levelIndex;
             lr.levelName  = _levelName;
+            lr.gridCols   = _gridCols;   // write dims so LoadLevel can restore them correctly
+            lr.gridRows   = _gridRows;
             PrefabUtility.SaveAsPrefabAsset(stub, path);
             DestroyImmediate(stub);
             AssetDatabase.SaveAssets();
@@ -1361,12 +1370,15 @@ namespace BlockShooter.Editor
             _levelName    = lr.levelName;
             _goalType     = lr.goalType;
             _goalAmount   = lr.goalAmount;
-            _gridCols     = Mathf.Clamp(lr.gridCols, 1, MaxCols);
-            _gridRows     = Mathf.Clamp(lr.gridRows, 1, MaxRows);
-            _splineWidth  = lr.splineWidth;
-            _splineDepth  = lr.splineDepth;
+            // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
+            _gridCols     = lr.gridCols  > 0 ? Mathf.Clamp(lr.gridCols,  1, MaxCols) : 4;
+            _gridRows     = lr.gridRows  > 0 ? Mathf.Clamp(lr.gridRows,  1, MaxRows) : 2;
+            _splineWidth  = lr.splineWidth  > 0 ? lr.splineWidth  : 3.5f;
+            _splineDepth  = lr.splineDepth  > 0 ? lr.splineDepth  : 5f;
             _splinePreset = lr.splinePreset;
 
+            // Null arrays so InitGrid() creates a fully fresh grid (no cross-level bleed)
+            _type = null; _color = null; _shots = null; _doors = null;
             InitGrid();
             foreach (var cell in lr.cells)
             {
