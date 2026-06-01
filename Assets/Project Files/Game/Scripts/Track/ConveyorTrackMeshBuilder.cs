@@ -199,7 +199,7 @@ namespace BlockShooter
             int gapCentre  = 0;
             int gapHalf    = Mathf.Max(1, Mathf.RoundToInt(openZoneHalfT * resolution));
             int s_capFirst = gapHalf % resolution;
-            int s_capB     = (resolution - gapHalf) % resolution;
+            int s_capB     = (resolution - gapHalf + 1) % resolution;
 
             // ── Triangles ─────────────────────────────────────────────────────
             for (int e = 0; e < edgeCount; e++)
