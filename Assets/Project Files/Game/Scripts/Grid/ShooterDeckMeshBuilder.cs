@@ -41,6 +41,8 @@ namespace BlockShooter
         public float backDepth     = 2f;
         [Tooltip("Height the walls drop below Y=0")]
         public float tileHeight    = 0.15f;
+        [Tooltip("Inset from cell boundary adjacent to a filled cell (gap around shooter blocks)")]
+        public float cellPadding   = 0.05f;
 
         private MeshFilter _mf;
         private void Awake() => _mf = GetComponent<MeshFilter>();
@@ -60,6 +62,7 @@ namespace BlockShooter
             float D   = backDepth;
             float yT  = 0f;
             float yB  = -tileHeight;
+            float P   = cellPadding;
 
             // Grid corner positions
             var cx = new float[gridCols + 1];
@@ -87,19 +90,37 @@ namespace BlockShooter
             {
                 if (!E(c, r)) continue;
 
-                AddTop(verts, uvs, trisTop, cx[c], cx[c+1], cz[r], cz[r+1], yT);
+                // Compute padded tile bounds: inset only on edges adjacent to filled cells.
+                // Wing-connected edges (boundary edges) are NOT inset — they merge seamlessly.
+                float tx0 = cx[c];
+                float tx1 = cx[c+1];
+                float tz0 = cz[r];
+                float tz1 = cz[r+1];
 
+                bool filledL = c > 0             && !E(c-1, r);   // filled neighbor to left
+                bool filledR = c < gridCols - 1  && !E(c+1, r);   // filled neighbor to right
+                bool filledB = r > 0             && !E(c, r-1);   // filled neighbor behind
+                bool filledF = r < gridRows - 1  && !E(c, r+1);   // filled neighbor in front
+
+                if (filledL) tx0 += P;
+                if (filledR) tx1 -= P;
+                if (filledB) tz0 += P;
+                if (filledF) tz1 -= P;
+
+                AddTop(verts, uvs, trisTop, tx0, tx1, tz0, tz1, yT);
+
+                // Walls start at padded tile edge, span to grid corner (wall covers full cell boundary).
                 // Left wall: skip c=0 (connects to left wing)
-                if (c > 0 && !E(c-1, r))
+                if (filledL)
                     AddWallX(verts, uvs, trisWall, cx[c], cz[r], cz[r+1], yT, yB, false);
                 // Right wall: skip c=gridCols-1 (connects to right wing)
-                if (c < gridCols - 1 && !E(c+1, r))
+                if (filledR)
                     AddWallX(verts, uvs, trisWall, cx[c+1], cz[r], cz[r+1], yT, yB, true);
                 // Back wall (-Z direction): skip r=0 (connects to back wing)
-                if (r > 0 && !E(c, r-1))
+                if (filledB)
                     AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[r], yT, yB, false);
                 // Front wall (+Z direction): skip r=gridRows-1 (front is always open)
-                if (r < gridRows - 1 && !E(c, r+1))
+                if (filledF)
                     AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[r+1], yT, yB, true);
             }
 

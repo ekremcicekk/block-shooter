@@ -54,6 +54,8 @@ namespace BlockShooter
         public float backDepth     = 2f;
         [Tooltip("Wall drop height below Y=0")]
         public float deckTileHeight = 0.15f;
+        [Tooltip("Inset from cell boundary for tiles adjacent to filled cells (creates gap around shooter blocks)")]
+        public float cellPadding    = 0.05f;
         [Tooltip("Slot 0 — top/deck surface material")]
         public Material deckTopMaterial;
         [Tooltip("Slot 1 — side wall material")]
