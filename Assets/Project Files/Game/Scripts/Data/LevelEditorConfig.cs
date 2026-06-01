@@ -47,7 +47,13 @@ namespace BlockShooter
         [Tooltip("Slot 1 — belt surface material (M_ConveyorIn)")]
         public Material trackBeltMaterial;
 
-        [Header("Shooter Deck Materials")]
+        [Header("Shooter Deck")]
+        [Tooltip("Platform extension to the left and right of the grid")]
+        public float sideWingWidth = 2f;
+        [Tooltip("Platform extension behind the grid (away from conveyor)")]
+        public float backDepth     = 2f;
+        [Tooltip("Wall drop height below Y=0")]
+        public float deckTileHeight = 0.15f;
         [Tooltip("Slot 0 — top/deck surface material")]
         public Material deckTopMaterial;
         [Tooltip("Slot 1 — side wall material")]

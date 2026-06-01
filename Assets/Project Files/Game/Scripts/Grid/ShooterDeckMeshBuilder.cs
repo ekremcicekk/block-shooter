@@ -6,24 +6,27 @@ namespace BlockShooter
     /// <summary>
     /// Generates a merged deck mesh for the shooter grid.
     ///
-    /// isEmpty[col, row] = true  → empty cell → raised tile (platform visible here).
-    /// isEmpty[col, row] = false → filled cell → no tile (shooter block is the visual).
+    /// Orientation (matches scene layout):
+    ///   +Z = toward conveyor  = FRONT  → always open, no wall, no extension.
+    ///   -Z = away from conveyor = BACK  → platform extends here by backDepth.
+    ///   r=0          = back row  (most negative Z inside grid)
+    ///   r=gridRows-1 = front row (most positive Z inside grid, closest to conveyor)
     ///
-    /// The mesh consists of:
-    ///   • Tiles for every empty cell inside the grid.
-    ///   • A left-wing strip extending sideWingWidth to the left of the grid.
-    ///   • A right-wing strip extending sideWingWidth to the right of the grid.
-    ///   • A back-wing strip extending backDepth behind the grid (full width incl. side wings).
-    ///   • The FRONT edge is always open — no wall, no forward extension.
+    /// isEmpty[col, row] = true  → empty cell → raised tile.
+    /// isEmpty[col, row] = false → filled cell (shooter block) → no tile.
     ///
-    /// Wing-to-cell connection rule:
-    ///   Empty cell at col=0          → left wing connects seamlessly (no inner wall).
-    ///   Empty cell at col=gridCols-1 → right wing connects seamlessly.
-    ///   Empty cell at row=gridRows-1 → back wing connects seamlessly.
-    ///   Filled cell at those boundaries → inner boundary wall separates wing from cell gap.
+    /// Wings:
+    ///   Left  wing : extends sideWingWidth to the -X side for the full grid depth.
+    ///   Right wing : extends sideWingWidth to the +X side for the full grid depth.
+    ///   Back  wing : full width, extends backDepth in the -Z direction.
     ///
-    /// Submesh 0 = top surface (deckTopMaterial)
-    /// Submesh 1 = side walls  (deckWallMaterial)
+    /// Empty cell at col=0          → connects to left  wing (no wall at x=cx[0]).
+    /// Empty cell at col=gridCols-1 → connects to right wing (no wall at x=cx[gridCols]).
+    /// Empty cell at row=0          → connects to back  wing (no wall at z=cz[0]).
+    /// Front row (row=gridRows-1)   → always open, no wall at z=cz[gridRows].
+    ///
+    /// Submesh 0 = top surface  (deckTopMaterial)
+    /// Submesh 1 = side walls   (deckWallMaterial)
     /// </summary>
     [RequireComponent(typeof(MeshFilter))]
     [RequireComponent(typeof(MeshRenderer))]
@@ -32,9 +35,9 @@ namespace BlockShooter
         public int   gridCols      = 4;
         public int   gridRows      = 2;
         public float cellSize      = 1.2f;
-        [Tooltip("How far the platform extends to the left and right of the grid")]
+        [Tooltip("Platform extension to the left and right of the grid")]
         public float sideWingWidth = 2f;
-        [Tooltip("How far the platform extends behind the grid")]
+        [Tooltip("Platform extension behind the grid (away from conveyor, -Z direction)")]
         public float backDepth     = 2f;
         [Tooltip("Height the walls drop below Y=0")]
         public float tileHeight    = 0.15f;
@@ -64,11 +67,11 @@ namespace BlockShooter
             for (int i = 0; i <= gridCols; i++) cx[i] = -gHW + i * cellSize;
             for (int j = 0; j <= gridRows; j++) cz[j] = -gHD + j * cellSize;
 
-            // Derived edge positions
-            float xL     = cx[0]          - W;    // left outer edge
-            float xR     = cx[gridCols]   + W;    // right outer edge
-            float zFront = cz[0];                  // front edge (always open)
-            float zBack  = cz[gridRows]   + D;    // back outer edge
+            // Key Z positions
+            float zExtBack = cz[0] - D;        // back outer edge  (away from conveyor)
+            float zFront   = cz[gridRows];      // front face       (toward conveyor, OPEN)
+            float xL       = cx[0]          - W;
+            float xR       = cx[gridCols]   + W;
 
             bool E(int c, int r) =>
                 c >= 0 && c < gridCols && r >= 0 && r < gridRows && isEmpty[c, r];
@@ -84,59 +87,54 @@ namespace BlockShooter
             {
                 if (!E(c, r)) continue;
 
-                // Top tile
                 AddTop(verts, uvs, trisTop, cx[c], cx[c+1], cz[r], cz[r+1], yT);
 
-                // Inner walls — only between this empty cell and an adjacent FILLED cell.
-                // Left: not leftmost col (leftmost connects to left wing)
+                // Left wall: skip c=0 (connects to left wing)
                 if (c > 0 && !E(c-1, r))
                     AddWallX(verts, uvs, trisWall, cx[c], cz[r], cz[r+1], yT, yB, false);
-                // Right: not rightmost col (rightmost connects to right wing)
+                // Right wall: skip c=gridCols-1 (connects to right wing)
                 if (c < gridCols - 1 && !E(c+1, r))
                     AddWallX(verts, uvs, trisWall, cx[c+1], cz[r], cz[r+1], yT, yB, true);
-                // Front: front row is always open (no wall at z=cz[0])
+                // Back wall (-Z direction): skip r=0 (connects to back wing)
                 if (r > 0 && !E(c, r-1))
                     AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[r], yT, yB, false);
-                // Back: not backmost row (backmost connects to back wing)
+                // Front wall (+Z direction): skip r=gridRows-1 (front is always open)
                 if (r < gridRows - 1 && !E(c, r+1))
                     AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[r+1], yT, yB, true);
             }
 
             // ── 2. Wing top surfaces ─────────────────────────────────────────
-            // Left wing: spans full grid depth (zFront → cz[gridRows])
-            AddTop(verts, uvs, trisTop, xL, cx[0], zFront, cz[gridRows], yT);
+            // Left wing: alongside the full grid depth (no overlap with back wing)
+            AddTop(verts, uvs, trisTop, xL, cx[0],        cz[0], zFront, yT);
             // Right wing
-            AddTop(verts, uvs, trisTop, cx[gridCols], xR, zFront, cz[gridRows], yT);
-            // Back wing: full width including side-wing columns
-            AddTop(verts, uvs, trisTop, xL, xR, cz[gridRows], zBack, yT);
+            AddTop(verts, uvs, trisTop, cx[gridCols], xR, cz[0], zFront, yT);
+            // Back wing: full width (xL..xR), extends in -Z from grid back face
+            AddTop(verts, uvs, trisTop, xL, xR, zExtBack, cz[0], yT);
 
             // ── 3. Outer walls ───────────────────────────────────────────────
-            // Left outer (normal −X, visible from outside/left)
-            AddWallX(verts, uvs, trisWall, xL, zFront, zBack, yT, yB, false);
-            // Right outer (normal +X)
-            AddWallX(verts, uvs, trisWall, xR, zFront, zBack, yT, yB, true);
-            // Back outer (normal +Z)
-            AddWallZ(verts, uvs, trisWall, xL, xR, zBack, yT, yB, true);
-            // Front: intentionally omitted — always open.
+            AddWallX(verts, uvs, trisWall, xL, zExtBack, zFront, yT, yB, false); // Left  outer (−X)
+            AddWallX(verts, uvs, trisWall, xR, zExtBack, zFront, yT, yB, true);  // Right outer (+X)
+            AddWallZ(verts, uvs, trisWall, xL, xR, zExtBack,     yT, yB, false); // Back  outer (−Z)
+            // Front face: intentionally omitted — always open.
 
             // ── 4. Inner wing boundary walls ────────────────────────────────
-            // Left inner (x=cx[0]): wall where c=0 is FILLED; normal +X (faces grid interior)
+            // Inner LEFT (x=cx[0]): per row, filled c=0 cells; normal +X
             for (int r = 0; r < gridRows; r++)
             {
-                if (E(0, r)) continue; // empty → connects to wing, no wall
+                if (E(0, r)) continue;
                 AddWallX(verts, uvs, trisWall, cx[0], cz[r], cz[r+1], yT, yB, true);
             }
-            // Right inner (x=cx[gridCols]): wall where c=gridCols-1 is FILLED; normal -X
+            // Inner RIGHT (x=cx[gridCols]): per row, filled c=gridCols-1 cells; normal -X
             for (int r = 0; r < gridRows; r++)
             {
                 if (E(gridCols - 1, r)) continue;
                 AddWallX(verts, uvs, trisWall, cx[gridCols], cz[r], cz[r+1], yT, yB, false);
             }
-            // Back inner (z=cz[gridRows]): wall where r=gridRows-1 is FILLED; normal +Z
+            // Inner BACK (z=cz[0]): per col, filled r=0 cells; normal -Z (faces back extension)
             for (int c = 0; c < gridCols; c++)
             {
-                if (E(c, gridRows - 1)) continue;
-                AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[gridRows], yT, yB, true);
+                if (E(c, 0)) continue;
+                AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[0], yT, yB, false);
             }
 
             // ── Build mesh ───────────────────────────────────────────────────
@@ -153,7 +151,6 @@ namespace BlockShooter
 
         // ── Geometry helpers ─────────────────────────────────────────────────
 
-        // Horizontal quad at y, normal +Y.
         static void AddTop(List<Vector3> v, List<Vector2> u, List<int> t,
             float x0, float x1, float z0, float z1, float y)
         {
@@ -166,31 +163,27 @@ namespace BlockShooter
             t.Add(b); t.Add(b+3); t.Add(b+2);
         }
 
-        // Vertical wall at fixed X, spanning Z range.
-        // normalRight=true  → normal +X (wall visible from the +X/right side)
-        // normalRight=false → normal -X (wall visible from the -X/left side)
+        // Wall at fixed X. normalRight=true → +X normal; false → -X normal.
         static void AddWallX(List<Vector3> v, List<Vector2> u, List<int> t,
             float x, float z0, float z1, float yT, float yB, bool normalRight)
         {
             if (normalRight)
-                AddWall(v, u, t, x,yB,z0,  x,yT,z0,  x,yT,z1,  x,yB,z1);  // normal +X
+                AddWall(v, u, t, x,yB,z0, x,yT,z0, x,yT,z1, x,yB,z1);
             else
-                AddWall(v, u, t, x,yB,z1,  x,yT,z1,  x,yT,z0,  x,yB,z0);  // normal -X
+                AddWall(v, u, t, x,yB,z1, x,yT,z1, x,yT,z0, x,yB,z0);
         }
 
-        // Vertical wall at fixed Z, spanning X range.
-        // normalBack=true  → normal +Z (wall visible from behind, +Z side)
-        // normalBack=false → normal -Z (wall visible from front, -Z side)
+        // Wall at fixed Z. normalBack=true → +Z normal; false → -Z normal.
         static void AddWallZ(List<Vector3> v, List<Vector2> u, List<int> t,
             float x0, float x1, float z, float yT, float yB, bool normalBack)
         {
             if (normalBack)
-                AddWall(v, u, t, x1,yB,z,  x1,yT,z,  x0,yT,z,  x0,yB,z);  // normal +Z
+                AddWall(v, u, t, x1,yB,z, x1,yT,z, x0,yT,z, x0,yB,z);
             else
-                AddWall(v, u, t, x0,yB,z,  x0,yT,z,  x1,yT,z,  x1,yB,z);  // normal -Z
+                AddWall(v, u, t, x0,yB,z, x0,yT,z, x1,yT,z, x1,yB,z);
         }
 
-        // Raw quad: BL, TL, TR, BR (CCW winding = normal faces viewer).
+        // Raw quad: BL, TL, TR, BR (outward-facing CCW winding).
         static void AddWall(List<Vector3> v, List<Vector2> u, List<int> t,
             float blx,float bly,float blz,
             float tlx,float tly,float tlz,
