@@ -44,6 +44,7 @@ namespace BlockShooter.Editor
         private int[,]            _shots, _doors;
 
         private List<LevelConveyorGroup> _groups = new();
+        private float _openZoneHalfT = 0.08f;
 
         // ── Spline ────────────────────────────────────────────────────────────
         private List<Vector3>     _knots        = new();
@@ -1067,6 +1068,10 @@ namespace BlockShooter.Editor
                       rowCount  = _cfg?.rowsPerGroup ?? 20,
                       laneCount = _cfg?.laneCount    ?? 5 });
             GUILayout.Space(8);
+
+            Hdr("OPEN ZONE");
+            _openZoneHalfT = EditorGUILayout.Slider("Gap Half-T", _openZoneHalfT, 0.005f, 0.25f);
+            GUILayout.Space(8);
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -1367,7 +1372,8 @@ namespace BlockShooter.Editor
             _gridRows     = lr.gridRows  > 0 ? Mathf.Clamp(lr.gridRows,  1, MaxRows) : 2;
             _splineWidth  = lr.splineWidth  > 0 ? lr.splineWidth  : 3.5f;
             _splineDepth  = lr.splineDepth  > 0 ? lr.splineDepth  : 5f;
-            _splinePreset = lr.splinePreset;
+            _splinePreset  = lr.splinePreset;
+            _openZoneHalfT = lr.openZoneHalfT > 0f ? lr.openZoneHalfT : 0.08f;
 
             // Null arrays so InitGrid() creates a fully fresh grid (no cross-level bleed)
             _type = null; _color = null; _shots = null; _doors = null;
@@ -1533,8 +1539,9 @@ namespace BlockShooter.Editor
             lr.gridRows     = _gridRows;
             lr.splineWidth  = _splineWidth;
             lr.splineDepth  = _splineDepth;
-            lr.splinePreset = _splinePreset;
-            lr.splineKnots  = new List<Vector3>(_knots);
+            lr.splinePreset  = _splinePreset;
+            lr.openZoneHalfT = _openZoneHalfT;
+            lr.splineKnots   = new List<Vector3>(_knots);
             EnsureTangentLists();
             lr.splineTangentsIn   = new List<Vector3>(_tangentsIn);
             lr.splineTangentsOut  = new List<Vector3>(_tangentsOut);
@@ -1574,7 +1581,7 @@ namespace BlockShooter.Editor
             // Track mesh — ConveyorTrackMeshBuilder (RequireComponent auto-adds MeshFilter + MeshRenderer)
             var meshBuilder = trackGo.AddComponent<ConveyorTrackMeshBuilder>();
             meshBuilder.resolution    = 60;
-            meshBuilder.openZoneHalfT = 0.015f;
+            meshBuilder.openZoneHalfT = _openZoneHalfT;
             meshBuilder.beltHalfWidth = 0.45f;
             meshBuilder.wallAboveBelt = 0.3f;
             meshBuilder.railHeight    = 1f;
