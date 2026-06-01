@@ -1730,11 +1730,12 @@ namespace BlockShooter.Editor
             var deckMeshGo = Go(root, "ShooterDeck");
             deckMeshGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
             var deckBuilder = deckMeshGo.AddComponent<ShooterDeckMeshBuilder>();
-            deckBuilder.gridCols   = _gridCols;
-            deckBuilder.gridRows   = _gridRows;
-            deckBuilder.cellSize   = cs;
-            deckBuilder.tileHeight = 0.15f;
-            deckBuilder.wingWidth  = 0.5f;
+            deckBuilder.gridCols      = _gridCols;
+            deckBuilder.gridRows      = _gridRows;
+            deckBuilder.cellSize      = cs;
+            deckBuilder.tileHeight    = 0.15f;
+            deckBuilder.sideWingWidth = 2f;
+            deckBuilder.backDepth     = 2f;
             deckBuilder.BuildMesh(isEmpty);
             var deckMr = deckMeshGo.GetComponent<MeshRenderer>();
             deckMr.sharedMaterials = new Material[]
