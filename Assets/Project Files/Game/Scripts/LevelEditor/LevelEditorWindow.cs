@@ -1736,7 +1736,6 @@ namespace BlockShooter.Editor
             deckBuilder.tileHeight    = _cfg.deckTileHeight;
             deckBuilder.sideWingWidth = _cfg.sideWingWidth;
             deckBuilder.backDepth     = _cfg.backDepth;
-            deckBuilder.cellPadding   = _cfg.cellPadding;
             deckBuilder.bevelSize     = _cfg.bevelSize;
             deckBuilder.BuildMesh(isEmpty);
             var deckMr = deckMeshGo.GetComponent<MeshRenderer>();
