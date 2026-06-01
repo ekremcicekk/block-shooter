@@ -46,5 +46,11 @@ namespace BlockShooter
         public Material trackSideMaterial;
         [Tooltip("Slot 1 — belt surface material (M_ConveyorIn)")]
         public Material trackBeltMaterial;
+
+        [Header("Shooter Deck Materials")]
+        [Tooltip("Slot 0 — top/deck surface material")]
+        public Material deckTopMaterial;
+        [Tooltip("Slot 1 — side wall material")]
+        public Material deckWallMaterial;
     }
 }

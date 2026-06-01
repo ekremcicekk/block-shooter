@@ -1720,6 +1720,27 @@ namespace BlockShooter.Editor
                 }
             }
 
+            // ── Shooter Deck Mesh ──
+            var deckMeshGo = Go(root, "ShooterDeck");
+            deckMeshGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
+            var deckBuilder = deckMeshGo.AddComponent<ShooterDeckMeshBuilder>();
+            deckBuilder.gridCols    = _gridCols;
+            deckBuilder.gridRows    = _gridRows;
+            deckBuilder.cellSize    = cs;
+            deckBuilder.wingWidth   = 0.8f;
+            deckBuilder.frontBorder = 0.3f;
+            deckBuilder.backBorder  = 0.3f;
+            deckBuilder.deckHeight  = 0.3f;
+            deckBuilder.recessDepth = 0.05f;
+            deckBuilder.recessPad   = 0.12f;
+            deckBuilder.BuildMesh();
+            var deckMr = deckMeshGo.GetComponent<MeshRenderer>();
+            deckMr.sharedMaterials = new Material[]
+            {
+                _cfg.deckTopMaterial,
+                _cfg.deckWallMaterial,
+            };
+
             // ── Ground ──
             if (_cfg.groundPrefab != null)
             {
