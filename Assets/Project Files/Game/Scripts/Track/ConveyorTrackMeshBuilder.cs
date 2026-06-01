@@ -193,13 +193,11 @@ namespace BlockShooter
                 }
             }
 
-            // ── Gap centre detection ──────────────────────────────────────────
-            // T=0 on the spline is always placed at the FireRange by the level editor.
-            // s=0 corresponds to T=0, so we centre the gap there directly.
-            int gapCentre  = 0;
+            // ── Gap zone ──────────────────────────────────────────────────────
+            // T=0 (s=0) = FireRange position. Removes gapHalf triangles on each side → symmetric.
             int gapHalf    = Mathf.Max(1, Mathf.RoundToInt(openZoneHalfT * resolution));
-            int s_capFirst = gapHalf % resolution;
-            int s_capB     = (resolution - gapHalf + 1) % resolution;
+            int s_capFirst = gapHalf;
+            int s_capB     = resolution - gapHalf;
 
             // ── Triangles ─────────────────────────────────────────────────────
             for (int e = 0; e < edgeCount; e++)
@@ -224,13 +222,11 @@ namespace BlockShooter
                     }
                     else
                     {
-                        // e=6..10 : entire right wall (inner face + chamfer + outer face) → skip inside gap.
+                        // e=6..10 : entire right wall → skip inside gap (symmetric gapHalf steps each side).
                         // e=0..4  : left wall → never cut.
                         if (openZoneEnabled && e >= 6 && e <= 10)
                         {
-                            int dist = Mathf.Abs(s - gapCentre);
-                            if (dist > resolution / 2) dist = resolution - dist;
-                            if (dist < gapHalf) continue;
+                            if (s < gapHalf || s >= resolution - gapHalf) continue;
                         }
 
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
@@ -257,9 +253,7 @@ namespace BlockShooter
                 }
                 for (int s = 0; s < resolution; s++)
                 {
-                    int dist = Mathf.Abs(s - gapCentre);
-                    if (dist > resolution / 2) dist = resolution - dist;
-                    if (dist >= gapHalf) continue;
+                    if (s >= gapHalf && s < resolution - gapHalf) continue;
 
                     int b = gapStripBase + s * 2;
                     trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
