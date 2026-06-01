@@ -4,198 +4,109 @@ using UnityEngine;
 namespace BlockShooter
 {
     /// <summary>
-    /// Procedural mesh for the shooter grid platform.
-    /// Submesh 0 = top/deck surface, Submesh 1 = side walls.
-    ///
-    /// Top-down shape (with bevel corners, front open):
-    ///
-    ///   bv/         \bv
-    ///   /   WING     \
-    /// (-xO)          (xO)       ← side walls
-    ///   \    RECESS  /
-    ///    +----------+           ← front open (no wall toward player)
-    ///
-    /// Y levels:
-    ///   yT =  recessDepth  → wing/border tops (above blocks)
-    ///   yR =  0            → recess floor (block base level)
-    ///   yB = -deckHeight   → platform bottom
+    /// Generates a raised tile for every EMPTY grid cell.
+    /// Cells that contain a shooter block or door are left flat (no tile).
+    /// Submesh 0 = top face, Submesh 1 = side walls.
     /// </summary>
     [RequireComponent(typeof(MeshFilter))]
     [RequireComponent(typeof(MeshRenderer))]
     public class ShooterDeckMeshBuilder : MonoBehaviour
     {
-        [Header("Grid Dimensions")]
-        public int   gridCols    = 4;
-        public int   gridRows    = 2;
-        public float cellSize    = 1.2f;
+        public int   gridCols   = 4;
+        public int   gridRows   = 2;
+        public float cellSize   = 1.2f;
+        [Tooltip("Height the tile rises from the ground")]
+        public float tileHeight = 0.15f;
+        [Tooltip("Gap between tile edge and cell boundary")]
+        public float tilePad    = 0.04f;
 
-        [Header("Platform Size")]
-        public float wingWidth   = 0.8f;
-        public float frontBorder = 0.3f;
-        public float backBorder  = 0.3f;
-        public float deckHeight  = 0.3f;
+        private MeshFilter _mf;
+        private void Awake() => _mf = GetComponent<MeshFilter>();
 
-        [Header("Recess")]
-        [Tooltip("How much wings/border rise above the block level (Y=0). Creates tray appearance.")]
-        public float recessDepth = 0.05f;
-        [Tooltip("Gap between grid edge and inner recess wall.")]
-        public float recessPad   = 0.12f;
-
-        [Header("Shape")]
-        [Tooltip("Corner chamfer size on outer wall corners.")]
-        public float bevelSize   = 0.15f;
-        [Tooltip("Leave the player-facing side of the deck open (no front wall).")]
-        public bool  openFront   = true;
-
-        private MeshFilter _meshFilter;
-
-        private void Awake() => _meshFilter = GetComponent<MeshFilter>();
-        private void Start() => BuildMesh();
-
-        public void BuildMesh()
+        /// <summary>
+        /// isEmpty[col, row] = true  → that cell is empty, gets a raised tile.
+        /// isEmpty[col, row] = false → cell has a block/door, no tile generated.
+        /// </summary>
+        public void BuildMesh(bool[,] isEmpty)
         {
-            if (_meshFilter == null) _meshFilter = GetComponent<MeshFilter>();
-            _meshFilter.sharedMesh = Generate();
-        }
+            if (_mf == null) _mf = GetComponent<MeshFilter>();
 
-        private Mesh Generate()
-        {
-            float gHW = gridCols * cellSize * 0.5f;
-            float gHD = gridRows * cellSize * 0.5f;
-            float bv  = Mathf.Min(bevelSize, Mathf.Min(wingWidth, backBorder) * 0.9f);
+            float hw  = (gridCols - 1) * cellSize * 0.5f;
+            float hd  = (gridRows - 1) * cellSize * 0.5f;
+            float hs  = cellSize * 0.5f - tilePad;
+            float yT  = 0f;
+            float yB  = -tileHeight;
 
-            // Key XZ coordinates
-            float xI  =  gHW + recessPad;
-            float xO  =  xI  + wingWidth;
-            float zFI = -(gHD + recessPad);
-            float zBI =  gHD + recessPad;
-            float zF  =  zFI - frontBorder;
-            float zB  =  zBI + backBorder;
+            var verts  = new List<Vector3>();
+            var uvs    = new List<Vector2>();
+            var trisTop  = new List<int>();
+            var trisSide = new List<int>();
 
-            // Key Y levels
-            float yT  =  recessDepth;
-            float yR  =  0f;
-            float yB  = -deckHeight;
-
-            var verts    = new List<Vector3>();
-            var uvs      = new List<Vector2>();
-            var trisDeck = new List<int>();
-            var trisWall = new List<int>();
-
-            // ── Submesh 0: top/deck faces (normal = +Y) ──────────────────────
-            // Wings
-            HFlat(verts, uvs, trisDeck, -xO, -xI, zF, zB, yT);
-            HFlat(verts, uvs, trisDeck,  xI,  xO, zF, zB, yT);
-            // Borders around recess
-            HFlat(verts, uvs, trisDeck, -xI,  xI, zF,  zFI, yT);
-            HFlat(verts, uvs, trisDeck, -xI,  xI, zBI, zB,  yT);
-            // Recess floor = block level (covers empty cells)
-            HFlat(verts, uvs, trisDeck, -xI,  xI, zFI, zBI, yR);
-
-            // ── Submesh 1: outer straight walls ──────────────────────────────
-            // Left outer wall (shortened for corner bevels)
-            VWall(verts, uvs, trisWall,
-                new Vector3(-xO,yB,zB-bv), new Vector3(-xO,yT,zB-bv),
-                new Vector3(-xO,yT,zF+bv), new Vector3(-xO,yB,zF+bv));
-
-            // Right outer wall
-            VWall(verts, uvs, trisWall,
-                new Vector3(xO,yB,zF+bv), new Vector3(xO,yT,zF+bv),
-                new Vector3(xO,yT,zB-bv), new Vector3(xO,yB,zB-bv));
-
-            // Back outer wall (shortened for corner bevels)
-            VWall(verts, uvs, trisWall,
-                new Vector3(-xO+bv,yB,zB), new Vector3(-xO+bv,yT,zB),
-                new Vector3( xO-bv,yT,zB), new Vector3( xO-bv,yB,zB));
-
-            // Front outer wall (only if closed)
-            if (!openFront)
+            for (int r = 0; r < gridRows; r++)
+            for (int c = 0; c < gridCols; c++)
             {
-                VWall(verts, uvs, trisWall,
-                    new Vector3( xO-bv,yB,zF), new Vector3( xO-bv,yT,zF),
-                    new Vector3(-xO+bv,yT,zF), new Vector3(-xO+bv,yB,zF));
-            }
+                if (!isEmpty[c, r]) continue;
 
-            // ── Corner bevel wall faces (diagonal chamfers) ───────────────────
-            // Back-left corner
-            VWall(verts, uvs, trisWall,
-                new Vector3(-xO,   yB, zB-bv), new Vector3(-xO,   yT, zB-bv),
-                new Vector3(-xO+bv,yT, zB   ), new Vector3(-xO+bv,yB, zB   ));
+                float cx = -hw + c * cellSize;
+                float cz = -hd + r * cellSize;
 
-            // Back-right corner
-            VWall(verts, uvs, trisWall,
-                new Vector3(xO-bv, yB, zB   ), new Vector3(xO-bv, yT, zB   ),
-                new Vector3(xO,    yT, zB-bv), new Vector3(xO,    yB, zB-bv));
-
-            // Front-left corner (end-cap of left wall, visible when front is open)
-            VWall(verts, uvs, trisWall,
-                new Vector3(-xO,   yB, zF+bv), new Vector3(-xO,   yT, zF+bv),
-                new Vector3(-xO+bv,yT, zF   ), new Vector3(-xO+bv,yB, zF   ));
-
-            // Front-right corner
-            VWall(verts, uvs, trisWall,
-                new Vector3(xO-bv, yB, zF   ), new Vector3(xO-bv, yT, zF   ),
-                new Vector3(xO,    yT, zF+bv), new Vector3(xO,    yB, zF+bv));
-
-            // ── Inner recess walls (yR → yT) ─────────────────────────────────
-            // Left inner wall (faces +X into recess)
-            VWall(verts, uvs, trisWall,
-                new Vector3(-xI,yR,zFI), new Vector3(-xI,yT,zFI),
-                new Vector3(-xI,yT,zBI), new Vector3(-xI,yR,zBI));
-
-            // Right inner wall
-            VWall(verts, uvs, trisWall,
-                new Vector3(xI,yR,zBI), new Vector3(xI,yT,zBI),
-                new Vector3(xI,yT,zFI), new Vector3(xI,yR,zFI));
-
-            // Back inner wall
-            VWall(verts, uvs, trisWall,
-                new Vector3(-xI,yR,zBI), new Vector3(-xI,yT,zBI),
-                new Vector3( xI,yT,zBI), new Vector3( xI,yR,zBI));
-
-            // Front inner wall (only if closed)
-            if (!openFront)
-            {
-                VWall(verts, uvs, trisWall,
-                    new Vector3( xI,yR,zFI), new Vector3( xI,yT,zFI),
-                    new Vector3(-xI,yT,zFI), new Vector3(-xI,yR,zFI));
+                AddTop (verts, uvs, trisTop,  cx, cz, hs, yT);
+                AddSides(verts, uvs, trisSide, cx, cz, hs, yT, yB);
             }
 
             var mesh = new Mesh { name = "ShooterDeck" };
             mesh.SetVertices(verts);
             mesh.SetUVs(0, uvs);
             mesh.subMeshCount = 2;
-            mesh.SetTriangles(trisDeck, 0);
-            mesh.SetTriangles(trisWall, 1);
+            mesh.SetTriangles(trisTop,  0);
+            mesh.SetTriangles(trisSide, 1);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
-            return mesh;
+            _mf.sharedMesh = mesh;
         }
 
-        // Horizontal quad at height y. Normal = +Y.
-        private static void HFlat(List<Vector3> v, List<Vector2> u, List<int> t,
-            float x1, float x2, float z1, float z2, float y)
+        // ── Geometry helpers ──────────────────────────────────────────────────
+
+        private static void AddTop(List<Vector3> v, List<Vector2> u, List<int> t,
+            float cx, float cz, float hs, float y)
         {
             int b = v.Count;
-            v.Add(new Vector3(x1, y, z1)); v.Add(new Vector3(x2, y, z1));
-            v.Add(new Vector3(x2, y, z2)); v.Add(new Vector3(x1, y, z2));
-            u.Add(new Vector2(x1, z1)); u.Add(new Vector2(x2, z1));
-            u.Add(new Vector2(x2, z2)); u.Add(new Vector2(x1, z2));
+            v.Add(new Vector3(cx-hs, y, cz-hs));
+            v.Add(new Vector3(cx+hs, y, cz-hs));
+            v.Add(new Vector3(cx+hs, y, cz+hs));
+            v.Add(new Vector3(cx-hs, y, cz+hs));
+            u.Add(new Vector2(0,0)); u.Add(new Vector2(1,0));
+            u.Add(new Vector2(1,1)); u.Add(new Vector2(0,1));
+            // +Y normal winding
             t.Add(b); t.Add(b+2); t.Add(b+1);
             t.Add(b); t.Add(b+3); t.Add(b+2);
         }
 
-        // Vertical quad. bl/tl/tr/br = bottom-left/top-left/top-right/bottom-right
-        // when viewed from OUTSIDE (normal points outward).
-        private static void VWall(List<Vector3> v, List<Vector2> u, List<int> t,
-            Vector3 bl, Vector3 tl, Vector3 tr, Vector3 br)
+        private static void AddSides(List<Vector3> v, List<Vector2> u, List<int> t,
+            float cx, float cz, float hs, float yT, float yB)
+        {
+            // Front  (normal −Z)
+            Quad(v,u,t, cx-hs,yT,cz-hs,  cx+hs,yT,cz-hs,  cx+hs,yB,cz-hs,  cx-hs,yB,cz-hs);
+            // Back   (normal +Z)
+            Quad(v,u,t, cx+hs,yT,cz+hs,  cx-hs,yT,cz+hs,  cx-hs,yB,cz+hs,  cx+hs,yB,cz+hs);
+            // Left   (normal −X)
+            Quad(v,u,t, cx-hs,yT,cz+hs,  cx-hs,yT,cz-hs,  cx-hs,yB,cz-hs,  cx-hs,yB,cz+hs);
+            // Right  (normal +X)
+            Quad(v,u,t, cx+hs,yT,cz-hs,  cx+hs,yT,cz+hs,  cx+hs,yB,cz+hs,  cx+hs,yB,cz-hs);
+        }
+
+        // Vertices: TL, TR, BR, BL (from outside / normal direction)
+        private static void Quad(List<Vector3> v, List<Vector2> u, List<int> t,
+            float x0,float y0,float z0,
+            float x1,float y1,float z1,
+            float x2,float y2,float z2,
+            float x3,float y3,float z3)
         {
             int b = v.Count;
-            v.Add(bl); v.Add(tl); v.Add(tr); v.Add(br);
-            float w = Vector3.Distance(bl, br);
-            float h = Vector3.Distance(bl, tl);
-            u.Add(new Vector2(0, 0));  u.Add(new Vector2(0, h));
-            u.Add(new Vector2(w, h));  u.Add(new Vector2(w, 0));
+            v.Add(new Vector3(x0,y0,z0)); v.Add(new Vector3(x1,y1,z1));
+            v.Add(new Vector3(x2,y2,z2)); v.Add(new Vector3(x3,y3,z3));
+            u.Add(new Vector2(0,1)); u.Add(new Vector2(1,1));
+            u.Add(new Vector2(1,0)); u.Add(new Vector2(0,0));
             t.Add(b); t.Add(b+1); t.Add(b+2);
             t.Add(b); t.Add(b+2); t.Add(b+3);
         }
@@ -208,11 +119,15 @@ namespace BlockShooter
             {
                 DrawDefaultInspector();
                 GUILayout.Space(8);
-                if (GUILayout.Button("Rebuild Mesh", GUILayout.Height(34)))
+                if (GUILayout.Button("Rebuild (all empty)", GUILayout.Height(32)))
                 {
                     var b = (ShooterDeckMeshBuilder)target;
-                    b._meshFilter = b.GetComponent<MeshFilter>();
-                    b.BuildMesh();
+                    var empty = new bool[b.gridCols, b.gridRows];
+                    for (int c = 0; c < b.gridCols; c++)
+                    for (int r = 0; r < b.gridRows; r++)
+                        empty[c, r] = true;
+                    b._mf = b.GetComponent<MeshFilter>();
+                    b.BuildMesh(empty);
                     UnityEditor.EditorUtility.SetDirty(b.gameObject);
                 }
             }

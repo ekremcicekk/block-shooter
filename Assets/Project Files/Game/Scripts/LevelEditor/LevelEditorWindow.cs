@@ -1722,19 +1722,20 @@ namespace BlockShooter.Editor
             }
 
             // ── Shooter Deck Mesh ──
+            var isEmpty = new bool[_gridCols, _gridRows];
+            for (int c = 0; c < _gridCols; c++)
+            for (int r = 0; r < _gridRows; r++)
+                isEmpty[c, r] = _type[c, r] == GridCellType.Empty;
+
             var deckMeshGo = Go(root, "ShooterDeck");
             deckMeshGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
             var deckBuilder = deckMeshGo.AddComponent<ShooterDeckMeshBuilder>();
-            deckBuilder.gridCols    = _gridCols;
-            deckBuilder.gridRows    = _gridRows;
-            deckBuilder.cellSize    = cs;
-            deckBuilder.wingWidth   = 0.8f;
-            deckBuilder.frontBorder = 0.3f;
-            deckBuilder.backBorder  = 0.3f;
-            deckBuilder.deckHeight  = 0.3f;
-            deckBuilder.recessDepth = 0.05f;
-            deckBuilder.recessPad   = 0.12f;
-            deckBuilder.BuildMesh();
+            deckBuilder.gridCols   = _gridCols;
+            deckBuilder.gridRows   = _gridRows;
+            deckBuilder.cellSize   = cs;
+            deckBuilder.tileHeight = 0.15f;
+            deckBuilder.tilePad    = 0.04f;
+            deckBuilder.BuildMesh(isEmpty);
             var deckMr = deckMeshGo.GetComponent<MeshRenderer>();
             deckMr.sharedMaterials = new Material[]
             {
