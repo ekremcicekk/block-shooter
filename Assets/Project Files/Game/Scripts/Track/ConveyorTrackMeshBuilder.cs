@@ -247,14 +247,14 @@ namespace BlockShooter
             // facing the player. This replaces e=10 but starts exactly at belt level.
             if (openZoneEnabled)
             {
-                float outerX = profile[11].x;   // hw + railWidth
+                float innerX = profile[6].x;    // hw  — inner face of right wall (P6)
                 float floorY = profile[11].y;   // -railHeight
 
                 int gapStripBase = verts.Count;
                 for (int s = 0; s <= resolution; s++)
                 {
-                    verts.Add(ToWorld(new Vector2(outerX, 0f),    s, wPos, wRight, wUp));
-                    verts.Add(ToWorld(new Vector2(outerX, floorY),s, wPos, wRight, wUp));
+                    verts.Add(ToWorld(new Vector2(innerX, 0f),    s, wPos, wRight, wUp));
+                    verts.Add(ToWorld(new Vector2(innerX, floorY),s, wPos, wRight, wUp));
                     uvs.Add(Vector2.zero); uvs.Add(Vector2.zero);
                 }
                 for (int s = 0; s < resolution; s++)
@@ -298,14 +298,15 @@ namespace BlockShooter
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            float innerX = profile[6].x;    // hw  (belt-right inner edge)
-            float outerX = profile[11].x;   // hw + railWidth
-            float floorY = profile[11].y;   // -railHeight
+            // Cap spans wall thickness: from inner face (P6.x) to outer face (P11.x)
+            float innerX = profile[6].x;    // hw        — inner face of right wall
+            float outerX = profile[11].x;   // hw + rw   — outer face of right wall
+            float floorY = profile[11].y;   // -rh
 
-            var a = ToWorld(new Vector2(innerX, 0f),     s, wPos, wRight, wUp); // top-inner  (belt level)
-            var b = ToWorld(new Vector2(outerX, 0f),     s, wPos, wRight, wUp); // top-outer  (belt level)
-            var c = ToWorld(new Vector2(outerX, floorY), s, wPos, wRight, wUp); // bot-outer  (floor level)
-            var d = ToWorld(new Vector2(innerX, floorY), s, wPos, wRight, wUp); // bot-inner  (floor level)
+            var a = ToWorld(new Vector2(innerX, 0f),     s, wPos, wRight, wUp); // top-inner
+            var b = ToWorld(new Vector2(outerX, 0f),     s, wPos, wRight, wUp); // top-outer
+            var c = ToWorld(new Vector2(outerX, floorY), s, wPos, wRight, wUp); // bot-outer
+            var d = ToWorld(new Vector2(innerX, floorY), s, wPos, wRight, wUp); // bot-inner
 
             int bi = verts.Count;
             verts.Add(a); verts.Add(b); verts.Add(c); verts.Add(d);
