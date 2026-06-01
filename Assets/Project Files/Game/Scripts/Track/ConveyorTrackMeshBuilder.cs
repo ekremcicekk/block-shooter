@@ -292,22 +292,20 @@ namespace BlockShooter
             return mesh;
         }
 
-        // Flat rectangular cap at sample s.
-        // Top edge: P7 (inner wall top = path inner edge) → P10 (outer wall top = path outer edge).
-        // Bottom edge: virtual points at same X coords as P7/P10, at floor level (P11.y).
-        // This connects the cap flush to the path surface edge (arka kenar / inner face of wall).
+        // Flat rectangular cap at sample s, spanning exactly from belt level (y=0) to
+        // floor level (y=floorY), inner edge at x=innerX, outer edge at x=outerX.
+        // No profile contour followed — pure rectangle, never above belt level.
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            // P7 = (hw, wa-bv)  — inner right wall top  = path inner edge
-            // P10= (hw+rw, wa-bv)— outer right wall top = path outer edge
-            // floor at P11.y
-            float floorY = profile[11].y;
+            float innerX = profile[6].x;    // hw  (belt-right inner edge)
+            float outerX = profile[11].x;   // hw + railWidth
+            float floorY = profile[11].y;   // -railHeight
 
-            var a = ToWorld(profile[7],                                  s, wPos, wRight, wUp); // top-inner (P7)
-            var b = ToWorld(profile[10],                                 s, wPos, wRight, wUp); // top-outer (P10)
-            var c = ToWorld(new Vector2(profile[10].x, floorY),          s, wPos, wRight, wUp); // bot-outer
-            var d = ToWorld(new Vector2(profile[7].x,  floorY),          s, wPos, wRight, wUp); // bot-inner
+            var a = ToWorld(new Vector2(innerX, 0f),     s, wPos, wRight, wUp); // top-inner  (belt level)
+            var b = ToWorld(new Vector2(outerX, 0f),     s, wPos, wRight, wUp); // top-outer  (belt level)
+            var c = ToWorld(new Vector2(outerX, floorY), s, wPos, wRight, wUp); // bot-outer  (floor level)
+            var d = ToWorld(new Vector2(innerX, floorY), s, wPos, wRight, wUp); // bot-inner  (floor level)
 
             int bi = verts.Count;
             verts.Add(a); verts.Add(b); verts.Add(c); verts.Add(d);
