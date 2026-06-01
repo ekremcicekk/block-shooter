@@ -1734,7 +1734,7 @@ namespace BlockShooter.Editor
             deckBuilder.gridRows   = _gridRows;
             deckBuilder.cellSize   = cs;
             deckBuilder.tileHeight = 0.15f;
-            deckBuilder.tilePad    = 0.04f;
+            deckBuilder.wingWidth  = 0.5f;
             deckBuilder.BuildMesh(isEmpty);
             var deckMr = deckMeshGo.GetComponent<MeshRenderer>();
             deckMr.sharedMaterials = new Material[]
