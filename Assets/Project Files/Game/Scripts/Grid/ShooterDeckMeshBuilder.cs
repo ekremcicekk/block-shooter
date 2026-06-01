@@ -63,33 +63,38 @@ namespace BlockShooter
             {
                 if (!E(c, r)) continue;
 
-                bool lb = !E(c-1, r);   // boundary on left
-                bool rb = !E(c+1, r);   // boundary on right
-                bool fb = !E(c, r-1);   // boundary on front (−Z)
-                bool bb = !E(c, r+1);   // boundary on back  (+Z)
+                bool lb = !E(c-1, r);   // wall boundary on left  (filled or OOB)
+                bool rb = !E(c+1, r);   // wall boundary on right (filled or OOB)
+                bool fb = !E(c, r-1);   // wall boundary on front (filled or OOB)
+                bool bb = !E(c, r+1);   // wall boundary on back  (filled or OOB)
+
+                // Wing: extend top surface only at outer grid boundary, never toward filled cells
+                bool lw = c == 0;
+                bool rw = c == gridCols - 1;
+                bool fw = r == 0;
+                bool bw = r == gridRows - 1;
 
                 // ── Top surface ─────────────────────────────────────────────
-                // Main cell quad
                 Top(verts, uvs, trisTop, cx[c], cx[c+1], cz[r], cz[r+1], yT);
 
-                // Edge extensions
-                if (lb) Top(verts, uvs, trisTop, cx[c]-W,    cx[c],      cz[r],    cz[r+1],   yT);
-                if (rb) Top(verts, uvs, trisTop, cx[c+1],    cx[c+1]+W,  cz[r],    cz[r+1],   yT);
-                if (fb) Top(verts, uvs, trisTop, cx[c],      cx[c+1],    cz[r]-W,  cz[r],     yT);
-                if (bb) Top(verts, uvs, trisTop, cx[c],      cx[c+1],    cz[r+1],  cz[r+1]+W, yT);
+                // Edge extensions (OOB boundary only)
+                if (lw) Top(verts, uvs, trisTop, cx[c]-W,    cx[c],      cz[r],    cz[r+1],   yT);
+                if (rw) Top(verts, uvs, trisTop, cx[c+1],    cx[c+1]+W,  cz[r],    cz[r+1],   yT);
+                if (fw) Top(verts, uvs, trisTop, cx[c],      cx[c+1],    cz[r]-W,  cz[r],     yT);
+                if (bw) Top(verts, uvs, trisTop, cx[c],      cx[c+1],    cz[r+1],  cz[r+1]+W, yT);
 
-                // Corner fills (where two extensions meet)
-                if (lb && fb) Top(verts, uvs, trisTop, cx[c]-W,   cx[c],     cz[r]-W,  cz[r],     yT);
-                if (rb && fb) Top(verts, uvs, trisTop, cx[c+1],   cx[c+1]+W, cz[r]-W,  cz[r],     yT);
-                if (lb && bb) Top(verts, uvs, trisTop, cx[c]-W,   cx[c],     cz[r+1],  cz[r+1]+W, yT);
-                if (rb && bb) Top(verts, uvs, trisTop, cx[c+1],   cx[c+1]+W, cz[r+1],  cz[r+1]+W, yT);
+                // Corner fills (OOB corners only)
+                if (lw && fw) Top(verts, uvs, trisTop, cx[c]-W,   cx[c],     cz[r]-W,  cz[r],     yT);
+                if (rw && fw) Top(verts, uvs, trisTop, cx[c+1],   cx[c+1]+W, cz[r]-W,  cz[r],     yT);
+                if (lw && bw) Top(verts, uvs, trisTop, cx[c]-W,   cx[c],     cz[r+1],  cz[r+1]+W, yT);
+                if (rw && bw) Top(verts, uvs, trisTop, cx[c+1],   cx[c+1]+W, cz[r+1],  cz[r+1]+W, yT);
 
-                // ── Walls (outer edge of extensions, including corners) ───────
-                // Left wall  (normal −X) — Z extended by corners if present
+                // ── Walls (at all boundaries; Z/X range extends only where wing corner exists) ──
+                // Left wall (normal −X)
                 if (lb)
                 {
-                    float z0 = fb ? cz[r]-W : cz[r];
-                    float z1 = bb ? cz[r+1]+W : cz[r+1];
+                    float z0 = (lw && fw) ? cz[r]-W : cz[r];
+                    float z1 = (lw && bw) ? cz[r+1]+W : cz[r+1];
                     Wall(verts, uvs, trisWall,
                         cx[c]-W,yB,z1,  cx[c]-W,yT,z1,
                         cx[c]-W,yT,z0,  cx[c]-W,yB,z0);
@@ -97,8 +102,8 @@ namespace BlockShooter
                 // Right wall (normal +X)
                 if (rb)
                 {
-                    float z0 = fb ? cz[r]-W : cz[r];
-                    float z1 = bb ? cz[r+1]+W : cz[r+1];
+                    float z0 = (rw && fw) ? cz[r]-W : cz[r];
+                    float z1 = (rw && bw) ? cz[r+1]+W : cz[r+1];
                     Wall(verts, uvs, trisWall,
                         cx[c+1]+W,yB,z0,  cx[c+1]+W,yT,z0,
                         cx[c+1]+W,yT,z1,  cx[c+1]+W,yB,z1);
@@ -106,17 +111,17 @@ namespace BlockShooter
                 // Front wall (normal −Z)
                 if (fb)
                 {
-                    float x0 = lb ? cx[c]-W : cx[c];
-                    float x1 = rb ? cx[c+1]+W : cx[c+1];
+                    float x0 = (fw && lw) ? cx[c]-W : cx[c];
+                    float x1 = (fw && rw) ? cx[c+1]+W : cx[c+1];
                     Wall(verts, uvs, trisWall,
                         x0,yB,cz[r]-W,  x0,yT,cz[r]-W,
                         x1,yT,cz[r]-W,  x1,yB,cz[r]-W);
                 }
-                // Back wall  (normal +Z)
+                // Back wall (normal +Z)
                 if (bb)
                 {
-                    float x0 = lb ? cx[c]-W : cx[c];
-                    float x1 = rb ? cx[c+1]+W : cx[c+1];
+                    float x0 = (bw && lw) ? cx[c]-W : cx[c];
+                    float x1 = (bw && rw) ? cx[c+1]+W : cx[c+1];
                     Wall(verts, uvs, trisWall,
                         x1,yB,cz[r+1]+W,  x1,yT,cz[r+1]+W,
                         x0,yT,cz[r+1]+W,  x0,yB,cz[r+1]+W);
