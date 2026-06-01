@@ -224,11 +224,9 @@ namespace BlockShooter
                     }
                     else
                     {
-                        // e=7..10 : outer player-facing right wall → skip inside gap.
-                        // e=6     : inner right wall face (P6→P7) → kept; its top vertex
-                        //           at P7 is the path-surface edge the cap connects to.
-                        // e=0..4  : back left wall → always rendered, never cut.
-                        if (openZoneEnabled && e >= 7 && e <= 10)
+                        // e=6..10 : entire right wall (inner face + chamfer + outer face) → skip inside gap.
+                        // e=0..4  : left wall → never cut.
+                        if (openZoneEnabled && e >= 6 && e <= 10)
                         {
                             int dist = Mathf.Abs(s - gapCentre);
                             if (dist > resolution / 2) dist = resolution - dist;
@@ -292,31 +290,36 @@ namespace BlockShooter
             return mesh;
         }
 
-        // Flat rectangular cap at sample s, spanning exactly from belt level (y=0) to
-        // floor level (y=floorY), inner edge at x=innerX, outer edge at x=outerX.
-        // No profile contour followed — pure rectangle, never above belt level.
+        // End-cap at sample s covering the full right-wall cross-section:
+        // P6 (inner base) → P7 → P8 → P9 → P10 → P11 (outer base) → virtual inner bottom → back.
+        // Fan-triangulated from P6, double-sided.
         private static void AddWallCap(Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp,
             List<Vector3> verts, List<Vector2> uvs, List<int> trisWall, int s)
         {
-            // Cap spans wall thickness: from inner face (P6.x) to outer face (P11.x)
-            float innerX = profile[6].x;    // hw        — inner face of right wall
-            float outerX = profile[11].x;   // hw + rw   — outer face of right wall
-            float floorY = profile[11].y;   // -rh
+            var poly = new Vector2[]
+            {
+                profile[6],                                      // P6  inner belt-level
+                profile[7],                                      // P7  inner wall top
+                profile[8],                                      // P8  chamfer
+                profile[9],                                      // P9  chamfer
+                profile[10],                                     // P10 outer wall top
+                profile[11],                                     // P11 outer bottom
+                new Vector2(profile[6].x, profile[11].y),       // virtual inner bottom
+            };
 
-            var a = ToWorld(new Vector2(innerX, 0f),     s, wPos, wRight, wUp); // top-inner
-            var b = ToWorld(new Vector2(outerX, 0f),     s, wPos, wRight, wUp); // top-outer
-            var c = ToWorld(new Vector2(outerX, floorY), s, wPos, wRight, wUp); // bot-outer
-            var d = ToWorld(new Vector2(innerX, floorY), s, wPos, wRight, wUp); // bot-inner
+            int baseIdx = verts.Count;
+            foreach (var p in poly)
+            {
+                verts.Add(ToWorld(p, s, wPos, wRight, wUp));
+                uvs.Add(Vector2.zero);
+            }
 
-            int bi = verts.Count;
-            verts.Add(a); verts.Add(b); verts.Add(c); verts.Add(d);
-            uvs.Add(Vector2.zero); uvs.Add(Vector2.zero);
-            uvs.Add(Vector2.zero); uvs.Add(Vector2.zero);
-
-            trisWall.Add(bi);   trisWall.Add(bi+1); trisWall.Add(bi+2);
-            trisWall.Add(bi);   trisWall.Add(bi+2); trisWall.Add(bi+3);
-            trisWall.Add(bi);   trisWall.Add(bi+2); trisWall.Add(bi+1); // double-sided
-            trisWall.Add(bi);   trisWall.Add(bi+3); trisWall.Add(bi+2);
+            for (int i = 1; i < poly.Length - 1; i++)
+            {
+                int a = baseIdx, b = baseIdx + i, c = baseIdx + i + 1;
+                trisWall.Add(a); trisWall.Add(b); trisWall.Add(c);
+                trisWall.Add(a); trisWall.Add(c); trisWall.Add(b); // double-sided
+            }
         }
 
         // Fan-triangulated flat polygon at sample s, double-sided, for profile[pStart..pEnd].
