@@ -42,10 +42,85 @@ namespace BlockShooter
         [Tooltip("Height the walls drop below Y=0")]
         public float tileHeight    = 0.15f;
         [Tooltip("45-degree chamfer size on outer platform edges (left/right/back). 0 = sharp corners.")]
-        public float bevelSize     = 0.03f;
+        public float bevelSize     = 0.05f;
+        [Tooltip("Number of edge loops in the bevel. 1 = flat chamfer, >1 = rounded arc.")]
+        public int   bevelSegments = 4;
 
         private MeshFilter _mf;
+
+        // Outer and inset contours in XZ (local space). Populated by BuildMesh, used by Gizmos.
+        private Vector2[] _outerContour;
+        private Vector2[] _insetContour;
+
         private void Awake() => _mf = GetComponent<MeshFilter>();
+
+        // Returns the 4-point outer boundary polygon in XZ (clockwise from front-left).
+        Vector2[] ExtractOuterContour(float xL, float xR, float zExtBack, float zFront)
+        {
+            return new Vector2[]
+            {
+                new Vector2(xL, zFront),    // 0: front-left  (open side)
+                new Vector2(xL, zExtBack),  // 1: back-left
+                new Vector2(xR, zExtBack),  // 2: back-right
+                new Vector2(xR, zFront),    // 3: front-right (open side)
+            };
+        }
+
+        // Returns a single inset contour offset inward by B.
+        // Left/right edges move inward in X; back edge moves inward in Z.
+        // Front edge is open — its Z is not inset.
+        Vector2[] InsetContour(Vector2[] outer, float B)
+        {
+            // outer[0]=front-left, [1]=back-left, [2]=back-right, [3]=front-right
+            return new Vector2[]
+            {
+                new Vector2(outer[0].x + B, outer[0].y),        // front-left  inset: x+B, z unchanged
+                new Vector2(outer[1].x + B, outer[1].y + B),    // back-left   inset: x+B, z+B
+                new Vector2(outer[2].x - B, outer[2].y + B),    // back-right  inset: x-B, z+B
+                new Vector2(outer[3].x - B, outer[3].y),        // front-right inset: x-B, z unchanged
+            };
+        }
+
+#if UNITY_EDITOR
+        private void OnDrawGizmos()
+        {
+            float y = transform.position.y + 0.02f;
+            DrawContourGizmo(_outerContour, y, Color.green,  Color.cyan,    0.06f);
+            DrawContourGizmo(_insetContour, y, Color.magenta, Color.yellow, 0.04f);
+
+            // Connect matching vertices between outer and inset with white lines
+            if (_outerContour != null && _insetContour != null &&
+                _outerContour.Length == _insetContour.Length)
+            {
+                UnityEngine.Gizmos.color = new Color(1,1,1,0.4f);
+                for (int i = 0; i < _outerContour.Length; i++)
+                {
+                    Vector3 o = transform.TransformPoint(new Vector3(_outerContour[i].x, y, _outerContour[i].y));
+                    Vector3 n = transform.TransformPoint(new Vector3(_insetContour[i].x, y, _insetContour[i].y));
+                    UnityEngine.Gizmos.DrawLine(o, n);
+                }
+            }
+        }
+
+        void DrawContourGizmo(Vector2[] contour, float y, Color edgeColor, Color vertexColor, float sphereRadius)
+        {
+            if (contour == null || contour.Length < 2) return;
+            for (int i = 0; i < contour.Length; i++)
+            {
+                Vector2 a = contour[i];
+                Vector2 b = contour[(i + 1) % contour.Length];
+                Vector3 pA = transform.TransformPoint(new Vector3(a.x, y, a.y));
+                Vector3 pB = transform.TransformPoint(new Vector3(b.x, y, b.y));
+
+                bool isFrontEdge = (i == contour.Length - 1);
+                UnityEngine.Gizmos.color = isFrontEdge ? Color.yellow : edgeColor;
+                UnityEngine.Gizmos.DrawLine(pA, pB);
+
+                UnityEngine.Gizmos.color = vertexColor;
+                UnityEngine.Gizmos.DrawSphere(pA, sphereRadius);
+            }
+        }
+#endif
 
         public void BuildMesh(bool[,] isEmpty)
         {
@@ -70,6 +145,19 @@ namespace BlockShooter
             float zFront   = cz[gridRows];   // front face (toward conveyor +Z, OPEN)
             float xL       = cx[0]         - W;
             float xR       = cx[gridCols]  + W;
+
+            // Extract outer + inset contours and log both
+            _outerContour = ExtractOuterContour(xL, xR, zExtBack, zFront);
+            _insetContour = InsetContour(_outerContour, B);
+
+            var sb = new System.Text.StringBuilder("ShooterDeck contours:\n");
+            sb.AppendLine("  Outer:");
+            for (int i = 0; i < _outerContour.Length; i++)
+                sb.AppendLine($"    [{i}] ({_outerContour[i].x:F3}, {_outerContour[i].y:F3})");
+            sb.AppendLine($"  Inset (B={B:F3}):");
+            for (int i = 0; i < _insetContour.Length; i++)
+                sb.AppendLine($"    [{i}] ({_insetContour[i].x:F3}, {_insetContour[i].y:F3})");
+            Debug.Log(sb.ToString());
 
             bool E(int c, int r) =>
                 c >= 0 && c < gridCols && r >= 0 && r < gridRows && isEmpty[c, r];
@@ -114,22 +202,9 @@ namespace BlockShooter
             AddWallX(verts, uvs, trisWall, xR, zExtBack, zFront,   yM, yB, true);  // Right outer (+X)
             AddWallZ(verts, uvs, trisWall, xL, xR,       zExtBack, yM, yB, false); // Back  outer (-Z)
 
-            // ── 4. Bevel chamfer strips (outer edges only) ───────────────────
-            // Left  chamfer: along x=xL, slopes from (xL+B, yT) down to (xL, yM)
-            AddBevelEdgeX(verts, uvs, trisWall, xL, zExtBack+B, zFront,   yT, B, false);
-            // Right chamfer: along x=xR, slopes from (xR-B, yT) down to (xR, yM)
-            AddBevelEdgeX(verts, uvs, trisWall, xR, zExtBack+B, zFront,   yT, B, true);
-            // Back  chamfer: along z=zExtBack, slopes from (x, yT, zExtBack+B) down to (x, yM, zExtBack)
-            AddBevelEdgeZ(verts, uvs, trisWall, xL+B, xR-B,     zExtBack, yT, B, false);
-
-            // ── 5. Bevel corner caps (back-left and back-right) ──────────────
-            // Each cap is a quad (2 tris) closing the gap between two meeting chamfer strips.
-            //   A = top inner point
-            //   S = bottom on the side (left/right) chamfer end
-            //   C = actual wall corner (where left wall meets back wall at yM)  ← was missing before
-            //   K = bottom on the back chamfer end
-            AddBevelCornerCap(verts, uvs, trisWall, xL+B, yT, B, zExtBack, false); // back-left
-            AddBevelCornerCap(verts, uvs, trisWall, xR-B, yT, B, zExtBack, true);  // back-right
+            // ── 4. Bevel faces — arc rings from outer contour (at yM) to inset contour (at yT) ──
+            int segs = Mathf.Max(1, bevelSegments);
+            BuildBevelFaces(verts, uvs, trisWall, _outerContour, _insetContour, yT, yM, segs);
 
             // ── 6. Inner wing boundary walls ─────────────────────────────────
             // Inner LEFT (x=cx[0]): filled c=0 cells face the left wing; normal +X
@@ -197,77 +272,61 @@ namespace BlockShooter
                 AddWall(v, u, t, x0,yB,z, x0,yT,z, x1,yT,z, x1,yB,z);
         }
 
-        /// <summary>
-        /// 45° chamfer strip along the top of an X-aligned outer wall (wall at fixed x, spanning z0..z1).
-        /// normalRight=true  (right +X wall): top edge at (x-B, yT), bottom at (x, yM).
-        /// normalRight=false (left  -X wall): top edge at (x+B, yT), bottom at (x, yM).
-        /// </summary>
-        static void AddBevelEdgeX(List<Vector3> v, List<Vector2> u, List<int> t,
-            float x, float z0, float z1, float yT, float B, bool normalRight)
+        // Builds bevel faces using arc-interpolated rings between outer (at yM) and inset (at yT).
+        // segments=1 → single flat chamfer quad per edge.
+        // segments>1 → multiple quads following a quarter-circle arc per edge.
+        // No separate corner caps needed: adjacent edge quads share corner vertices automatically.
+        static void BuildBevelFaces(List<Vector3> v, List<Vector2> u, List<int> t,
+            Vector2[] outer, Vector2[] inset, float yT, float yM, int segments)
         {
-            float xInner = normalRight ? x - B : x + B;
-            float yM     = yT - B;
-            if (normalRight)
-                AddWall(v, u, t, x,yM,z0, xInner,yT,z0, xInner,yT,z1, x,yM,z1);
-            else
-                AddWall(v, u, t, x,yM,z1, xInner,yT,z1, xInner,yT,z0, x,yM,z0);
-        }
+            int n = outer.Length;
+            float B = yT - yM; // bevel height (positive)
 
-        /// <summary>
-        /// 45° chamfer strip along the top of a Z-aligned outer wall (wall at fixed z, spanning x0..x1).
-        /// normalBack=false (-Z back wall): top edge at (x, yT, z+B), bottom at (x, yM, z).
-        /// normalBack=true  (+Z front wall): top edge at (x, yT, z-B), bottom at (x, yM, z).
-        /// </summary>
-        static void AddBevelEdgeZ(List<Vector3> v, List<Vector2> u, List<int> t,
-            float x0, float x1, float z, float yT, float B, bool normalBack)
-        {
-            float zInner = normalBack ? z - B : z + B;
-            float yM     = yT - B;
-            if (normalBack)
-                AddWall(v, u, t, x1,yM,z, x1,yT,zInner, x0,yT,zInner, x0,yM,z);
-            else
-                AddWall(v, u, t, x0,yM,z, x0,yT,zInner, x1,yT,zInner, x1,yM,z);
-        }
+            // Build rings[k][i]: XZ position of vertex i at ring k.
+            // Ring 0 = outer at yM, ring segments = inset at yT.
+            // XZ follows cos arc, Y follows sin arc (quarter-circle).
+            var ringXZ = new Vector2[segments + 1][];
+            var ringY  = new float  [segments + 1];
 
-        /// <summary>
-        /// Corner cap where two outer chamfer strips meet at a back corner.
-        /// Fills the gap with a quad (2 triangles) so the mesh is watertight.
-        ///
-        /// Four vertices of the cap:
-        ///   A = (xInner, yT, zBack+B)  — top inner shared point
-        ///   S = (xOuter, yM, zBack+B)  — side chamfer lower end
-        ///   C = (xOuter, yM, zBack)    — actual wall corner (where left/right wall meets back wall)
-        ///   K = (xInner, yM, zBack)    — back chamfer lower end
-        ///
-        /// rightCorner=false → back-left  (xOuter = xInner-B, outward normal toward -X,-Z)
-        /// rightCorner=true  → back-right (xOuter = xInner+B, outward normal toward +X,-Z)
-        /// </summary>
-        static void AddBevelCornerCap(List<Vector3> v, List<Vector2> u, List<int> t,
-            float xInner, float yT, float B, float zBack, bool rightCorner)
-        {
-            float xOuter = rightCorner ? xInner + B : xInner - B;
-            float yM     = yT - B;
-
-            // Vertices: [0]=A, [1]=S, [2]=C, [3]=K
-            int b = v.Count;
-            v.Add(new Vector3(xInner, yT, zBack+B)); // A — top inner
-            v.Add(new Vector3(xOuter, yM, zBack+B)); // S — side chamfer lower end
-            v.Add(new Vector3(xOuter, yM, zBack));   // C — actual wall corner
-            v.Add(new Vector3(xInner, yM, zBack));   // K — back chamfer lower end
-            u.Add(new Vector2(0.5f,1f)); u.Add(new Vector2(0,0));
-            u.Add(new Vector2(0,0));     u.Add(new Vector2(1,0));
-
-            if (rightCorner)
+            for (int k = 0; k <= segments; k++)
             {
-                // back-right: diagonal A→S→K, horizontal S→C→K (outward +X,-Z)
-                t.Add(b); t.Add(b+1); t.Add(b+3); // A S K
-                t.Add(b+1); t.Add(b+2); t.Add(b+3); // S C K
+                float theta = (k / (float)segments) * Mathf.PI * 0.5f;
+                ringY[k]  = yM + B * Mathf.Sin(theta);
+                float cosT = Mathf.Cos(theta);
+
+                ringXZ[k] = new Vector2[n];
+                for (int i = 0; i < n; i++)
+                {
+                    Vector2 diff = outer[i] - inset[i];
+                    float   dist = diff.magnitude;
+                    Vector2 dir  = dist > 0.0001f ? diff / dist : Vector2.zero;
+                    ringXZ[k][i] = inset[i] + dir * dist * cosT;
+                }
             }
-            else
+
+            // Emit quads between consecutive rings for each non-front edge.
+            for (int i = 0; i < n; i++)
             {
-                // back-left: diagonal A→K→S, horizontal S→K→C (outward -X,-Z)
-                t.Add(b); t.Add(b+3); t.Add(b+1); // A K S
-                t.Add(b+1); t.Add(b+3); t.Add(b+2); // S K C
+                int  next        = (i + 1) % n;
+                bool isFrontEdge = (i == n - 1);
+                if (isFrontEdge) continue;
+
+                for (int k = 0; k < segments; k++)
+                {
+                    var oA = new Vector3(ringXZ[k]  [i].x,    ringY[k],   ringXZ[k]  [i].y);
+                    var oB = new Vector3(ringXZ[k]  [next].x, ringY[k],   ringXZ[k]  [next].y);
+                    var iA = new Vector3(ringXZ[k+1][i].x,    ringY[k+1], ringXZ[k+1][i].y);
+                    var iB = new Vector3(ringXZ[k+1][next].x, ringY[k+1], ringXZ[k+1][next].y);
+
+                    int b = v.Count;
+                    v.Add(oA); v.Add(iA); v.Add(iB); v.Add(oB);
+                    u.Add(new Vector2(0, (float)k/segments));
+                    u.Add(new Vector2(0, (float)(k+1)/segments));
+                    u.Add(new Vector2(1, (float)(k+1)/segments));
+                    u.Add(new Vector2(1, (float)k/segments));
+                    t.Add(b); t.Add(b+1); t.Add(b+2);
+                    t.Add(b); t.Add(b+2); t.Add(b+3);
+                }
             }
         }
 
