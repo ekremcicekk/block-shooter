@@ -1511,8 +1511,9 @@ namespace BlockShooter.Editor
             WriteDesignData(lr);
             BuildHierarchy(root.transform, lr);
 
-            // Save generated track mesh as a persistent asset so prefab can reference it
+            // Save generated meshes as persistent assets so prefab can reference them
             SaveTrackMeshAsset(root.transform, dir, name);
+            SaveDeckMeshAsset(root.transform, dir, name);
 
             PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
             DestroyImmediate(root);
@@ -1741,21 +1742,12 @@ namespace BlockShooter.Editor
                 _cfg.deckWallMaterial,
             };
 
-            // ── Ground ──
+            // ── Ground (optional, only if prefab explicitly assigned) ──
             if (_cfg.groundPrefab != null)
             {
                 var gnd = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.groundPrefab, root);
                 gnd.name = "Ground";
                 gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth * .3f);
-            }
-            else
-            {
-                var gnd = GameObject.CreatePrimitive(PrimitiveType.Plane);
-                gnd.name = "Ground";
-                gnd.transform.SetParent(root, false);
-                gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth * .3f);
-                gnd.transform.localScale    = new Vector3(2f, 1f, 2f);
-                DestroyImmediate(gnd.GetComponent<MeshCollider>());
             }
         }
 
@@ -1774,6 +1766,29 @@ namespace BlockShooter.Editor
             if (existing != null)
             {
                 // Reuse existing asset to keep prefab references stable
+                existing.Clear();
+                EditorUtility.CopySerialized(mf.sharedMesh, existing);
+                mf.sharedMesh = existing;
+            }
+            else
+            {
+                AssetDatabase.CreateAsset(mf.sharedMesh, meshPath);
+            }
+        }
+
+        private static void SaveDeckMeshAsset(Transform root, string dir, string name)
+        {
+            var deck = root.Find("ShooterDeck");
+            if (deck == null) return;
+            var mf = deck.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) return;
+
+            const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
+            EnsureDir(meshDir);
+            string meshPath = $"{meshDir}/{name}_DeckMesh.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            if (existing != null)
+            {
                 existing.Clear();
                 EditorUtility.CopySerialized(mf.sharedMesh, existing);
                 mf.sharedMesh = existing;
