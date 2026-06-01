@@ -56,6 +56,8 @@ namespace BlockShooter
         public float deckTileHeight = 0.15f;
         [Tooltip("Inset from cell boundary for tiles adjacent to filled cells (creates gap around shooter blocks)")]
         public float cellPadding    = 0.05f;
+        [Tooltip("45-degree chamfer size on outer platform edges (left/right/back). 0 = sharp corners.")]
+        public float bevelSize      = 0.03f;
         [Tooltip("Slot 0 — top/deck surface material")]
         public Material deckTopMaterial;
         [Tooltip("Slot 1 — side wall material")]
