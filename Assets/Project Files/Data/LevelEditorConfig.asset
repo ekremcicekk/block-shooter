@@ -35,6 +35,7 @@ MonoBehaviour:
   sideWingWidth: 5
   backDepth: 5
   deckTileHeight: 2
-  bevelSize: 0.2
+  bevelSize: 0.1
+  bevelSegments: 3
   deckTopMaterial: {fileID: 2100000, guid: fb0a40a42cd09724dbb5ec66b917d204, type: 2}
   deckWallMaterial: {fileID: 2100000, guid: 4b4f972e845c754428d7d8f762e7f4ee, type: 2}

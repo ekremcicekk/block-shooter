@@ -29,7 +29,7 @@ namespace BlockShooter
             float gHD = gridRows * cellSize * 0.5f;
             float yT  = 0f;
             float yB  = -tileHeight;
-            float R   = Mathf.Clamp(bevelSize, 0f, Mathf.Min(sideWingWidth, backDepth) * 0.9f);
+            float R   = Mathf.Clamp(bevelSize, 0f, Mathf.Min(cellSize * 0.5f, Mathf.Min(sideWingWidth, backDepth) * 0.9f));
             int   S   = Mathf.Max(1, bevelSegments);
 
             var cx = new float[gridCols + 1];
@@ -42,98 +42,217 @@ namespace BlockShooter
             float xL     = cx[0]        - sideWingWidth;
             float xR     = cx[gridCols] + sideWingWidth;
 
-            bool E(int c, int r) =>
-                c >= 0 && c < gridCols && r >= 0 && r < gridRows && isEmpty[c, r];
+            bool IsPlatform(int col, int row)
+            {
+                if (row >= gridRows) return false;
+                if (col < 0 || col >= gridCols) return true;
+                if (row < 0) return true;
+                return isEmpty[col, row];
+            }
+
+            bool HasCornerTR(int c, int r)
+            {
+                bool tr = IsPlatform(c, r);
+                bool tl = IsPlatform(c - 1, r);
+                bool bl = IsPlatform(c - 1, r - 1);
+                bool br = IsPlatform(c, r - 1);
+                return (tr && !tl && !br) || (!tr && tl && br && bl);
+            }
+
+            bool HasCornerTL(int c, int r)
+            {
+                bool tr = IsPlatform(c, r);
+                bool tl = IsPlatform(c - 1, r);
+                bool bl = IsPlatform(c - 1, r - 1);
+                bool br = IsPlatform(c, r - 1);
+                return (tl && !tr && !bl) || (!tl && tr && bl && br);
+            }
+
+            bool HasCornerBL(int c, int r)
+            {
+                bool tr = IsPlatform(c, r);
+                bool tl = IsPlatform(c - 1, r);
+                bool bl = IsPlatform(c - 1, r - 1);
+                bool br = IsPlatform(c, r - 1);
+                return (bl && !tl && !br) || (!bl && tl && br && tr);
+            }
+
+            bool HasCornerBR(int c, int r)
+            {
+                bool tr = IsPlatform(c, r);
+                bool tl = IsPlatform(c - 1, r);
+                bool bl = IsPlatform(c - 1, r - 1);
+                bool br = IsPlatform(c, r - 1);
+                return (br && !bl && !tr) || (!br && bl && tr && tl);
+            }
 
             var verts    = new List<Vector3>();
             var uvs      = new List<Vector2>();
             var trisTop  = new List<int>();
             var trisWall = new List<int>();
 
-            // ── 1. Empty cell tiles + inter-cell walls (UNCHANGED) ─────────
+            // ── 1. Empty cell tiles (top surfaces) ─────────────────────────
             for (int r = 0; r < gridRows; r++)
             for (int c = 0; c < gridCols; c++)
             {
-                if (!E(c, r)) continue;
-                AddTop(verts, uvs, trisTop, cx[c], cx[c+1], cz[r], cz[r+1], yT);
+                if (!isEmpty[c, r]) continue;
 
-                if (c > 0 && !E(c-1, r))
-                    AddWallX(verts, uvs, trisWall, cx[c], cz[r], cz[r+1], yT, yB, false);
-                if (c < gridCols-1 && !E(c+1, r))
-                    AddWallX(verts, uvs, trisWall, cx[c+1], cz[r], cz[r+1], yT, yB, true);
-                if (r > 0 && !E(c, r-1))
-                    AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[r], yT, yB, false);
-                if (r < gridRows-1 && !E(c, r+1))
-                    AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[r+1], yT, yB, true);
+                // Center strip
+                AddTop(verts, uvs, trisTop, cx[c] + R, cx[c+1] - R, cz[r], cz[r+1], yT);
+
+                // Left side strip
+                AddTop(verts, uvs, trisTop, cx[c], cx[c] + R, cz[r] + R, cz[r+1] - R, yT);
+
+                // Right side strip
+                AddTop(verts, uvs, trisTop, cx[c+1] - R, cx[c+1], cz[r] + R, cz[r+1] - R, yT);
+
+                // BL corner square (if not rounded)
+                if (!HasCornerTR(c, r))
+                    AddTop(verts, uvs, trisTop, cx[c], cx[c] + R, cz[r], cz[r] + R, yT);
+
+                // BR corner square (if not rounded)
+                if (!HasCornerTL(c + 1, r))
+                    AddTop(verts, uvs, trisTop, cx[c+1] - R, cx[c+1], cz[r], cz[r] + R, yT);
+
+                // TL corner square (if not rounded)
+                if (!HasCornerBR(c, r + 1))
+                    AddTop(verts, uvs, trisTop, cx[c], cx[c] + R, cz[r+1] - R, cz[r+1], yT);
+
+                // TR corner square (if not rounded)
+                if (!HasCornerBL(c + 1, r + 1))
+                    AddTop(verts, uvs, trisTop, cx[c+1] - R, cx[c+1], cz[r+1] - R, cz[r+1], yT);
             }
 
             // ── 2. Wing tops (rounded corners in XZ) ───────────────────────
             // Left wing: 3 rects + 2 corner fans
             AddTop(verts, uvs, trisTop, xL,   cx[0], zBack+R, zFront-R, yT); // full-width centre strip
             AddTop(verts, uvs, trisTop, xL+R, cx[0], zBack,   zBack+R,  yT); // back inner strip
-            AddTop(verts, uvs, trisTop, xL+R, cx[0], zFront-R,zFront,   yT); // front inner strip
-            AddCornerFan(verts, uvs, trisTop, xL+R, zBack+R,  R, S, 180f, yT); // back-left
-            AddCornerFan(verts, uvs, trisTop, xL+R, zFront-R, R, S,  90f, yT); // front-left
+            float leftWingFrontRightX = cx[0] - (IsPlatform(0, gridRows - 1) ? 0f : R);
+            AddTop(verts, uvs, trisTop, xL+R, leftWingFrontRightX, zFront-R,zFront,   yT); // front inner strip
+            AddCornerFan(verts, uvs, trisTop, xL+R, zBack+R, xL+R, zBack+R,  R, S, 180f, yT); // back-left
+            AddCornerFan(verts, uvs, trisTop, xL+R, zFront-R, xL+R, zFront-R, R, S,  90f, yT); // front-left
 
             // Right wing: 3 rects + 2 corner fans (rect 1 goes full width to xR like left wing)
             AddTop(verts, uvs, trisTop, cx[gridCols], xR,   zBack+R, zFront-R, yT);
             AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zBack,   zBack+R,  yT);
-            AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zFront-R,zFront,   yT);
-            AddCornerFan(verts, uvs, trisTop, xR-R, zBack+R,  R, S, 270f, yT); // back-right
-            AddCornerFan(verts, uvs, trisTop, xR-R, zFront-R, R, S,   0f, yT); // front-right
+            float rightWingFrontLeftX = cx[gridCols] + (IsPlatform(gridCols - 1, gridRows - 1) ? 0f : R);
+            AddTop(verts, uvs, trisTop, rightWingFrontLeftX, xR-R, zFront-R,zFront,   yT); // front inner strip
+            AddCornerFan(verts, uvs, trisTop, xR-R, zBack+R, xR-R, zBack+R,  R, S, 270f, yT); // back-right
+            AddCornerFan(verts, uvs, trisTop, xR-R, zFront-R, xR-R, zFront-R, R, S,   0f, yT); // front-right
 
             // Back wing: grid-width strip (no corners, handled above)
             AddTop(verts, uvs, trisTop, cx[0], cx[gridCols], zBack, cz[0], yT);
 
-            // ── 3. Outer walls: straight sections + curved corners ──────────
+            // ── 3. Straight walls ──────────────────────────────────────────
             AddWallX(verts, uvs, trisWall, xL, zBack+R, zFront-R, yT, yB, false); // left straight
             AddWallX(verts, uvs, trisWall, xR, zBack+R, zFront-R, yT, yB, true);  // right straight
             AddWallZ(verts, uvs, trisWall, xL+R, xR-R, zBack, yT, yB, false);     // back straight
 
-            AddCurvedWall(verts, uvs, trisWall, xL+R, zBack+R,  R, S, 180f, yT, yB); // back-left
-            AddCurvedWall(verts, uvs, trisWall, xR-R, zBack+R,  R, S, 270f, yT, yB); // back-right
-            AddCurvedWall(verts, uvs, trisWall, xL+R, zFront-R, R, S,  90f, yT, yB); // front-left
-            AddCurvedWall(verts, uvs, trisWall, xR-R, zFront-R, R, S,   0f, yT, yB); // front-right
-
-            // ── 4. Inner boundary walls ───────────────────────────────────────
-            bool cornerBL = !E(0, 0);
-            bool cornerBR = !E(gridCols - 1, 0);
-
+            // Grid X-walls (vertical walls at constant x = cx[c])
+            for (int c = 0; c <= gridCols; c++)
             for (int r = 0; r < gridRows; r++)
             {
-                if (!E(0, r))
+                bool tl = IsPlatform(c - 1, r);
+                bool tr = IsPlatform(c, r);
+                if (tl != tr)
                 {
-                    float z0 = (r == 0 && cornerBL) ? cz[0] + R : cz[r];
-                    if (z0 < cz[r + 1])
-                        AddWallX(verts, uvs, trisWall, cx[0], z0, cz[r + 1], yT, yB, true);
-                }
-                if (!E(gridCols - 1, r))
-                {
-                    float z0 = (r == 0 && cornerBR) ? cz[0] + R : cz[r];
-                    if (z0 < cz[r + 1])
-                        AddWallX(verts, uvs, trisWall, cx[gridCols], z0, cz[r + 1], yT, yB, false);
-                }
-            }
-            for (int c = 0; c < gridCols; c++)
-            {
-                if (!E(c, 0))
-                {
-                    float x0 = (c == 0           && cornerBL) ? cx[0]        + R : cx[c];
-                    float x1 = (c == gridCols - 1 && cornerBR) ? cx[gridCols] - R : cx[c + 1];
-                    if (x0 < x1)
-                        AddWallZ(verts, uvs, trisWall, x0, x1, cz[0], yT, yB, false);
+                    bool normalRight = tl && !tr; // platform on left, hole on right -> faces right (+X)
+                    float zStart = cz[r];
+                    if (HasCornerTL(c, r) || HasCornerTR(c, r))
+                        zStart += R;
+
+                    float zEnd = cz[r+1];
+                    if (HasCornerBL(c, r+1) || HasCornerBR(c, r+1))
+                        zEnd -= R;
+
+                    if (zStart < zEnd)
+                        AddWallX(verts, uvs, trisWall, cx[c], zStart, zEnd, yT, yB, normalRight);
                 }
             }
 
-            if (cornerBL)
+            // Grid and Wing Z-walls (horizontal walls)
+            for (int r = 0; r <= gridRows; r++)
+            for (int c = -1; c <= gridCols; c++)
             {
-                AddCurvedWall(verts, uvs, trisWall, cx[0] + R,        cz[0] + R, R, S, 180f, yT, yB);
-                AddCornerFan (verts, uvs, trisTop,  cx[0] + R,        cz[0] + R, R, S, 180f, yT);
+                bool bl = IsPlatform(c, r - 1);
+                bool tr = IsPlatform(c, r);
+                if (bl != tr)
+                {
+                    bool normalFwd = bl && !tr; // platform below, hole above -> faces north (+Z)
+                    float xStart = (c == -1) ? xL + R : cx[c];
+                    if (c > -1)
+                    {
+                        if (HasCornerTR(c, r) || HasCornerBR(c, r))
+                            xStart += R;
+                    }
+
+                    float xEnd = (c == gridCols) ? xR - R : cx[c+1];
+                    if (c < gridCols)
+                    {
+                        if (HasCornerTL(c+1, r) || HasCornerBL(c+1, r))
+                            xEnd -= R;
+                    }
+
+                    if (xStart < xEnd)
+                        AddWallZ(verts, uvs, trisWall, xStart, xEnd, cz[r], yT, yB, normalFwd);
+                }
             }
-            if (cornerBR)
+
+            // ── 4. Curved Corners & Fans ───────────────────────────────────
+            // Outer wing curved walls
+            AddCurvedWall(verts, uvs, trisWall, xL+R, zBack+R,  R, S, 180f, yT, yB, false); // back-left
+            AddCurvedWall(verts, uvs, trisWall, xR-R, zBack+R,  R, S, 270f, yT, yB, false); // back-right
+            AddCurvedWall(verts, uvs, trisWall, xL+R, zFront-R, R, S,  90f, yT, yB, false); // front-left
+            AddCurvedWall(verts, uvs, trisWall, xR-R, zFront-R, R, S,   0f, yT, yB, false); // front-right
+
+            // Grid vertices curved corners
+            for (int c = 0; c <= gridCols; c++)
+            for (int r = 0; r <= gridRows; r++)
             {
-                AddCurvedWall(verts, uvs, trisWall, cx[gridCols] - R, cz[0] + R, R, S, 270f, yT, yB);
-                AddCornerFan (verts, uvs, trisTop,  cx[gridCols] - R, cz[0] + R, R, S, 270f, yT);
+                bool tr = IsPlatform(c, r);
+                bool tl = IsPlatform(c - 1, r);
+                bool bl = IsPlatform(c - 1, r - 1);
+                bool br = IsPlatform(c, r - 1);
+
+                // TR quadrant corner
+                if ((tr && !tl && !br) || (!tr && tl && br && bl))
+                {
+                    bool inward = !tr;
+                    float fx = inward ? cx[c] : cx[c] + R;
+                    float fz = inward ? cz[r] : cz[r] + R;
+                    AddCurvedWall(verts, uvs, trisWall, cx[c] + R, cz[r] + R, R, S, 180f, yT, yB, inward);
+                    AddCornerFan(verts, uvs, trisTop, fx, fz, cx[c] + R, cz[r] + R, R, S, 180f, yT);
+                }
+
+                // TL quadrant corner
+                if ((tl && !tr && !bl) || (!tl && tr && bl && br))
+                {
+                    bool inward = !tl;
+                    float fx = inward ? cx[c] : cx[c] - R;
+                    float fz = inward ? cz[r] : cz[r] + R;
+                    AddCurvedWall(verts, uvs, trisWall, cx[c] - R, cz[r] + R, R, S, 270f, yT, yB, inward);
+                    AddCornerFan(verts, uvs, trisTop, fx, fz, cx[c] - R, cz[r] + R, R, S, 270f, yT);
+                }
+
+                // BL quadrant corner
+                if ((bl && !tl && !br) || (!bl && tl && br && tr))
+                {
+                    bool inward = !bl;
+                    float fx = inward ? cx[c] : cx[c] - R;
+                    float fz = inward ? cz[r] : cz[r] - R;
+                    AddCurvedWall(verts, uvs, trisWall, cx[c] - R, cz[r] - R, R, S, 0f, yT, yB, inward);
+                    AddCornerFan(verts, uvs, trisTop, fx, fz, cx[c] - R, cz[r] - R, R, S, 0f, yT);
+                }
+
+                // BR quadrant corner
+                if ((br && !bl && !tr) || (!br && bl && tr && tl))
+                {
+                    bool inward = !br;
+                    float fx = inward ? cx[c] : cx[c] + R;
+                    float fz = inward ? cz[r] : cz[r] - R;
+                    AddCurvedWall(verts, uvs, trisWall, cx[c] + R, cz[r] - R, R, S, 90f, yT, yB, inward);
+                    AddCornerFan(verts, uvs, trisTop, fx, fz, cx[c] + R, cz[r] - R, R, S, 90f, yT);
+                }
             }
 
             // ── Build mesh ────────────────────────────────────────────────────
@@ -186,11 +305,11 @@ namespace BlockShooter
         /// Winding gives +Y normal (visible from above).
         /// </summary>
         static void AddCornerFan(List<Vector3> v, List<Vector2> u, List<int> t,
-            float cx, float cz, float R, int S, float startDeg, float yT)
+            float fx, float fz, float cx, float cz, float R, int S, float startDeg, float yT)
         {
             int ci = v.Count;
-            v.Add(new Vector3(cx, yT, cz));
-            u.Add(new Vector2(cx, cz));
+            v.Add(new Vector3(fx, yT, fz));
+            u.Add(new Vector2(fx, fz));
 
             for (int k = 0; k <= S; k++)
             {
@@ -203,18 +322,34 @@ namespace BlockShooter
 
             for (int k = 0; k < S; k++)
             {
-                t.Add(ci);
-                t.Add(ci + 2 + k); // arc[k+1] first — CCW from above gives +Y normal
-                t.Add(ci + 1 + k); // arc[k]
+                int idxA = ci + 1 + k;
+                int idxB = ci + 2 + k;
+                Vector3 pA = v[idxA];
+                Vector3 pB = v[idxB];
+                
+                // Calculate 2D cross product from fan center (fx, fz) to determine CW winding
+                float cross = (pA.x - fx) * (pB.z - fz) - (pA.z - fz) * (pB.x - fx);
+                if (cross < 0f)
+                {
+                    t.Add(ci);
+                    t.Add(idxA);
+                    t.Add(idxB);
+                }
+                else
+                {
+                    t.Add(ci);
+                    t.Add(idxB);
+                    t.Add(idxA);
+                }
             }
         }
 
         /// <summary>
         /// Curved vertical wall following a 90° arc in XZ, extruded from yT to yB.
-        /// Center (cx, cz), arc sweeps CCW from startDeg. Outward normals computed by RecalculateNormals.
+        /// Center (cx, cz), arc sweeps CCW from startDeg. Outward or inward normals.
         /// </summary>
         static void AddCurvedWall(List<Vector3> v, List<Vector2> u, List<int> t,
-            float cx, float cz, float R, int S, float startDeg, float yT, float yB)
+            float cx, float cz, float R, int S, float startDeg, float yT, float yB, bool normalInward)
         {
             var arc = new Vector2[S + 1];
             for (int k = 0; k <= S; k++)
@@ -225,11 +360,22 @@ namespace BlockShooter
 
             for (int k = 0; k < S; k++)
             {
-                AddQuad(v, u, t,
-                    arc[k].x,   yB, arc[k].y,
-                    arc[k].x,   yT, arc[k].y,
-                    arc[k+1].x, yT, arc[k+1].y,
-                    arc[k+1].x, yB, arc[k+1].y);
+                if (normalInward)
+                {
+                    AddQuad(v, u, t,
+                        arc[k+1].x, yB, arc[k+1].y,
+                        arc[k+1].x, yT, arc[k+1].y,
+                        arc[k].x,   yT, arc[k].y,
+                        arc[k].x,   yB, arc[k].y);
+                }
+                else
+                {
+                    AddQuad(v, u, t,
+                        arc[k].x,   yB, arc[k].y,
+                        arc[k].x,   yT, arc[k].y,
+                        arc[k+1].x, yT, arc[k+1].y,
+                        arc[k+1].x, yB, arc[k+1].y);
+                }
             }
         }
 
