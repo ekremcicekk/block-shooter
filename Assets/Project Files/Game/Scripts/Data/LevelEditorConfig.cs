@@ -15,10 +15,8 @@ namespace BlockShooter
 
         [Header("Runtime Prefabs")]
         public GameObject shooterBlockPrefab;
-        public GameObject wallElementPrefab;
         public GameObject conveyorBlockPrefab;
         public GameObject slotIndicatorPrefab;
-        public GameObject trackSegmentPrefab;
         public GameObject arrowPrefab;
         public GameObject fireRangePrefab;
         public GameObject groundPrefab;

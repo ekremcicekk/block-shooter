@@ -21,7 +21,7 @@ namespace BlockShooter.Editor
         private const int   MaxRows  = 6;
 
         // FireRange world Z — all splines pass through this point
-        private const float FIRE_Z = 0;
+        private const float FIRE_Z = 0.5f;
 
         // ── Config ────────────────────────────────────────────────────────────
         private LevelEditorConfig _cfg;
@@ -415,8 +415,9 @@ namespace BlockShooter.Editor
             _previewGo = new GameObject("[SplinePreview]");
             var track = new GameObject("Track");
             track.transform.SetParent(_previewGo.transform, false);
+            track.transform.localPosition = new Vector3(0f, 0f, 0.5f);
             var sc = track.AddComponent<SplineContainer>();
-            WriteKnotsToContainer(sc);
+            WriteKnotsToContainer(sc, 0f, -0.5f);
 
             // Select track and frame it in the scene
             Selection.activeGameObject = track;
@@ -528,7 +529,7 @@ namespace BlockShooter.Editor
             Handles.color = new Color(1f, .9f, .1f, .8f);
             for (int i = 0; i < slots; i++)
             {
-                var p = new Vector3(-tw * .5f + i * cs, 0f, FIRE_Z - 1.5f);
+                var p = new Vector3(-tw * .5f + i * cs, 0f, -0.75f);
                 float sz = HandleUtility.GetHandleSize(p) * .12f;
                 Handles.SphereHandleCap(0, p, Quaternion.identity, sz, EventType.Repaint);
             }
@@ -540,7 +541,7 @@ namespace BlockShooter.Editor
             for (int r = 0; r < _gridRows; r++)
             for (int c = 0; c < _gridCols; c++)
             {
-                var pos = new Vector3(-hw + c * cs, 0f, FIRE_Z - 3.5f - hd + r * cs);
+                var pos = new Vector3(-hw + c * cs, 0f, -3.5f - hd + r * cs);
                 Color col = _type[c, r] == GridCellType.Empty
                     ? new Color(.3f, .3f, .3f, .25f)
                     : new Color(PC(_color[c, r]).r, PC(_color[c, r]).g, PC(_color[c, r]).b, .55f);
@@ -777,27 +778,58 @@ namespace BlockShooter.Editor
             float d  = _splineDepth;
 
             _knots.Clear();
+            _tangentsIn.Clear();
+            _tangentsOut.Clear();
+            _tangentModes.Clear();
+
             switch (_splinePreset)
             {
-                case 0: // Oval
-                    _knots.Add(new Vector3( 0,  0, fz      ));
-                    _knots.Add(new Vector3(+hw, 0, fz+d*.5f));
-                    _knots.Add(new Vector3( 0,  0, fz+d    ));
-                    _knots.Add(new Vector3(-hw, 0, fz+d*.5f));
+                case 0: // Oval (Perfect Ellipse)
+                    _knots.Add(new Vector3(0f, 0f, fz));
+                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(0f, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.5f));
+
+                    for (int i = 0; i < 4; i++)
+                    {
+                        _tangentsIn.Add(Vector3.zero);
+                        _tangentsOut.Add(Vector3.zero);
+                        _tangentModes.Add(TangentMode.AutoSmooth);
+                    }
                     break;
-                case 1: // Wide
-                    _knots.Add(new Vector3( 0,  0, fz       ));
-                    _knots.Add(new Vector3(+hw, 0, fz+d*.25f));
-                    _knots.Add(new Vector3( 0,  0, fz+d     ));
-                    _knots.Add(new Vector3(-hw, 0, fz+d*.25f));
+
+                case 1: // Wide (Capsule / Stadium Shape)
+                    _knots.Add(new Vector3(0f, 0f, fz));
+                    _knots.Add(new Vector3(+hw * 0.6f, 0f, fz));
+                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(+hw * 0.6f, 0f, fz + d));
+                    _knots.Add(new Vector3(0f, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw * 0.6f, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(-hw * 0.6f, 0f, fz));
+
+                    for (int i = 0; i < 8; i++)
+                    {
+                        _tangentsIn.Add(Vector3.zero);
+                        _tangentsOut.Add(Vector3.zero);
+                        _tangentModes.Add(TangentMode.AutoSmooth);
+                    }
                     break;
-                case 2: // Rectangle — 6 knots, knot 0 always at center-front (X=0)
-                    _knots.Add(new Vector3(  0,  0, fz        ));
-                    _knots.Add(new Vector3(+hw,  0, fz+d*.15f ));
-                    _knots.Add(new Vector3(+hw,  0, fz+d*.85f ));
-                    _knots.Add(new Vector3(  0,  0, fz+d      ));
-                    _knots.Add(new Vector3(-hw,  0, fz+d*.85f ));
-                    _knots.Add(new Vector3(-hw,  0, fz+d*.15f ));
+
+                case 2: // Rectangle
+                    _knots.Add(new Vector3(0f, 0f, fz));
+                    _knots.Add(new Vector3(+hw, 0f, fz));
+                    _knots.Add(new Vector3(+hw, 0f, fz + d));
+                    _knots.Add(new Vector3(0f, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw, 0f, fz));
+
+                    for (int i = 0; i < 6; i++)
+                    {
+                        _tangentsIn.Add(Vector3.zero);
+                        _tangentsOut.Add(Vector3.zero);
+                        _tangentModes.Add(TangentMode.Linear);
+                    }
                     break;
             }
 
@@ -860,7 +892,7 @@ namespace BlockShooter.Editor
         {
             if (_previewGo == null) return;
             var sc = _previewGo.GetComponentInChildren<SplineContainer>();
-            if (sc != null) WriteKnotsToContainer(sc);
+            if (sc != null) WriteKnotsToContainer(sc, 0f, -0.5f);
             SceneView.RepaintAll();
         }
 
@@ -875,7 +907,7 @@ namespace BlockShooter.Editor
             if (_tangentModes.Count > _knots.Count) _tangentModes.RemoveRange(_knots.Count, _tangentModes.Count - _knots.Count);
         }
 
-        private void WriteKnotsToContainer(SplineContainer sc, float yOffset = 0f)
+        private void WriteKnotsToContainer(SplineContainer sc, float yOffset = 0f, float zOffset = 0f)
         {
             EnsureTangentLists();
             var spline = sc.Spline;
@@ -885,7 +917,7 @@ namespace BlockShooter.Editor
                 var k = _knots[i];
                 var tanIn  = (float3)(Vector3)_tangentsIn[i];
                 var tanOut = (float3)(Vector3)_tangentsOut[i];
-                spline.Add(new BezierKnot(new float3(k.x, k.y + yOffset, k.z), tanIn, tanOut));
+                spline.Add(new BezierKnot(new float3(k.x, k.y + yOffset, k.z + zOffset), tanIn, tanOut));
             }
             spline.Closed = true;
             for (int i = 0; i < spline.Count; i++)
@@ -1432,10 +1464,32 @@ namespace BlockShooter.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            if (_activeIdx == idx) { _activeIdx = -1; NewLevel(); }
-            else if (_activeIdx > idx) _activeIdx--;
-
             RefreshList();
+
+            if (_activeIdx == idx)
+            {
+                if (_paths.Count > 0)
+                {
+                    _activeIdx = Mathf.Clamp(idx, 0, _paths.Count - 1);
+                    LoadLevel(_activeIdx);
+                }
+                else
+                {
+                    _activeIdx = -1;
+                    DestroyLevelPreview();
+                    _levelName = "";
+                    _levelIndex = 1;
+                }
+            }
+            else
+            {
+                int oldActiveIdx = _activeIdx;
+                if (oldActiveIdx > idx)
+                {
+                    _activeIdx = oldActiveIdx - 1;
+                }
+            }
+
             Repaint();
         }
 
@@ -1568,17 +1622,18 @@ namespace BlockShooter.Editor
         private void BuildHierarchy(Transform root, LevelRoot lr)
         {
             float cs   = _cfg.gridCellSize;
-            float slotZ = FIRE_Z - 1.5f;
-            float gridZ = FIRE_Z - 3.5f;
+            float slotZ = -0.75f;
+            float gridZ = -3.5f;
 
             // Create ConveyorSystem parent group
             var conveyorSys = Go(root, "ConveyorSystem");
 
             // ── Track ──
             var trackGo = Go(conveyorSys.transform, "Track");
+            trackGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
             var sc = trackGo.AddComponent<SplineContainer>();
             float trackRailHeight = _cfg.railHeight;
-            WriteKnotsToContainer(sc, trackRailHeight);
+            WriteKnotsToContainer(sc, trackRailHeight, -0.5f);
             var cc = trackGo.AddComponent<ConveyorController>();
             cc.speed = _cfg.conveyorSpeed;
             lr.conveyorController = cc;
@@ -1726,14 +1781,6 @@ namespace BlockShooter.Editor
                         var d = go.AddComponent<BlockDoor>();
                         d.blockCount = _doors[c,r];
                         d.spawnColors = new List<BlockColorType> { _color[c,r] };
-                        break;
-                    }
-                    case GridCellType.Empty when _cfg.wallElementPrefab != null:
-                    {
-                        var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.wallElementPrefab, sgGo.transform);
-                        go.name = nm; go.transform.localPosition = pos;
-                        PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
-                        go.GetComponent<WallElement>()?.SetGridPosition(c, r);
                         break;
                     }
                 }
