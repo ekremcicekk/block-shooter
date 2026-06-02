@@ -1571,8 +1571,11 @@ namespace BlockShooter.Editor
             float slotZ = FIRE_Z - 1.5f;
             float gridZ = FIRE_Z - 3.5f;
 
+            // Create ConveyorSystem parent group
+            var conveyorSys = Go(root, "ConveyorSystem");
+
             // ── Track ──
-            var trackGo = Go(root, "Track");
+            var trackGo = Go(conveyorSys.transform, "Track");
             var sc = trackGo.AddComponent<SplineContainer>();
             WriteKnotsToContainer(sc);
             var cc = trackGo.AddComponent<ConveyorController>();
@@ -1633,31 +1636,38 @@ namespace BlockShooter.Editor
                                 _cfg.conveyorBlockPrefab, rowGo.transform);
                             bGo.name = $"Block_{lane}";
                             bGo.transform.localPosition = Vector3.zero;
+                            PrefabUtility.RecordPrefabInstancePropertyModifications(bGo.transform);
                             bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
                         }
                     }
             }
 
+            // Create logical parent groups
+            var gameplayLogic = Go(root, "GameplayLogic");
+            var boardPlatform = Go(root, "BoardPlatform");
+
             // ── FireRange ── (always anchored at FIRE_Z)
             GameObject frGo;
             if (_cfg.fireRangePrefab != null)
             {
-                frGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.fireRangePrefab, root);
+                frGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.fireRangePrefab, gameplayLogic.transform);
                 frGo.name = "FireRange";
             }
             else
             {
-                frGo = Go(root, "FireRange");
+                frGo = Go(gameplayLogic.transform, "FireRange");
                 var fc = frGo.AddComponent<BoxCollider>();
                 fc.isTrigger = true;
                 fc.size = new Vector3(1.8f, 2f, 0.8f);
                 frGo.AddComponent<FireRange>();
             }
             frGo.transform.localPosition = new Vector3(0f, 0f, FIRE_Z);
+            if (PrefabUtility.IsPartOfPrefabInstance(frGo))
+                PrefabUtility.RecordPrefabInstancePropertyModifications(frGo.transform);
             lr.fireRange = frGo.GetComponent<FireRange>();
 
             // ── SlotDeck ──
-            var deckGo = Go(root, "SlotDeck");
+            var deckGo = Go(boardPlatform.transform, "SlotDeck");
             deckGo.transform.localPosition = new Vector3(0f, 0f, slotZ);
             var ss = deckGo.AddComponent<SlotSystem>();
             if (_cfg.slotIndicatorPrefab != null) ss.slotIndicatorPrefab = _cfg.slotIndicatorPrefab;
@@ -1670,7 +1680,7 @@ namespace BlockShooter.Editor
                     new Vector3(-tw*.5f + i*cs, 0f, 0f);
 
             // ── ShooterGrid ──
-            var sgGo = Go(root, "ShooterGrid");
+            var sgGo = Go(boardPlatform.transform, "ShooterGrid");
             sgGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
             var sg = sgGo.AddComponent<ShooterGrid>();
             if (_cfg.shooterBlockPrefab != null)
@@ -1692,6 +1702,7 @@ namespace BlockShooter.Editor
                     {
                         var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.shooterBlockPrefab, sgGo.transform);
                         go.name = nm; go.transform.localPosition = pos;
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
                         int sh = Mathf.Max(1, _shots[c,r]);
                         var sb = go.GetComponent<ShooterBlock>();
                         sb?.EditorSetup(_color[c,r], sh, c, r);
@@ -1715,6 +1726,7 @@ namespace BlockShooter.Editor
                     {
                         var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.wallElementPrefab, sgGo.transform);
                         go.name = nm; go.transform.localPosition = pos;
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
                         go.GetComponent<WallElement>()?.SetGridPosition(c, r);
                         break;
                     }
@@ -1727,7 +1739,7 @@ namespace BlockShooter.Editor
             for (int r = 0; r < _gridRows; r++)
                 isEmpty[c, r] = _type[c, r] == GridCellType.Empty;
 
-            var deckMeshGo = Go(root, "ShooterDeck");
+            var deckMeshGo = Go(boardPlatform.transform, "ShooterDeck");
             deckMeshGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
             var deckBuilder = deckMeshGo.AddComponent<ShooterDeckMeshBuilder>();
             deckBuilder.gridCols      = _gridCols;
@@ -1749,16 +1761,18 @@ namespace BlockShooter.Editor
             // ── Ground (optional, only if prefab explicitly assigned) ──
             if (_cfg.groundPrefab != null)
             {
-                var gnd = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.groundPrefab, root);
+                var envGo = Go(root, "Environment");
+                var gnd = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.groundPrefab, envGo.transform);
                 gnd.name = "Ground";
-                gnd.transform.localPosition = new Vector3(0f, -.01f, FIRE_Z + _splineDepth * .3f);
+                gnd.transform.localPosition = Vector3.zero;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(gnd.transform);
             }
         }
 
         // ── Track mesh asset ──────────────────────────────────────────────────
         private static void SaveTrackMeshAsset(Transform root, string dir, string name)
         {
-            var track = root.Find("Track");
+            var track = FindDeepChild(root, "Track");
             if (track == null) return;
             var mf = track.GetComponent<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return;
@@ -1782,7 +1796,7 @@ namespace BlockShooter.Editor
 
         private static void SaveDeckMeshAsset(Transform root, string dir, string name)
         {
-            var deck = root.Find("ShooterDeck");
+            var deck = FindDeepChild(root, "ShooterDeck");
             if (deck == null) return;
             var mf = deck.GetComponent<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return;
@@ -1801,6 +1815,17 @@ namespace BlockShooter.Editor
             {
                 AssetDatabase.CreateAsset(mf.sharedMesh, meshPath);
             }
+        }
+
+        private static Transform FindDeepChild(Transform parent, string name)
+        {
+            foreach (Transform child in parent)
+            {
+                if (child.name == name) return child;
+                var found = FindDeepChild(child, name);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         // ── Test In Scene ─────────────────────────────────────────────────────

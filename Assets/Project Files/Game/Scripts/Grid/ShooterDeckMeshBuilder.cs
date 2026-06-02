@@ -27,8 +27,8 @@ namespace BlockShooter
 
             float gHW = gridCols * cellSize * 0.5f;
             float gHD = gridRows * cellSize * 0.5f;
-            float yT  = 0f;
-            float yB  = -tileHeight;
+            float yT  = tileHeight;
+            float yB  = 0f;
             float R   = Mathf.Clamp(bevelSize, 0f, Mathf.Min(cellSize * 0.5f, Mathf.Min(sideWingWidth, backDepth) * 0.9f));
             int   S   = Mathf.Max(1, bevelSegments);
 
