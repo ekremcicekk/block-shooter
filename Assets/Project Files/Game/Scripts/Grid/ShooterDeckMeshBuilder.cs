@@ -13,10 +13,10 @@ namespace BlockShooter
         public float sideWingWidth = 2f;
         public float backDepth     = 2f;
         public float tileHeight    = 0.15f;
-        [Tooltip("Bevel width — how far the arc cuts into the top surface and wall.")]
-        public float bevelSize     = 0.05f;
-        [Tooltip("1 = flat chamfer. 3-6 = smooth rounded arc.")]
-        public int   bevelSegments = 4;
+        [Tooltip("Corner rounding radius in XZ (top-down view). 0 = sharp corners.")]
+        public float bevelSize     = 0.3f;
+        [Tooltip("1 = chamfer. 4-8 = smooth rounded corners.")]
+        public int   bevelSegments = 6;
 
         private MeshFilter _mf;
         private void Awake() => _mf = GetComponent<MeshFilter>();
@@ -29,8 +29,7 @@ namespace BlockShooter
             float gHD = gridRows * cellSize * 0.5f;
             float yT  = 0f;
             float yB  = -tileHeight;
-            float B   = Mathf.Clamp(bevelSize, 0f,
-                            Mathf.Min(tileHeight, Mathf.Min(sideWingWidth, backDepth)) * 0.9f);
+            float R   = Mathf.Clamp(bevelSize, 0f, Mathf.Min(sideWingWidth, backDepth) * 0.9f);
             int   S   = Mathf.Max(1, bevelSegments);
 
             var cx = new float[gridCols + 1];
@@ -40,8 +39,8 @@ namespace BlockShooter
 
             float zBack  = cz[0] - backDepth;
             float zFront = cz[gridRows];
-            float xL     = cx[0]         - sideWingWidth;
-            float xR     = cx[gridCols]  + sideWingWidth;
+            float xL     = cx[0]        - sideWingWidth;
+            float xR     = cx[gridCols] + sideWingWidth;
 
             bool E(int c, int r) =>
                 c >= 0 && c < gridCols && r >= 0 && r < gridRows && isEmpty[c, r];
@@ -51,7 +50,7 @@ namespace BlockShooter
             var trisTop  = new List<int>();
             var trisWall = new List<int>();
 
-            // ── 1. Empty cell tiles + inter-cell walls (NO bevel — unchanged) ─
+            // ── 1. Empty cell tiles + inter-cell walls (UNCHANGED) ─────────
             for (int r = 0; r < gridRows; r++)
             for (int c = 0; c < gridCols; c++)
             {
@@ -68,49 +67,46 @@ namespace BlockShooter
                     AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[r+1], yT, yB, true);
             }
 
-            // ── 2. Wing tops (edges adjacent to beveled walls are inset by B) ─
-            AddTop(verts, uvs, trisTop, xL+B, cx[0],        cz[0], zFront,   yT); // left wing
-            AddTop(verts, uvs, trisTop, cx[gridCols], xR-B, cz[0], zFront,   yT); // right wing
-            AddTop(verts, uvs, trisTop, xL+B, xR-B,  zBack+B, cz[0],        yT); // back wing
+            // ── 2. Wing tops (rounded corners in XZ) ───────────────────────
+            // Left wing: 3 rects + 2 corner fans
+            AddTop(verts, uvs, trisTop, xL,   cx[0], zBack+R, zFront-R, yT); // full-width centre strip
+            AddTop(verts, uvs, trisTop, xL+R, cx[0], zBack,   zBack+R,  yT); // back inner strip
+            AddTop(verts, uvs, trisTop, xL+R, cx[0], zFront-R,zFront,   yT); // front inner strip
+            AddCornerFan(verts, uvs, trisTop, xL+R, zBack+R,  R, S, 180f, yT); // back-left
+            AddCornerFan(verts, uvs, trisTop, xL+R, zFront-R, R, S,  90f, yT); // front-left
 
-            // ── 3. Outer walls — shortened by B at top (Y only, XZ unchanged) ─
-            AddWallX(verts, uvs, trisWall, xL, zBack,  zFront, yT-B, yB, false);
-            AddWallX(verts, uvs, trisWall, xR, zBack,  zFront, yT-B, yB, true);
-            AddWallZ(verts, uvs, trisWall, xL, xR,     zBack,  yT-B, yB, false);
+            // Right wing: 3 rects + 2 corner fans
+            AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zBack+R, zFront-R, yT);
+            AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zBack,   zBack+R,  yT);
+            AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zFront-R,zFront,   yT);
+            AddCornerFan(verts, uvs, trisTop, xR-R, zBack+R,  R, S, 270f, yT); // back-right
+            AddCornerFan(verts, uvs, trisTop, xR-R, zFront-R, R, S,   0f, yT); // front-right
 
-            // ── 4. Outer bevel arcs (replace the original sharp top edge) ────
-            AddBevelArcX(verts, uvs, trisWall, xL, zBack+B, zFront,  yT, B, S, false);
-            AddBevelArcX(verts, uvs, trisWall, xR, zBack+B, zFront,  yT, B, S, true);
-            AddBevelArcZ(verts, uvs, trisWall, xL+B, xR-B,  zBack,   yT, B, S, false);
+            // Back wing: grid-width strip (no corners, handled above)
+            AddTop(verts, uvs, trisTop, cx[0], cx[gridCols], zBack, cz[0], yT);
 
-            // ── 5. Outer corner fills (back-left and back-right) ─────────────
-            AddBevelCorner(verts, uvs, trisWall, xL+B, yT, B, zBack, false);
-            AddBevelCorner(verts, uvs, trisWall, xR-B, yT, B, zBack, true);
+            // ── 3. Outer walls: straight sections + curved corners ──────────
+            AddWallX(verts, uvs, trisWall, xL, zBack+R, zFront-R, yT, yB, false); // left straight
+            AddWallX(verts, uvs, trisWall, xR, zBack+R, zFront-R, yT, yB, true);  // right straight
+            AddWallZ(verts, uvs, trisWall, xL+R, xR-R, zBack, yT, yB, false);     // back straight
 
-            // ── 6. Inner boundary walls + bevel arcs ─────────────────────────
+            AddCurvedWall(verts, uvs, trisWall, xL+R, zBack+R,  R, S, 180f, yT, yB); // back-left
+            AddCurvedWall(verts, uvs, trisWall, xR-R, zBack+R,  R, S, 270f, yT, yB); // back-right
+            AddCurvedWall(verts, uvs, trisWall, xL+R, zFront-R, R, S,  90f, yT, yB); // front-left
+            AddCurvedWall(verts, uvs, trisWall, xR-R, zFront-R, R, S,   0f, yT, yB); // front-right
+
+            // ── 4. Inner boundary walls (UNCHANGED) ─────────────────────────
             for (int r = 0; r < gridRows; r++)
             {
-                // Inner left (x=cx[0], faces +X into wing)
                 if (!E(0, r))
-                {
-                    AddWallX(verts, uvs, trisWall, cx[0], cz[r], cz[r+1], yT-B, yB, true);
-                    AddBevelArcX(verts, uvs, trisWall, cx[0], cz[r], cz[r+1], yT, B, S, true);
-                }
-                // Inner right (x=cx[gridCols], faces -X into wing)
+                    AddWallX(verts, uvs, trisWall, cx[0], cz[r], cz[r+1], yT, yB, true);
                 if (!E(gridCols-1, r))
-                {
-                    AddWallX(verts, uvs, trisWall, cx[gridCols], cz[r], cz[r+1], yT-B, yB, false);
-                    AddBevelArcX(verts, uvs, trisWall, cx[gridCols], cz[r], cz[r+1], yT, B, S, false);
-                }
+                    AddWallX(verts, uvs, trisWall, cx[gridCols], cz[r], cz[r+1], yT, yB, false);
             }
             for (int c = 0; c < gridCols; c++)
             {
-                // Inner back (z=cz[0], faces -Z into back wing)
                 if (!E(c, 0))
-                {
-                    AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[0], yT-B, yB, false);
-                    AddBevelArcZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[0], yT, B, S, false);
-                }
+                    AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[0], yT, yB, false);
             }
 
             // ── Build mesh ────────────────────────────────────────────────────
@@ -158,110 +154,63 @@ namespace BlockShooter
         }
 
         /// <summary>
-        /// Bevel arc on an X-aligned wall (fixed x, runs z0..z1).
-        /// Generates S quad strips replacing the original sharp top edge.
-        /// Arc goes from (x, yT-B, z) inward to (xInner, yT, z).
-        /// normalRight=false → left wall (-X normal, xInner = x+B)
-        /// normalRight=true  → right wall (+X normal, xInner = x-B)
+        /// Triangle fan filling a rounded corner on the top surface.
+        /// Center (cx, cz) is the inset corner point. Arc sweeps 90° CCW from startDeg.
+        /// Winding gives +Y normal (visible from above).
         /// </summary>
-        static void AddBevelArcX(List<Vector3> v, List<Vector2> u, List<int> t,
-            float x, float z0, float z1, float yT, float B, int S, bool normalRight)
+        static void AddCornerFan(List<Vector3> v, List<Vector2> u, List<int> t,
+            float cx, float cz, float R, int S, float startDeg, float yT)
         {
-            float xInner = normalRight ? x - B : x + B;
-            // Precompute arc rings (px=x coord, py=y coord) for k=0..S
-            var ring = new (float px, float py)[S + 1];
+            int ci = v.Count;
+            v.Add(new Vector3(cx, yT, cz));
+            u.Add(new Vector2(cx, cz));
+
             for (int k = 0; k <= S; k++)
             {
-                float a = k / (float)S * Mathf.PI * 0.5f;
-                // Arc center at (xInner, yT-B). Starts at (x, yT-B), ends at (xInner, yT).
-                float px = xInner + (x - xInner) * Mathf.Cos(a); // x → xInner as k→S
-                float py = yT - B + B * Mathf.Sin(a);            // yT-B → yT as k→S
-                ring[k]  = (px, py);
-            }
-            // ring[0] = (x, yT-B) — top of shortened wall
-            // ring[S] = (xInner, yT) — inset top surface edge
-
-            for (int k = 0; k < S; k++)
-            {
-                var (ax, ay) = ring[k];
-                var (bx, by) = ring[k+1];
-                if (normalRight)
-                    AddQuad(v, u, t, ax,ay,z0, bx,by,z0, bx,by,z1, ax,ay,z1);
-                else
-                    AddQuad(v, u, t, ax,ay,z1, bx,by,z1, bx,by,z0, ax,ay,z0);
-            }
-        }
-
-        /// <summary>
-        /// Bevel arc on a Z-aligned wall (fixed z, runs x0..x1).
-        /// normalFwd=false → back wall (-Z normal, zInner = z+B)
-        /// normalFwd=true  → front wall (+Z normal, zInner = z-B)
-        /// </summary>
-        static void AddBevelArcZ(List<Vector3> v, List<Vector2> u, List<int> t,
-            float x0, float x1, float z, float yT, float B, int S, bool normalFwd)
-        {
-            float zInner = normalFwd ? z - B : z + B;
-            var ring = new (float pz, float py)[S + 1];
-            for (int k = 0; k <= S; k++)
-            {
-                float a  = k / (float)S * Mathf.PI * 0.5f;
-                float pz = zInner + (z - zInner) * Mathf.Cos(a);
-                float py = yT - B + B * Mathf.Sin(a);
-                ring[k]  = (pz, py);
+                float a  = (startDeg + k * 90f / S) * Mathf.Deg2Rad;
+                float px = cx + R * Mathf.Cos(a);
+                float pz = cz + R * Mathf.Sin(a);
+                v.Add(new Vector3(px, yT, pz));
+                u.Add(new Vector2(px, pz));
             }
 
             for (int k = 0; k < S; k++)
             {
-                var (az, ay) = ring[k];
-                var (bz, by) = ring[k+1];
-                if (normalFwd)
-                    AddQuad(v, u, t, x1,ay,az, x1,by,bz, x0,by,bz, x0,ay,az);
-                else
-                    AddQuad(v, u, t, x0,ay,az, x0,by,bz, x1,by,bz, x1,ay,az);
+                t.Add(ci);
+                t.Add(ci + 1 + k);
+                t.Add(ci + 2 + k);
             }
         }
 
         /// <summary>
-        /// Corner fill where the back bevel arc meets the left/right bevel arc.
-        /// Fills the gap at (xOuter, zBack) with two triangles:
-        ///   A = (xInner, yT,   zBack+B) — top inner corner
-        ///   S = (xOuter, yT-B, zBack+B) — left/right arc bottom at z=zBack+B
-        ///   C = (xOuter, yT-B, zBack)   — actual wall corner (junction at yT-B)
-        ///   K = (xInner, yT-B, zBack)   — back arc bottom at x=xInner
-        /// rightCorner=false → back-left, rightCorner=true → back-right
+        /// Curved vertical wall following a 90° arc in XZ, extruded from yT to yB.
+        /// Center (cx, cz), arc sweeps CCW from startDeg. Outward normals computed by RecalculateNormals.
         /// </summary>
-        static void AddBevelCorner(List<Vector3> v, List<Vector2> u, List<int> t,
-            float xInner, float yT, float B, float zBack, bool rightCorner)
+        static void AddCurvedWall(List<Vector3> v, List<Vector2> u, List<int> t,
+            float cx, float cz, float R, int S, float startDeg, float yT, float yB)
         {
-            float xOuter = rightCorner ? xInner + B : xInner - B;
-            float yM     = yT - B;
-
-            int b = v.Count;
-            v.Add(new Vector3(xInner, yT, zBack+B)); // 0 A
-            v.Add(new Vector3(xOuter, yM, zBack+B)); // 1 S
-            v.Add(new Vector3(xOuter, yM, zBack));   // 2 C
-            v.Add(new Vector3(xInner, yM, zBack));   // 3 K
-            u.Add(new Vector2(0.5f,1f)); u.Add(new Vector2(0,0));
-            u.Add(new Vector2(0,0));     u.Add(new Vector2(1,0));
-
-            if (rightCorner)
+            var arc = new Vector2[S + 1];
+            for (int k = 0; k <= S; k++)
             {
-                t.Add(b); t.Add(b+1); t.Add(b+3); // A S K
-                t.Add(b+1); t.Add(b+2); t.Add(b+3); // S C K
+                float a = (startDeg + k * 90f / S) * Mathf.Deg2Rad;
+                arc[k] = new Vector2(cx + R * Mathf.Cos(a), cz + R * Mathf.Sin(a));
             }
-            else
+
+            for (int k = 0; k < S; k++)
             {
-                t.Add(b); t.Add(b+3); t.Add(b+1); // A K S
-                t.Add(b+1); t.Add(b+3); t.Add(b+2); // S K C
+                AddQuad(v, u, t,
+                    arc[k].x,   yB, arc[k].y,
+                    arc[k].x,   yT, arc[k].y,
+                    arc[k+1].x, yT, arc[k+1].y,
+                    arc[k+1].x, yB, arc[k+1].y);
             }
         }
 
-        // BL, TL, TR, BR — outward CCW winding.
         static void AddQuad(List<Vector3> v, List<Vector2> u, List<int> t,
-            float blx,float bly,float blz,
-            float tlx,float tly,float tlz,
-            float trx,float try_,float trz,
-            float brx,float bry,float brz)
+            float blx, float bly, float blz,
+            float tlx, float tly, float tlz,
+            float trx, float try_, float trz,
+            float brx, float bry, float brz)
         {
             int b = v.Count;
             v.Add(new Vector3(blx,bly,blz)); v.Add(new Vector3(tlx,tly,tlz));

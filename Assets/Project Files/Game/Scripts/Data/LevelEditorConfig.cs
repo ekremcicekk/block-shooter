@@ -54,10 +54,10 @@ namespace BlockShooter
         public float backDepth     = 2f;
         [Tooltip("Wall drop height below Y=0")]
         public float deckTileHeight = 0.15f;
-        [Tooltip("Bevel width — how far the arc cuts into the top surface and wall.")]
-        public float bevelSize      = 0.05f;
-        [Tooltip("1 = flat chamfer. 3-6 = smooth rounded arc.")]
-        public int   bevelSegments  = 4;
+        [Tooltip("Corner rounding radius in XZ (top-down view). 0 = sharp corners.")]
+        public float bevelSize      = 0.3f;
+        [Tooltip("1 = chamfer. 4-8 = smooth rounded corners.")]
+        public int   bevelSegments  = 6;
         [Tooltip("Slot 0 — top/deck surface material")]
         public Material deckTopMaterial;
         [Tooltip("Slot 1 — side wall material")]
