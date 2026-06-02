@@ -19,8 +19,6 @@ namespace BlockShooter
         [Header("Visuals")]
         [Tooltip("Prefab shown when slot is empty (gray rounded square). Falls back to a cube if null.")]
         public GameObject slotIndicatorPrefab;
-        [Tooltip("Scale applied to each slot indicator")]
-        public Vector3 indicatorScale = new Vector3(0.9f, 0.1f, 0.9f);
 
         [Header("Animation")]
         public float moveToSlotDuration = 0.35f;
@@ -59,9 +57,14 @@ namespace BlockShooter
         /// </summary>
         public void Initialize()
         {
-            // Clean up any previous state
+            // Clean up only runtime-added indicators (e.g. from extra slots)
             foreach (var ind in _indicators)
-                if (ind != null) Destroy(ind);
+            {
+                if (ind != null && ind.transform.parent == transform)
+                {
+                    Destroy(ind);
+                }
+            }
 
             _slotPositions.Clear();
             _occupied.Clear();
@@ -90,10 +93,18 @@ namespace BlockShooter
                 _slotPositions.Add(t.position);
                 _occupied.Add(null);
 
-                GameObject ind = slotIndicatorPrefab != null
-                    ? Instantiate(slotIndicatorPrefab, t.position, Quaternion.identity, transform)
-                    : CreateDefaultIndicator(t.position);
-                ind.transform.localScale = indicatorScale;
+                GameObject ind = null;
+                if (t.childCount > 0)
+                {
+                    ind = t.GetChild(0).gameObject;
+                    ind.SetActive(true);
+                }
+                else
+                {
+                    ind = slotIndicatorPrefab != null
+                        ? Instantiate(slotIndicatorPrefab, t.position, Quaternion.identity, t)
+                        : CreateDefaultIndicator(t);
+                }
                 _indicators.Add(ind);
             }
 
@@ -143,9 +154,14 @@ namespace BlockShooter
 
             GameObject ind = slotIndicatorPrefab != null
                 ? Instantiate(slotIndicatorPrefab, newPos, Quaternion.identity, transform)
-                : CreateDefaultIndicator(newPos);
+                : CreateDefaultIndicator(transform);
+            if (slotIndicatorPrefab == null)
+            {
+                ind.transform.position = newPos;
+            }
+            Vector3 originalScale = ind.transform.localScale;
             ind.transform.localScale = Vector3.zero;
-            ind.transform.DOScale(indicatorScale, 0.4f).SetEase(Ease.OutBack);
+            ind.transform.DOScale(originalScale, 0.4f).SetEase(Ease.OutBack);
             _indicators.Add(ind);
         }
 
@@ -165,12 +181,11 @@ namespace BlockShooter
                 _indicators[idx].SetActive(visible);
         }
 
-        private GameObject CreateDefaultIndicator(Vector3 pos)
+        private GameObject CreateDefaultIndicator(Transform parent)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "SlotIndicator";
-            go.transform.position = pos;
-            go.transform.SetParent(transform);
+            go.transform.SetParent(parent, false);
             Destroy(go.GetComponent<Collider>());
 
             var mr = go.GetComponent<MeshRenderer>();

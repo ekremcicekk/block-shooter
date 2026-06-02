@@ -16,7 +16,7 @@ MonoBehaviour:
   shooterBlockPrefab: {fileID: 9104099848893320791, guid: d352cff43f63e444da50c3c9e6f33540, type: 3}
   wallElementPrefab: {fileID: 0}
   conveyorBlockPrefab: {fileID: 6901060413654150086, guid: 12fe760b4c1250b49834abbac9208222, type: 3}
-  slotIndicatorPrefab: {fileID: 0}
+  slotIndicatorPrefab: {fileID: 1713317401027110795, guid: 5ab95acabef822d46b46dadcf622be12, type: 3}
   trackSegmentPrefab: {fileID: 0}
   arrowPrefab: {fileID: 5382590712880826785, guid: 67e4f67177226804cb7a5efb43e82c93, type: 3}
   fireRangePrefab: {fileID: 926021276733090944, guid: 811b749e63bcb5142976d5f4f148bba8, type: 3}
@@ -34,7 +34,7 @@ MonoBehaviour:
   slotCount: 4
   gridCellSize: 1.2
   defaultShots: 3
-  arrowSpacing: 2
+  arrowSpacing: 1
   trackSideMaterial: {fileID: 2100000, guid: 4b4f972e845c754428d7d8f762e7f4ee, type: 2}
   trackBeltMaterial: {fileID: 2100000, guid: fb0a40a42cd09724dbb5ec66b917d204, type: 2}
   sideWingWidth: 5

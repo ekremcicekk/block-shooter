@@ -111,6 +111,8 @@ namespace BlockShooter
             if (_splineContainer == null) return;
             _splineContainer.Spline.Evaluate(t, out var pos, out var tangent, out var up);
 
+            pos.y = 0f;
+
             obj.position = transform.TransformPoint(pos);
 
             Vector3 fwd = transform.TransformDirection((Vector3)tangent).normalized;

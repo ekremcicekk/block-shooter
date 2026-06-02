@@ -1672,8 +1672,18 @@ namespace BlockShooter.Editor
             int   slots = _cfg.slotCount;
             float tw    = (slots - 1) * cs;
             for (int i = 0; i < slots; i++)
-                Go(deckGo.transform, $"Slot_{i}").transform.localPosition =
-                    new Vector3(-tw*.5f + i*cs, 0f, 0f);
+            {
+                var slotGo = Go(deckGo.transform, $"Slot_{i}");
+                slotGo.transform.localPosition = new Vector3(-tw * .5f + i * cs, 0f, 0f);
+
+                if (_cfg.slotIndicatorPrefab != null)
+                {
+                    var indGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.slotIndicatorPrefab, slotGo.transform);
+                    indGo.name = "SlotIndicator";
+                    indGo.transform.localPosition = Vector3.zero;
+                    indGo.transform.localRotation = Quaternion.identity;
+                }
+            }
 
             // ── ShooterGrid ──
             var sgGo = Go(boardPlatform.transform, "ShooterGrid");
