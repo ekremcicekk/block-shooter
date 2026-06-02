@@ -75,8 +75,8 @@ namespace BlockShooter
             AddCornerFan(verts, uvs, trisTop, xL+R, zBack+R,  R, S, 180f, yT); // back-left
             AddCornerFan(verts, uvs, trisTop, xL+R, zFront-R, R, S,  90f, yT); // front-left
 
-            // Right wing: 3 rects + 2 corner fans
-            AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zBack+R, zFront-R, yT);
+            // Right wing: 3 rects + 2 corner fans (rect 1 goes full width to xR like left wing)
+            AddTop(verts, uvs, trisTop, cx[gridCols], xR,   zBack+R, zFront-R, yT);
             AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zBack,   zBack+R,  yT);
             AddTop(verts, uvs, trisTop, cx[gridCols], xR-R, zFront-R,zFront,   yT);
             AddCornerFan(verts, uvs, trisTop, xR-R, zBack+R,  R, S, 270f, yT); // back-right
@@ -95,85 +95,18 @@ namespace BlockShooter
             AddCurvedWall(verts, uvs, trisWall, xL+R, zFront-R, R, S,  90f, yT, yB); // front-left
             AddCurvedWall(verts, uvs, trisWall, xR-R, zFront-R, R, S,   0f, yT, yB); // front-right
 
-            // ── 4. Inner boundary walls + bevel ─────────────────────────────
-            // Inner LEFT (x=cx[0]): filled c=0 cells face +X into wing
+            // ── 4. Inner boundary walls (straight, no bevel yet) ─────────────
             for (int r = 0; r < gridRows; r++)
             {
-                if (E(0, r)) continue;
-                float z0 = cz[r], z1 = cz[r+1];
-                bool filledAbove = !E(0, r+1); // r+1 also filled or out of bounds → no fan at z1
-                bool filledBelow = !E(0, r-1); // r-1 also filled or out of bounds → no fan at z0
-
-                // Straight wall segment (shortened at ends if corners need fans)
-                float wz0 = (r > 0            && !filledBelow) ? z0 + R : z0;
-                float wz1 = (r < gridRows-1   && !filledAbove) ? z1 - R : z1;
-                if (wz0 < wz1)
-                    AddWallX(verts, uvs, trisWall, cx[0], wz0, wz1, yT, yB, true);
-
-                // Corner fans and curved wall at segment ends (convex corners only)
-                // Bottom corner (z0): convex if left neighbor is empty = E(0,r-1)
-                if (r > 0 && E(0, r-1))
-                {
-                    // Convex corner at (cx[0], z0): wing top corner + curved wall
-                    AddCornerFan(verts, uvs, trisTop, cx[0]-R, z0, R, S, 0f, yT);   // fan on wing (+X side)
-                    AddCurvedWall(verts, uvs, trisWall, cx[0]-R, z0, R, S, 0f, yT, yB);
-                }
-                // Top corner (z1): convex if left neighbor is empty = E(0,r+1)
-                if (r < gridRows-1 && E(0, r+1))
-                {
-                    AddCornerFan(verts, uvs, trisTop, cx[0]-R, z1, R, S, 90f, yT);
-                    AddCurvedWall(verts, uvs, trisWall, cx[0]-R, z1, R, S, 90f, yT, yB);
-                }
+                if (!E(0, r))
+                    AddWallX(verts, uvs, trisWall, cx[0], cz[r], cz[r+1], yT, yB, true);
+                if (!E(gridCols-1, r))
+                    AddWallX(verts, uvs, trisWall, cx[gridCols], cz[r], cz[r+1], yT, yB, false);
             }
-
-            // Inner RIGHT (x=cx[gridCols]): filled c=gridCols-1 cells face -X into wing
-            for (int r = 0; r < gridRows; r++)
-            {
-                if (E(gridCols-1, r)) continue;
-                float z0 = cz[r], z1 = cz[r+1];
-                bool filledAbove = !E(gridCols-1, r+1);
-                bool filledBelow = !E(gridCols-1, r-1);
-
-                float wz0 = (r > 0          && !filledBelow) ? z0 + R : z0;
-                float wz1 = (r < gridRows-1 && !filledAbove) ? z1 - R : z1;
-                if (wz0 < wz1)
-                    AddWallX(verts, uvs, trisWall, cx[gridCols], wz0, wz1, yT, yB, false);
-
-                if (r > 0 && E(gridCols-1, r-1))
-                {
-                    AddCornerFan(verts, uvs, trisTop, cx[gridCols]+R, z0, R, S, 180f, yT);
-                    AddCurvedWall(verts, uvs, trisWall, cx[gridCols]+R, z0, R, S, 180f, yT, yB);
-                }
-                if (r < gridRows-1 && E(gridCols-1, r+1))
-                {
-                    AddCornerFan(verts, uvs, trisTop, cx[gridCols]+R, z1, R, S, 90f, yT);
-                    AddCurvedWall(verts, uvs, trisWall, cx[gridCols]+R, z1, R, S, 90f, yT, yB);
-                }
-            }
-
-            // Inner BACK (z=cz[0]): filled r=0 cells face -Z into back wing
             for (int c = 0; c < gridCols; c++)
             {
-                if (E(c, 0)) continue;
-                float x0 = cx[c], x1 = cx[c+1];
-                bool filledLeft  = !E(c-1, 0);
-                bool filledRight = !E(c+1, 0);
-
-                float wx0 = (c > 0          && !filledLeft)  ? x0 + R : x0;
-                float wx1 = (c < gridCols-1 && !filledRight) ? x1 - R : x1;
-                if (wx0 < wx1)
-                    AddWallZ(verts, uvs, trisWall, wx0, wx1, cz[0], yT, yB, false);
-
-                if (c > 0 && E(c-1, 0))
-                {
-                    AddCornerFan(verts, uvs, trisTop, x0, cz[0]+R, R, S, 270f, yT);
-                    AddCurvedWall(verts, uvs, trisWall, x0, cz[0]+R, R, S, 270f, yT, yB);
-                }
-                if (c < gridCols-1 && E(c+1, 0))
-                {
-                    AddCornerFan(verts, uvs, trisTop, x1, cz[0]+R, R, S, 180f, yT);
-                    AddCurvedWall(verts, uvs, trisWall, x1, cz[0]+R, R, S, 180f, yT, yB);
-                }
+                if (!E(c, 0))
+                    AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[0], yT, yB, false);
             }
 
             // ── Build mesh ────────────────────────────────────────────────────
