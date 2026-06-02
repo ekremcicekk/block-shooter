@@ -90,7 +90,12 @@ namespace BlockShooter
 
             foreach (var t in slotTransforms)
             {
-                _slotPositions.Add(t.position);
+                // Force slot Y coordinate to 0.3f
+                Vector3 pos = t.position;
+                pos.y = 0.3f;
+                t.position = pos;
+
+                _slotPositions.Add(pos);
                 _occupied.Add(null);
 
                 GameObject ind = null;
@@ -102,7 +107,7 @@ namespace BlockShooter
                 else
                 {
                     ind = slotIndicatorPrefab != null
-                        ? Instantiate(slotIndicatorPrefab, t.position, Quaternion.identity, t)
+                        ? Instantiate(slotIndicatorPrefab, pos, Quaternion.identity, t)
                         : CreateDefaultIndicator(t);
                 }
                 _indicators.Add(ind);
@@ -120,9 +125,12 @@ namespace BlockShooter
             if (idx < 0) return false;
 
             _occupied[idx] = block;
-            SetIndicatorVisible(idx, false);
+            // SlotIndicator remains active
 
-            block.transform.DOJump(_slotPositions[idx], jumpPower: 0.8f, numJumps: 1, duration: moveToSlotDuration)
+            Vector3 targetPos = _slotPositions[idx];
+            targetPos.y += 0.05f; // Offset Y slightly to sit on top of the SlotIndicator
+
+            block.transform.DOJump(targetPos, jumpPower: 0.8f, numJumps: 1, duration: moveToSlotDuration)
                 .SetEase(Ease.OutQuad)
                 .OnComplete(() => block.OnArrivedInSlot());
 
@@ -139,7 +147,7 @@ namespace BlockShooter
             {
                 if (_occupied[i] != block) continue;
                 _occupied[i] = null;
-                SetIndicatorVisible(i, true);
+                // SlotIndicator is already active
                 return;
             }
         }
@@ -150,6 +158,8 @@ namespace BlockShooter
             Vector3 newPos = _slotPositions.Count > 0
                 ? _slotPositions[_slotPositions.Count - 1] + _extraSlotDir * _slotSpacing
                 : transform.position;
+
+            newPos.y = 0.3f; // Force extra slot Y coordinate to 0.3f
 
             _slotPositions.Add(newPos);
             _occupied.Add(null);

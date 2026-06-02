@@ -349,7 +349,9 @@ namespace BlockShooter
             }
 
             Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
-            Vector3 dir = (target.transform.position - spawnPos).normalized;
+            Vector3 targetPos = target.transform.position;
+            targetPos.y = spawnPos.y;
+            Vector3 dir = (targetPos - spawnPos).normalized;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
             proj.Launch(projColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, target, isProjectileVisible);
@@ -396,10 +398,12 @@ namespace BlockShooter
                 if (t == null || t.IsDestroyed) continue;
                 if (!_isRainbowMode && t.ColorType != _colorType) continue;
 
-                Vector3 dir = (t.transform.position - spawnPos).normalized;
+                Vector3 targetPos = t.transform.position;
+                targetPos.y = spawnPos.y;
+                Vector3 dir = (targetPos - spawnPos).normalized;
                 Projectile proj = ProjectilePool.Instance?.Get(spawnPos);
                 proj?.Launch(_colorType, GameManager.Instance.config.projectileSpeed * 1.5f,
-                    ProjectilePool.Instance, dir);
+                    ProjectilePool.Instance, dir, t);
 
                 if (muzzleFlash != null) muzzleFlash.Play();
                 yield return new WaitForSeconds(0.05f);

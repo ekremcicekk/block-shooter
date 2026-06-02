@@ -19,6 +19,7 @@ namespace BlockShooter
         private float _speed;
         private ConveyorBlock3D _target;
         private bool _isVisible = true;
+        private float _launchY;
 
         private Rigidbody _rb;
         private static readonly int ColorProp = Shader.PropertyToID("_BaseColor");
@@ -45,6 +46,7 @@ namespace BlockShooter
             _target    = target;
             _active    = true;
             _isVisible = isVisible;
+            _launchY   = transform.position.y;
 
             ApplyColor(colorType);
 
@@ -74,14 +76,17 @@ namespace BlockShooter
                 return;
             }
 
-            Vector3 toTarget = _target.transform.position - transform.position;
+            Vector3 targetPos = _target.transform.position;
+            targetPos.y = _launchY;
+
+            Vector3 toTarget = targetPos - transform.position;
             float   dist     = toTarget.magnitude;
             float   step     = _speed * Time.deltaTime;
 
             // Arrived (or would overshoot this frame)
             if (step >= dist || dist < 0.1f)
             {
-                transform.position = _target.transform.position;
+                transform.position = targetPos;
                 HandleHit();
                 return;
             }
