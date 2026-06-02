@@ -26,6 +26,11 @@ MonoBehaviour:
   laneSpacing: 0.18
   rowSpacing: 0.18
   rowsPerGroup: 20
+  beltHalfWidth: 0.45
+  wallAboveBelt: 0.3
+  railHeight: 0.75
+  railWidth: 0.1
+  trackBevelSize: 0.02
   slotCount: 4
   gridCellSize: 1.2
   defaultShots: 3

@@ -875,7 +875,7 @@ namespace BlockShooter.Editor
             if (_tangentModes.Count > _knots.Count) _tangentModes.RemoveRange(_knots.Count, _tangentModes.Count - _knots.Count);
         }
 
-        private void WriteKnotsToContainer(SplineContainer sc)
+        private void WriteKnotsToContainer(SplineContainer sc, float yOffset = 0f)
         {
             EnsureTangentLists();
             var spline = sc.Spline;
@@ -885,7 +885,7 @@ namespace BlockShooter.Editor
                 var k = _knots[i];
                 var tanIn  = (float3)(Vector3)_tangentsIn[i];
                 var tanOut = (float3)(Vector3)_tangentsOut[i];
-                spline.Add(new BezierKnot(new float3(k.x, k.y, k.z), tanIn, tanOut));
+                spline.Add(new BezierKnot(new float3(k.x, k.y + yOffset, k.z), tanIn, tanOut));
             }
             spline.Closed = true;
             for (int i = 0; i < spline.Count; i++)
@@ -1577,7 +1577,8 @@ namespace BlockShooter.Editor
             // ── Track ──
             var trackGo = Go(conveyorSys.transform, "Track");
             var sc = trackGo.AddComponent<SplineContainer>();
-            WriteKnotsToContainer(sc);
+            float trackRailHeight = _cfg.railHeight;
+            WriteKnotsToContainer(sc, trackRailHeight);
             var cc = trackGo.AddComponent<ConveyorController>();
             cc.speed = _cfg.conveyorSpeed;
             lr.conveyorController = cc;
@@ -1586,11 +1587,11 @@ namespace BlockShooter.Editor
             var meshBuilder = trackGo.AddComponent<ConveyorTrackMeshBuilder>();
             meshBuilder.resolution    = 60;
             meshBuilder.openZoneHalfT = _openZoneHalfT;
-            meshBuilder.beltHalfWidth = 0.45f;
-            meshBuilder.wallAboveBelt = 0.3f;
-            meshBuilder.railHeight    = 1f;
-            meshBuilder.railWidth     = 0.1f;
-            meshBuilder.bevelSize     = 0.02f;
+            meshBuilder.beltHalfWidth = _cfg.beltHalfWidth;
+            meshBuilder.wallAboveBelt = _cfg.wallAboveBelt;
+            meshBuilder.railHeight    = trackRailHeight;
+            meshBuilder.railWidth     = _cfg.railWidth;
+            meshBuilder.bevelSize     = _cfg.trackBevelSize;
             meshBuilder.BuildMesh();
 
             var mr = trackGo.GetComponent<MeshRenderer>();

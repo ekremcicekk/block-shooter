@@ -87,28 +87,6 @@ namespace BlockShooter
             _meshFilter.mesh = Sweep();
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  Profile definition
-        // ─────────────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Returns the OPEN 2D polygon (no bottom edge).
-        /// 12 vertices: left wall bottom → up the wall → belt surface → down the wall → right wall bottom.
-        /// The closing edge (P11 → P0) is intentionally omitted in Sweep() so the
-        /// underside of the track has zero triangles — it's never visible from above.
-        ///
-        ///    P2────────P3              P9────────P10
-        ///   ╱            ╲           ╱              ╲
-        ///  P1              P4───────P8               P11  ← wall tops / belt at Y=0
-        ///  |     (WALL)    P5───────P7    (WALL)     |
-        ///  P0                 (BELT)                 P11
-        ///  open ↕                                    open ↕   ← no floor triangles
-        ///
-        /// Submesh 0 = Wall  (all edges except P5→P6)
-        /// Submesh 1 = Belt  (edge P5→P6, flat top where blocks travel)
-        ///
-        /// bevelSize clamped to min(railWidth/2, wallAboveBelt).
-        /// </summary>
         private Vector2[] BuildProfile()
         {
             float hw = beltHalfWidth;
@@ -155,7 +133,7 @@ namespace BlockShooter
         {
             Vector2[] profile = BuildProfile();
             int pCount    = profile.Length;          // 12 profile vertices
-            int edgeCount = pCount;                  // 12 edges — includes closing P11→P0 (floor)
+            int edgeCount = pCount - 1;              // 11 edges — excludes closing underside floor (P11→P0)
             int sCount    = resolution + 1;
 
             var wPos   = new Vector3[sCount];
@@ -167,7 +145,6 @@ namespace BlockShooter
             float[] splineV = ComputeSplineV(wPos, sCount);
 
             const int beltEdge  = 5;
-            int       floorEdge = pCount - 1;        // edge 11: P11→P0, closes the bottom
             int       sweepVCount = edgeCount * 2 * sCount;
 
             var verts    = new List<Vector3>(sweepVCount + 64);
@@ -204,7 +181,6 @@ namespace BlockShooter
             {
                 int  stripBase = e * 2 * sCount;
                 bool isBelt    = (e == beltEdge);
-                bool isFloor   = (e == floorEdge);
 
                 for (int s = 0; s < resolution; s++)
                 {
@@ -214,11 +190,6 @@ namespace BlockShooter
                     {
                         trisBelt.Add(b);   trisBelt.Add(b+2); trisBelt.Add(b+1);
                         trisBelt.Add(b+1); trisBelt.Add(b+2); trisBelt.Add(b+3);
-                    }
-                    else if (isFloor)
-                    {
-                        trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
-                        trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);
                     }
                     else
                     {
@@ -237,18 +208,19 @@ namespace BlockShooter
 
             // ── Gap outer face strip ──────────────────────────────────────────
             // The entire right wall (e=6..10) is removed in the gap zone.
-            // Add a dedicated strip at x=outerX, from y=0 (belt level) to y=floorY,
+            // Add a dedicated strip at x=outerX, from y=beltY to y=floorY,
             // facing the player. This replaces e=10 but starts exactly at belt level.
             if (openZoneEnabled)
             {
                 float innerX = profile[6].x;    // hw  — inner face of right wall (P6)
-                float floorY = profile[11].y;   // -railHeight
+                float beltY  = profile[6].y;    // belt level
+                float floorY = profile[11].y;   // bottom level
 
                 int gapStripBase = verts.Count;
                 for (int s = 0; s <= resolution; s++)
                 {
-                    verts.Add(ToWorld(new Vector2(innerX, 0f),    s, wPos, wRight, wUp));
-                    verts.Add(ToWorld(new Vector2(innerX, floorY),s, wPos, wRight, wUp));
+                    verts.Add(ToWorld(new Vector2(innerX, beltY),  s, wPos, wRight, wUp));
+                    verts.Add(ToWorld(new Vector2(innerX, floorY), s, wPos, wRight, wUp));
                     uvs.Add(Vector2.zero); uvs.Add(Vector2.zero);
                 }
                 for (int s = 0; s < resolution; s++)

@@ -29,6 +29,16 @@ namespace BlockShooter
         public float laneSpacing      = 0.22f;
         public float rowSpacing       = 0.22f;
         public int   rowsPerGroup     = 20;
+        [Tooltip("Half-width of the flat belt surface (inner groove width = 2 × this)")]
+        public float beltHalfWidth    = 0.45f;
+        [Tooltip("How far the outer walls rise ABOVE the belt surface")]
+        public float wallAboveBelt    = 0.3f;
+        [Tooltip("How far the outer walls hang DOWN below the belt surface")]
+        public float railHeight       = 1.0f;
+        [Tooltip("Thickness of each outer wall")]
+        public float railWidth        = 0.1f;
+        [Tooltip("Chamfer size on the top-OUTER corner of each wall")]
+        public float trackBevelSize   = 0.02f;
 
         [Header("Slot Defaults")]
         public int slotCount = 4;
