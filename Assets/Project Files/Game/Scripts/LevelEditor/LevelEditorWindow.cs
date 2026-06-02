@@ -1737,6 +1737,7 @@ namespace BlockShooter.Editor
             deckBuilder.sideWingWidth = _cfg.sideWingWidth;
             deckBuilder.backDepth     = _cfg.backDepth;
             deckBuilder.bevelSize     = _cfg.bevelSize;
+            deckBuilder.bevelSegments = _cfg.bevelSegments;
             deckBuilder.BuildMesh(isEmpty);
             var deckMr = deckMeshGo.GetComponent<MeshRenderer>();
             deckMr.sharedMaterials = new Material[]
