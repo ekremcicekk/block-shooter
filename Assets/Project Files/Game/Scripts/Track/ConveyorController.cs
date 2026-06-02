@@ -18,6 +18,12 @@ namespace BlockShooter
         public float speed = 1.5f;
         public bool  loop  = true;
 
+        [Header("Direction Arrows")]
+        [Tooltip("Arrow prefab that moves along the track")]
+        public GameObject arrowPrefab;
+        [Tooltip("World-unit distance between consecutive arrows")]
+        public float      arrowSpacing = 2.0f;
+
         public bool  IsFrozen         { get => _isFrozen; set => _isFrozen = value; }
         public float SplineWorldLength => _splineWorldLength;
         public SplineContainer SplineContainer => _splineContainer;
@@ -27,12 +33,20 @@ namespace BlockShooter
         private bool  _isFrozen;
 
         private readonly List<GroupEntry> _groups = new();
+        private readonly List<ArrowMarker> _arrows = new();
 
         private struct GroupEntry
         {
             public BlockGroup Group;
             public float HeadT;
             public float TailT;
+        }
+
+        private struct ArrowMarker
+        {
+            public Transform Transform;
+            public float T;
+            public Quaternion PrefabLocalRot; // applied on top of spline tangent
         }
 
         private void Awake()
@@ -67,6 +81,43 @@ namespace BlockShooter
                 currentT += WorldLengthToT(group.SplineLength);
                 if (currentT >= 1f) currentT -= 1f;
             }
+
+            SpawnArrows();
+        }
+
+        private void SpawnArrows()
+        {
+            foreach (var a in _arrows)
+                if (a.Transform != null) Destroy(a.Transform.gameObject);
+            _arrows.Clear();
+
+            if (arrowPrefab == null || arrowSpacing <= 0f || _splineWorldLength <= 0f) return;
+
+            int count = Mathf.Max(1, Mathf.RoundToInt(_splineWorldLength / arrowSpacing));
+            Quaternion prefabRot = arrowPrefab.transform.localRotation;
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / count;
+                var go = Instantiate(arrowPrefab, transform);
+                var marker = new ArrowMarker { Transform = go.transform, T = t, PrefabLocalRot = prefabRot };
+                PlaceArrow(go.transform, t, prefabRot);
+                _arrows.Add(marker);
+            }
+        }
+
+        private void PlaceArrow(Transform obj, float t, Quaternion prefabLocalRot)
+        {
+            if (_splineContainer == null) return;
+            _splineContainer.Spline.Evaluate(t, out var pos, out var tangent, out var up);
+
+            obj.position = transform.TransformPoint(pos);
+
+            Vector3 fwd = transform.TransformDirection((Vector3)tangent).normalized;
+            Vector3 upDir = transform.TransformDirection((Vector3)up).normalized;
+            if (upDir == Vector3.zero) upDir = Vector3.up;
+            if (fwd != Vector3.zero)
+                obj.rotation = Quaternion.LookRotation(fwd, upDir) * prefabLocalRot;
         }
 
         private void Update()
@@ -86,6 +137,16 @@ namespace BlockShooter
                 _groups[i]  = entry;
 
                 PlaceGroupAtT(entry.Group, entry.HeadT);
+            }
+
+            for (int i = 0; i < _arrows.Count; i++)
+            {
+                var a = _arrows[i];
+                if (a.Transform == null) continue;
+
+                a.T = (a.T + delta) % 1f;
+                _arrows[i] = a;
+                PlaceArrow(a.Transform, a.T, a.PrefabLocalRot);
             }
         }
 

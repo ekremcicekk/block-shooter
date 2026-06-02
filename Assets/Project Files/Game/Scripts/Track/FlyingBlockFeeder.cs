@@ -11,7 +11,6 @@ namespace BlockShooter
     /// No mesh junction needed — blocks physically fly from feeder to main track.
     /// </summary>
     [RequireComponent(typeof(SplineContainer))]
-    [RequireComponent(typeof(ConveyorTrackRenderer))]
     public class FlyingBlockFeeder : MonoBehaviour
     {
         [Header("Main Track Reference")]

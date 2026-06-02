@@ -1604,15 +1604,10 @@ namespace BlockShooter.Editor
                 };
             }
 
-            if (_cfg.trackSegmentPrefab != null)
+            if (_cfg.arrowPrefab != null)
             {
-                var tr = trackGo.AddComponent<ConveyorTrackRenderer>();
-                tr.segmentPrefab = _cfg.trackSegmentPrefab;
-                if (_cfg.arrowPrefab != null)
-                {
-                    tr.arrowPrefab  = _cfg.arrowPrefab;
-                    tr.arrowSpacing = _cfg.arrowSpacing;
-                }
+                cc.arrowPrefab  = _cfg.arrowPrefab;
+                cc.arrowSpacing = _cfg.arrowSpacing;
             }
 
             // Block groups
