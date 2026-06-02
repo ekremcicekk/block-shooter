@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 3107719286104500061}
   - component: {fileID: 6918127924396999908}
   - component: {fileID: 4346634797267474631}
+  - component: {fileID: 1583414759827294181}
   m_Layer: 0
   m_Name: BodyMesh
   m_TagString: Untagged
@@ -99,6 +100,28 @@ SkinnedMeshRenderer:
     m_Center: {x: 0, y: 0.5, z: 0.18444067}
     m_Extent: {x: 0.5, y: 0.5, z: 0.6844407}
   m_DirtyAABB: 0
+--- !u!95 &1583414759827294181
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1394936033213387327}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 8b03cd8d486a21c488a77ca465cdedce, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!1 &2449477870382252076
 GameObject:
   m_ObjectHideFlags: 0
@@ -125,7 +148,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2449477870382252076}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -2.1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -133,8 +156,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 1.12}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0.56}
+  m_SizeDelta: {x: 0, y: -1.12}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!23 &769400495685354805
 MeshRenderer:
@@ -300,7 +323,7 @@ Transform:
   m_GameObject: {fileID: 2755183677879777169}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.2532585, z: 0.7519551}
+  m_LocalPosition: {x: 0, y: 0.394, z: 0.525}
   m_LocalScale: {x: 2.506517, y: 2.506517, z: 2.506517}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -331,7 +354,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5856518754137615233}
   m_LocalRotation: {x: 0.5150381, y: 0, z: 0, w: 0.8571673}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0.14}
   m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -340,7 +363,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0.65}
+  m_AnchoredPosition: {x: 0, y: 0.912}
   m_SizeDelta: {x: 13.7428, y: 6.8714}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &930284269994885026
@@ -500,12 +523,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89cc8859c90a4ab4c8c9a027c327bd58, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  blockRenderer: {fileID: 0}
+  blockRenderer: {fileID: 4346634797267474631}
   glowRenderer: {fileID: 4833198214337232911}
   shotCountText: {fileID: 291678120616329798}
   muzzleFlash: {fileID: 0}
   depletedParticle: {fileID: 0}
   accessibleIndicator: {fileID: 0}
+  bodyAnimator: {fileID: 1583414759827294181}
   bodyMesh: {fileID: 3107719286104500061}
   shootPoint: {fileID: 5655684702468073853}
   _colorType: 0

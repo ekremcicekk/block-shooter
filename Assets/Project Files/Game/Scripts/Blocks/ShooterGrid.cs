@@ -60,7 +60,7 @@ namespace BlockShooter
 
                 block.transform.localScale = Vector3.zero;
                 float delay = block.GridColumn * 0.05f + block.GridRow * 0.1f;
-                block.transform.DOScale(Vector3.one, 0.3f).SetDelay(delay).SetEase(Ease.OutBack);
+                block.transform.DOScale(Vector3.one * 0.8f, 0.3f).SetDelay(delay).SetEase(Ease.OutBack);
             }
 
             foreach (var door in GetComponentsInChildren<BlockDoor>(true))
@@ -161,7 +161,7 @@ namespace BlockShooter
             RefreshColumnAccessibility(col);
 
             block.transform.localScale = Vector3.zero;
-            block.transform.DOScale(Vector3.one, 0.35f).SetEase(Ease.OutBack);
+            block.transform.DOScale(Vector3.one * 0.8f, 0.35f).SetEase(Ease.OutBack);
         }
 
         // ── Queries ───────────────────────────────────────────────────────────

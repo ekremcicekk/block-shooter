@@ -22,12 +22,13 @@ namespace BlockShooter
     {
         // ── Visuals ────────────────────────────────────────────────────────────
         [Header("Visuals")]
-        public MeshRenderer blockRenderer;
+        public Renderer blockRenderer;
         public MeshRenderer glowRenderer;
         public TextMeshPro  shotCountText;
         public ParticleSystem muzzleFlash;
         public ParticleSystem depletedParticle;
         public GameObject accessibleIndicator;   // optional highlight ring shown when selectable
+        public Animator bodyAnimator;
 
         [Header("Shoot Point")]
         [Tooltip("The body mesh transform that rotates to face the target before firing")]
@@ -74,6 +75,7 @@ namespace BlockShooter
             _isAccessible = false;
             ApplyColor();
             UpdateShotCountUI();
+            if (shotCountText != null) shotCountText.gameObject.SetActive(false);
             SetAccessible(false);
         }
 
@@ -146,6 +148,7 @@ namespace BlockShooter
         {
             State = BlockState.MovingToSlot;
             SetAccessible(false);
+            if (shotCountText != null) shotCountText.gameObject.SetActive(true);
 
             ShooterGrid.Instance?.OnBlockLeftGrid(this);
             SlotSystem.Instance.TrySlotBlock(this);
@@ -156,6 +159,10 @@ namespace BlockShooter
         public void OnArrivedInSlot()
         {
             State = BlockState.InSlot;
+            if (bodyAnimator != null)
+            {
+                bodyAnimator.SetTrigger("ShooterArrived");
+            }
             TryStartGroupRoutine();
         }
 
@@ -282,13 +289,23 @@ namespace BlockShooter
 
             BlockColorType projColor = _isRainbowMode ? target.ColorType : _colorType;
 
-            // Rotate body mesh on Y axis only — no pitch/roll
+            // Rotate body mesh on Y axis only — no pitch/roll, and play X rotation recoil animation
             if (bodyMesh != null)
             {
                 Vector3 lookDir = target.transform.position - bodyMesh.position;
                 lookDir.y = 0f;
                 if (lookDir.sqrMagnitude > 0.001f)
+                {
+                    bodyMesh.DOKill(true);
                     bodyMesh.rotation = Quaternion.LookRotation(lookDir.normalized);
+
+                    float targetY = bodyMesh.localEulerAngles.y;
+                    Sequence recoilSeq = DOTween.Sequence();
+                    recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(-3f, targetY, 0f), 0.05f).SetEase(Ease.OutQuad));
+                    recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(3f, targetY, 0f), 0.08f).SetEase(Ease.InOutQuad));
+                    recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(0f, targetY, 0f), 0.05f).SetEase(Ease.InQuad));
+                    recoilSeq.Play();
+                }
             }
 
             Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
@@ -355,9 +372,18 @@ namespace BlockShooter
 
         public void SetAccessible(bool accessible)
         {
+            bool changed = (_isAccessible != accessible);
             _isAccessible = accessible;
             if (accessibleIndicator != null)
                 accessibleIndicator.SetActive(accessible && State == BlockState.InGrid);
+
+            if (changed && accessible && State == BlockState.InGrid)
+            {
+                if (bodyAnimator != null)
+                {
+                    bodyAnimator.SetTrigger("ShooterUnlock");
+                }
+            }
         }
 
         // ── Deplete ───────────────────────────────────────────────────────────
@@ -374,9 +400,17 @@ namespace BlockShooter
             ShooterGrid.Instance?.OnBlockDepleted(this);
             OnDepleted?.Invoke(this);
 
-            // Animate out then hide — slot indicator reappears via ReleaseSlot above
-            transform.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack)
-                .OnComplete(() => gameObject.SetActive(false));
+            if (bodyAnimator != null)
+            {
+                bodyAnimator.SetTrigger("ShooterDeplete");
+                DOVirtual.DelayedCall(0.5f, () => gameObject.SetActive(false));
+            }
+            else
+            {
+                // Fallback to standard tween if no animator is present
+                transform.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack)
+                    .OnComplete(() => gameObject.SetActive(false));
+            }
         }
 
         // ── Rainbow mode ──────────────────────────────────────────────────────
@@ -442,6 +476,7 @@ namespace BlockShooter
         private void OnDisable()
         {
             DOTween.Kill(transform);
+            if (bodyMesh != null) DOTween.Kill(bodyMesh);
             StopShooting();
         }
     }

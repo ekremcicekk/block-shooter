@@ -122,9 +122,12 @@ namespace BlockShooter
             _occupied[idx] = block;
             SetIndicatorVisible(idx, false);
 
-            block.transform.DOMove(_slotPositions[idx], moveToSlotDuration)
-                .SetEase(Ease.OutBack)
+            block.transform.DOJump(_slotPositions[idx], jumpPower: 0.8f, numJumps: 1, duration: moveToSlotDuration)
+                .SetEase(Ease.OutQuad)
                 .OnComplete(() => block.OnArrivedInSlot());
+
+            block.transform.DOScale(Vector3.one, moveToSlotDuration)
+                .SetEase(Ease.OutQuad);
 
             return true;
         }
