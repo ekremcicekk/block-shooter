@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: GameConfig
   m_EditorClassIdentifier: 
   fireRate: 0.1
-  projectileSpeed: 18
+  projectileSpeed: 35
   redMaterial: {fileID: 2100000, guid: 33257ab040a58eb4bbcd20bc6f183a1a, type: 2}
   blueMaterial: {fileID: 2100000, guid: 34378ae5269e41041a904673f4f0bc67, type: 2}
   greenMaterial: {fileID: 2100000, guid: 18f9dd7617a8de54da7342ef6fbf37bf, type: 2}

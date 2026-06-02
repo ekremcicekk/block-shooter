@@ -37,7 +37,7 @@ MonoBehaviour:
   trackBeltMaterial: {fileID: 2100000, guid: fb0a40a42cd09724dbb5ec66b917d204, type: 2}
   sideWingWidth: 5
   backDepth: 5
-  deckTileHeight: 0.75
+  deckTileHeight: 0.35
   bevelSize: 0.1
   bevelSegments: 3
   deckTopMaterial: {fileID: 2100000, guid: fb0a40a42cd09724dbb5ec66b917d204, type: 2}

@@ -49,6 +49,8 @@ namespace BlockShooter
         private bool    _isAccessible;
         private bool    _isShooting;
         private Coroutine _shootCoroutine;
+        private int     _visibleShotsLeft;
+        private int     _invisibleShotsLeft;
 
         private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
@@ -73,6 +75,8 @@ namespace BlockShooter
         {
             State         = BlockState.InGrid;
             _isAccessible = false;
+            _visibleShotsLeft = UnityEngine.Random.Range(1, 3);
+            _invisibleShotsLeft = 0;
             ApplyColor();
             UpdateShotCountUI();
             if (shotCountText != null) shotCountText.gameObject.SetActive(false);
@@ -289,22 +293,58 @@ namespace BlockShooter
 
             BlockColorType projColor = _isRainbowMode ? target.ColorType : _colorType;
 
-            // Rotate body mesh on Y axis only — no pitch/roll, and play X rotation recoil animation
+            // Determine if this shot should be visible based on the organic burst visibility pattern
+            bool isProjectileVisible = true;
+            if (_visibleShotsLeft > 0)
+            {
+                isProjectileVisible = true;
+                _visibleShotsLeft--;
+                if (_visibleShotsLeft <= 0)
+                {
+                    _invisibleShotsLeft = UnityEngine.Random.Range(1, 3); // 1-2 invisible shots
+                }
+            }
+            else if (_invisibleShotsLeft > 0)
+            {
+                isProjectileVisible = false;
+                _invisibleShotsLeft--;
+                if (_invisibleShotsLeft <= 0)
+                {
+                    _visibleShotsLeft = UnityEngine.Random.Range(1, 4); // 1-3 visible shots
+                }
+            }
+
+            // Rotate body mesh on Y axis only — no pitch/roll, and play X rotation recoil animation if visible
             if (bodyMesh != null)
             {
                 Vector3 lookDir = target.transform.position - bodyMesh.position;
                 lookDir.y = 0f;
                 if (lookDir.sqrMagnitude > 0.001f)
                 {
-                    bodyMesh.DOKill(true);
-                    bodyMesh.rotation = Quaternion.LookRotation(lookDir.normalized);
+                    if (isProjectileVisible)
+                    {
+                        // Kill current tween WITHOUT forcing completion (prevents instant snap back to 0)
+                        bodyMesh.DOKill(false);
+                        
+                        // Extract target Y rotation
+                        float targetY = Quaternion.LookRotation(lookDir.normalized).eulerAngles.y;
 
-                    float targetY = bodyMesh.localEulerAngles.y;
-                    Sequence recoilSeq = DOTween.Sequence();
-                    recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(-3f, targetY, 0f), 0.05f).SetEase(Ease.OutQuad));
-                    recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(3f, targetY, 0f), 0.08f).SetEase(Ease.InOutQuad));
-                    recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(0f, targetY, 0f), 0.05f).SetEase(Ease.InQuad));
-                    recoilSeq.Play();
+                        // Get current local X rotation (safely wrapping it)
+                        float currentLocalX = bodyMesh.localEulerAngles.x;
+                        if (currentLocalX > 180f) currentLocalX -= 360f;
+
+                        // Start new recoil tween from the current local X rotation to -10, then to 0
+                        Sequence recoilSeq = DOTween.Sequence();
+                        recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(-10f, targetY, 0f), 0.05f).SetEase(Ease.OutQuad));
+                        recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(0f, targetY, 0f), 0.12f).SetEase(Ease.InQuad));
+                        recoilSeq.Play();
+                    }
+                    else
+                    {
+                        // Keep Y rotation pointing at target even if recoil tween is playing
+                        float targetY = Quaternion.LookRotation(lookDir.normalized).eulerAngles.y;
+                        bodyMesh.localRotation = Quaternion.Euler(bodyMesh.localRotation.eulerAngles.x, targetY, 0f);
+                    }
                 }
             }
 
@@ -312,7 +352,7 @@ namespace BlockShooter
             Vector3 dir = (target.transform.position - spawnPos).normalized;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
-            proj.Launch(projColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, target);
+            proj.Launch(projColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, target, isProjectileVisible);
 
             if (muzzleFlash != null) muzzleFlash.Play();
             transform.DOKill(false);

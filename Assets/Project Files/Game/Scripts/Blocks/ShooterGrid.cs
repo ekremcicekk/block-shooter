@@ -22,6 +22,7 @@ namespace BlockShooter
         public ShooterBlock shooterBlockPrefab;
 
         private GameConfig _config;
+        private LevelRoot  _levelRoot;
 
         private readonly List<ShooterBlock> _activeBlocks = new();
         private readonly Dictionary<int, List<ShooterBlock>> _columns = new();
@@ -47,6 +48,7 @@ namespace BlockShooter
         public void Initialize()
         {
             _config = GameManager.Instance.config;
+            _levelRoot = GetComponentInParent<LevelRoot>();
             _activeBlocks.Clear();
             _columns.Clear();
 
@@ -92,16 +94,60 @@ namespace BlockShooter
 
         private void RefreshAllAccessibility()
         {
-            foreach (var col in _columns.Keys)
-                RefreshColumnAccessibility(col);
-        }
+            var deck = GetComponentInChildren<ShooterDeckMeshBuilder>();
+            if (deck == null && _levelRoot != null)
+                deck = _levelRoot.GetComponentInChildren<ShooterDeckMeshBuilder>();
+            if (deck == null)
+                deck = FindFirstObjectByType<ShooterDeckMeshBuilder>();
 
-        private void RefreshColumnAccessibility(int col)
-        {
-            if (!_columns.TryGetValue(col, out var list)) return;
+            int cols = deck != null ? deck.gridCols : 4;
+            int rows = deck != null ? deck.gridRows : 2;
 
-            bool frontFound = false;
-            foreach (var block in list)
+            bool[,] isBlocked = new bool[cols, rows];
+
+            // 1. Mark static walls
+            if (_levelRoot != null)
+            {
+                foreach (var cell in _levelRoot.cells)
+                {
+                    if (cell.type == GridCellType.Empty)
+                    {
+                        if (cell.col >= 0 && cell.col < cols && cell.row >= 0 && cell.row < rows)
+                        {
+                            isBlocked[cell.col, cell.row] = true;
+                        }
+                    }
+                }
+            }
+
+            // 2. Mark active doors
+            float cellSize = deck != null ? deck.cellSize : 1.2f;
+            Vector3 origin = transform.position;
+            var doors = GetComponentsInChildren<BlockDoor>(false);
+            foreach (var door in doors)
+            {
+                int col = Mathf.RoundToInt((door.transform.position.x - origin.x) / cellSize);
+                int row = Mathf.RoundToInt((door.transform.position.z - origin.z) / cellSize);
+                if (col >= 0 && col < cols && row >= 0 && row < rows)
+                {
+                    isBlocked[col, row] = true;
+                }
+            }
+
+            // 3. Mark active blocks still in grid
+            foreach (var block in _activeBlocks)
+            {
+                if (block != null && block.State == ShooterBlock.BlockState.InGrid)
+                {
+                    if (block.GridColumn >= 0 && block.GridColumn < cols && block.GridRow >= 0 && block.GridRow < rows)
+                    {
+                        isBlocked[block.GridColumn, block.GridRow] = true;
+                    }
+                }
+            }
+
+            // 4. Update accessibility for each block using BFS pathfinding
+            foreach (var block in _activeBlocks)
             {
                 if (block == null) continue;
                 if (block.State == ShooterBlock.BlockState.Depleted) continue;
@@ -109,13 +155,89 @@ namespace BlockShooter
                     block.State == ShooterBlock.BlockState.MovingToSlot) continue;
 
                 if (_freePickActive)
-                    block.SetAccessible(true);
+                {
+                    bool[,] freePickBlocked = new bool[cols, rows];
+                    if (_levelRoot != null)
+                    {
+                        foreach (var cell in _levelRoot.cells)
+                        {
+                            if (cell.type == GridCellType.Empty && cell.col >= 0 && cell.col < cols && cell.row >= 0 && cell.row < rows)
+                                freePickBlocked[cell.col, cell.row] = true;
+                        }
+                    }
+                    foreach (var door in doors)
+                    {
+                        int col = Mathf.RoundToInt((door.transform.position.x - origin.x) / cellSize);
+                        int row = Mathf.RoundToInt((door.transform.position.z - origin.z) / cellSize);
+                        if (col >= 0 && col < cols && row >= 0 && row < rows)
+                            freePickBlocked[col, row] = true;
+                    }
+
+                    bool pathExists = HasPathToFront(block.GridColumn, block.GridRow, freePickBlocked, cols, rows);
+                    block.SetAccessible(pathExists);
+                }
                 else
                 {
-                    block.SetAccessible(!frontFound);
-                    frontFound = true;
+                    bool pathExists = HasPathToFront(block.GridColumn, block.GridRow, isBlocked, cols, rows);
+                    block.SetAccessible(pathExists);
                 }
             }
+        }
+
+        private void RefreshColumnAccessibility(int col)
+        {
+            RefreshAllAccessibility();
+        }
+
+        private bool HasPathToFront(int startCol, int startRow, bool[,] baseBlocked, int cols, int rows)
+        {
+            if (startCol < 0 || startCol >= cols || startRow < 0 || startRow >= rows) return false;
+            if (startRow == rows - 1) return true;
+
+            bool originalVal = baseBlocked[startCol, startRow];
+            baseBlocked[startCol, startRow] = false;
+
+            var queue = new Queue<Vector2Int>();
+            var visited = new HashSet<Vector2Int>();
+
+            var startNode = new Vector2Int(startCol, startRow);
+            queue.Enqueue(startNode);
+            visited.Add(startNode);
+
+            bool reachedFront = false;
+
+            while (queue.Count > 0)
+            {
+                var curr = queue.Dequeue();
+
+                if (curr.y == rows - 1)
+                {
+                    reachedFront = true;
+                    break;
+                }
+
+                Vector2Int[] neighbors = {
+                    new Vector2Int(curr.x, curr.y + 1), // Front
+                    new Vector2Int(curr.x - 1, curr.y), // Left
+                    new Vector2Int(curr.x + 1, curr.y), // Right
+                    new Vector2Int(curr.x, curr.y - 1)  // Back
+                };
+
+                foreach (var next in neighbors)
+                {
+                    if (next.x >= 0 && next.x < cols && next.y >= 0 && next.y < rows)
+                    {
+                        if (!visited.Contains(next) && !baseBlocked[next.x, next.y])
+                        {
+                            visited.Add(next);
+                            queue.Enqueue(next);
+                        }
+                    }
+                }
+            }
+
+            baseBlocked[startCol, startRow] = originalVal;
+            return reachedFront;
         }
 
         // ── Column registry ───────────────────────────────────────────────────

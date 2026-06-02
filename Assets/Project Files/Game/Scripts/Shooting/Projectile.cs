@@ -18,6 +18,7 @@ namespace BlockShooter
         private ProjectilePool _pool;
         private float _speed;
         private ConveyorBlock3D _target;
+        private bool _isVisible = true;
 
         private Rigidbody _rb;
         private static readonly int ColorProp = Shader.PropertyToID("_BaseColor");
@@ -36,15 +37,23 @@ namespace BlockShooter
         }
 
         public void Launch(BlockColorType colorType, float speed, ProjectilePool pool, Vector3 direction,
-            ConveyorBlock3D target = null)
+            ConveyorBlock3D target = null, bool isVisible = true)
         {
             _colorType = colorType;
             _pool      = pool;
             _speed     = speed;
             _target    = target;
             _active    = true;
+            _isVisible = isVisible;
 
             ApplyColor(colorType);
+
+            if (ballRenderer != null) ballRenderer.enabled = isVisible;
+            if (trail != null)
+            {
+                trail.enabled = isVisible;
+                if (!isVisible) trail.Clear();
+            }
 
             // Face initial direction
             if (direction.sqrMagnitude > 0.001f)
@@ -88,7 +97,7 @@ namespace BlockShooter
             _active = false;
             CancelInvoke(nameof(ReturnToPool));
 
-            PlayHitFX();
+            if (_isVisible) PlayHitFX();
             _target.TakeHit();
             _target = null;
             ReturnToPool();
