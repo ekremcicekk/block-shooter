@@ -95,18 +95,45 @@ namespace BlockShooter
             AddCurvedWall(verts, uvs, trisWall, xL+R, zFront-R, R, S,  90f, yT, yB); // front-left
             AddCurvedWall(verts, uvs, trisWall, xR-R, zFront-R, R, S,   0f, yT, yB); // front-right
 
-            // ── 4. Inner boundary walls (straight, no bevel yet) ─────────────
+            // ── 4. Inner boundary walls ───────────────────────────────────────
+            bool cornerBL = !E(0, 0);
+            bool cornerBR = !E(gridCols - 1, 0);
+
             for (int r = 0; r < gridRows; r++)
             {
                 if (!E(0, r))
-                    AddWallX(verts, uvs, trisWall, cx[0], cz[r], cz[r+1], yT, yB, true);
-                if (!E(gridCols-1, r))
-                    AddWallX(verts, uvs, trisWall, cx[gridCols], cz[r], cz[r+1], yT, yB, false);
+                {
+                    float z0 = (r == 0 && cornerBL) ? cz[0] + R : cz[r];
+                    if (z0 < cz[r + 1])
+                        AddWallX(verts, uvs, trisWall, cx[0], z0, cz[r + 1], yT, yB, true);
+                }
+                if (!E(gridCols - 1, r))
+                {
+                    float z0 = (r == 0 && cornerBR) ? cz[0] + R : cz[r];
+                    if (z0 < cz[r + 1])
+                        AddWallX(verts, uvs, trisWall, cx[gridCols], z0, cz[r + 1], yT, yB, false);
+                }
             }
             for (int c = 0; c < gridCols; c++)
             {
                 if (!E(c, 0))
-                    AddWallZ(verts, uvs, trisWall, cx[c], cx[c+1], cz[0], yT, yB, false);
+                {
+                    float x0 = (c == 0           && cornerBL) ? cx[0]        + R : cx[c];
+                    float x1 = (c == gridCols - 1 && cornerBR) ? cx[gridCols] - R : cx[c + 1];
+                    if (x0 < x1)
+                        AddWallZ(verts, uvs, trisWall, x0, x1, cz[0], yT, yB, false);
+                }
+            }
+
+            if (cornerBL)
+            {
+                AddCurvedWall(verts, uvs, trisWall, cx[0] + R,        cz[0] + R, R, S, 180f, yT, yB);
+                AddCornerFan (verts, uvs, trisTop,  cx[0] + R,        cz[0] + R, R, S, 180f, yT);
+            }
+            if (cornerBR)
+            {
+                AddCurvedWall(verts, uvs, trisWall, cx[gridCols] - R, cz[0] + R, R, S, 270f, yT, yB);
+                AddCornerFan (verts, uvs, trisTop,  cx[gridCols] - R, cz[0] + R, R, S, 270f, yT);
             }
 
             // ── Build mesh ────────────────────────────────────────────────────
