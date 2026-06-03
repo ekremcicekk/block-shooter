@@ -44,6 +44,7 @@ namespace BlockShooter.Editor
         private int[,]            _shots, _doors;
 
         private List<LevelConveyorGroup> _groups = new();
+        private List<BranchPathData> _branches = new();
         private float _openZoneHalfT = 0.08f;
 
         // ── Spline ────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ namespace BlockShooter.Editor
         private float             _splineWidth = 3.5f;
         private float             _splineDepth = 5f;
         private int               _splinePreset = 0;  // 0=Oval 1=Wide 2=Rectangle
+        private int               _editingBranchIndex = -1; // -1 = main spline, >=0 = branch index
 
         // Safe-area guide toggle
         private bool _showSafeArea = true;
@@ -76,6 +78,12 @@ namespace BlockShooter.Editor
         private List<Vector3>     _presetBackupTanIn  = null;
         private List<Vector3>     _presetBackupTanOut = null;
         private List<TangentMode> _presetBackupModes  = null;
+
+        // Main spline backup when editing branch spline
+        private List<Vector3>     _mainSplineKnotsBackup  = null;
+        private List<Vector3>     _mainSplineTanInBackup  = null;
+        private List<Vector3>     _mainSplineTanOutBackup = null;
+        private List<TangentMode> _mainSplineModesBackup  = null;
 
         // Copy
         private int _copyIdx = 0;
@@ -214,6 +222,7 @@ namespace BlockShooter.Editor
         // ── Left panel ────────────────────────────────────────────────────────
         private void DrawLeft()
         {
+            EditorGUI.BeginDisabledGroup(_editingSpline);
             EditorGUILayout.BeginVertical(GUILayout.Width(ListW), GUILayout.ExpandHeight(true));
 
             // Active prefab reference — always at top, click to ping/select in Project
@@ -261,6 +270,7 @@ namespace BlockShooter.Editor
                 _goalAmount = EditorGUILayout.IntField("Amount", _goalAmount);
 
             EditorGUILayout.EndVertical();
+            EditorGUI.EndDisabledGroup();
         }
 
         // ── Center panel ──────────────────────────────────────────────────────
@@ -276,13 +286,19 @@ namespace BlockShooter.Editor
                 GUILayout.ExpandWidth(true), GUILayout.Height(scrollH));
 
             DrawSplineSection();
+            
+            EditorGUI.BeginDisabledGroup(_editingSpline);
             DrawGridSection();
             DrawGroupsSection();
+            EditorGUI.EndDisabledGroup();
+
+            DrawBranchesSection();
 
             EditorGUILayout.EndScrollView();
 
             // ── Action buttons — always visible below scroll ──────────────────
             GUILayout.Space(6);
+            EditorGUI.BeginDisabledGroup(_editingSpline);
             EditorGUILayout.BeginHorizontal();
             GUI.backgroundColor = new Color(.3f,.85f,.45f);
             if (GUILayout.Button("  ✓  SAVE PREFAB  ", GUILayout.Height(34)))
@@ -292,6 +308,7 @@ namespace BlockShooter.Editor
                 TestInScene();
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
+            EditorGUI.EndDisabledGroup();
             GUILayout.Space(4);
             EditorGUILayout.EndVertical();
         }
@@ -337,13 +354,15 @@ namespace BlockShooter.Editor
 
             GUILayout.Space(4);
 
-            // Edit button
-            if (!_editingSpline)
+            bool editingMain = _editingSpline && _editingBranchIndex < 0;
+            if (!editingMain)
             {
+                EditorGUI.BeginDisabledGroup(_editingSpline); // Disable button if currently editing a branch
                 GUI.backgroundColor = new Color(.4f,.7f,1f);
                 if (GUILayout.Button("✏  Edit Spline  (Scene View)", GUILayout.Height(26)))
                     StartSplineEdit();
                 GUI.backgroundColor = Color.white;
+                EditorGUI.EndDisabledGroup();
             }
             else
             {
@@ -397,6 +416,21 @@ namespace BlockShooter.Editor
         // ── Start spline edit mode ────────────────────────────────────────────
         private void StartSplineEdit()
         {
+            // Point references to active target
+            if (_editingBranchIndex >= 0)
+            {
+                _mainSplineKnotsBackup = new List<Vector3>(_knots);
+                _mainSplineTanInBackup = new List<Vector3>(_tangentsIn);
+                _mainSplineTanOutBackup = new List<Vector3>(_tangentsOut);
+                _mainSplineModesBackup = new List<TangentMode>(_tangentModes);
+
+                var branch = _branches[_editingBranchIndex];
+                _knots = branch.splineKnots;
+                _tangentsIn = branch.splineTangentsIn;
+                _tangentsOut = branch.splineTangentsOut;
+                _tangentModes = branch.splineTangentModes.Select(m => (TangentMode)m).ToList();
+            }
+
             // Save state so ✕ Cancel can restore exactly what we started with
             EnsureTangentLists();
             _splineEditBackupKnots  = new List<Vector3>(_knots);
@@ -408,7 +442,19 @@ namespace BlockShooter.Editor
             _selKnot       = -1;
             _addKnotMode   = false;
 
-            DestroyLevelPreview(); // hide mesh preview while editing knots
+            if (_editingBranchIndex < 0)
+            {
+                DestroyLevelPreview(); // hide mesh preview while editing knots
+            }
+            else if (_levelPreviewGo != null)
+            {
+                var branch = _branches[_editingBranchIndex];
+                var branchTransform = _levelPreviewGo.transform.Find("ConveyorSystem/Branches/" + branch.branchName);
+                if (branchTransform != null)
+                {
+                    branchTransform.gameObject.SetActive(false);
+                }
+            }
             DestroyPreview();
 
             // Lightweight preview: just a Track GO with SplineContainer
@@ -417,7 +463,15 @@ namespace BlockShooter.Editor
             track.transform.SetParent(_previewGo.transform, false);
             track.transform.localPosition = new Vector3(0f, 0f, 0.5f);
             var sc = track.AddComponent<SplineContainer>();
-            WriteKnotsToContainer(sc, 0f, -0.5f);
+            
+            if (_editingBranchIndex >= 0)
+            {
+                WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), 0f, -0.5f);
+            }
+            else
+            {
+                WriteKnotsToContainer(sc, 0f, -0.5f);
+            }
 
             // Select track and frame it in the scene
             Selection.activeGameObject = track;
@@ -433,20 +487,61 @@ namespace BlockShooter.Editor
             if (!save && _splineEditBackupKnots != null)
             {
                 // Cancel: restore state from before edit started
-                _knots        = _splineEditBackupKnots;
-                _tangentsIn   = _splineEditBackupTanIn;
-                _tangentsOut  = _splineEditBackupTanOut;
-                _tangentModes = _splineEditBackupModes;
-                EnsureTangentLists();
+                if (_editingBranchIndex >= 0)
+                {
+                    var branch = _branches[_editingBranchIndex];
+                    branch.splineKnots = _splineEditBackupKnots;
+                    branch.splineTangentsIn = _splineEditBackupTanIn;
+                    branch.splineTangentsOut = _splineEditBackupTanOut;
+                    branch.splineTangentModes = _splineEditBackupModes.Select(m => (int)m).ToList();
+                }
+                else
+                {
+                    _knots        = _splineEditBackupKnots;
+                    _tangentsIn   = _splineEditBackupTanIn;
+                    _tangentsOut  = _splineEditBackupTanOut;
+                    _tangentModes = _splineEditBackupModes;
+                    EnsureTangentLists();
+                }
             }
-            // On save: _knots/_tangentsIn/_tangentsOut/_tangentModes are already
-            // up-to-date (kept in sync live via HandleKnots → SyncPreviewSpline).
-            // Do NOT read back from SplineContainer — it resets tangent modes to AutoSmooth.
+            else if (save && _editingBranchIndex >= 0)
+            {
+                var branch = _branches[_editingBranchIndex];
+                branch.splineTangentModes = _tangentModes.Select(m => (int)m).ToList();
+            }
+
+            // Restore main spline lists from backups when editing is finished
+            if (_mainSplineKnotsBackup != null)
+            {
+                _knots = _mainSplineKnotsBackup;
+                _tangentsIn = _mainSplineTanInBackup;
+                _tangentsOut = _mainSplineTanOutBackup;
+                _tangentModes = _mainSplineModesBackup;
+
+                _mainSplineKnotsBackup = null;
+                _mainSplineTanInBackup = null;
+                _mainSplineTanOutBackup = null;
+                _mainSplineModesBackup = null;
+            }
+
+            _editingBranchIndex = -1;
             _splineEditBackupKnots = null;
 
             DestroyPreview();
             SceneView.RepaintAll();
             Repaint();
+
+            if (save)
+            {
+                SavePrefab();
+            }
+            else
+            {
+                if (_activeIdx >= 0 && _activeIdx < _paths.Count)
+                {
+                    ShowLevelPreview(_paths[_activeIdx]);
+                }
+            }
         }
 
         private void DestroyPreview()
@@ -624,6 +719,10 @@ namespace BlockShooter.Editor
                 Vector3 hitPos = GetMouseGroundHit(e.mousePosition);
                 if (hitPos != Vector3.positiveInfinity)
                 {
+                    if (_editingBranchIndex >= 0)
+                    {
+                        hitPos = SnapToMainSpline(hitPos);
+                    }
                     int insertAt = FindInsertIndex(hitPos);
                     _knots.Insert(insertAt, hitPos);
                     EnsureTangentLists();
@@ -680,7 +779,11 @@ namespace BlockShooter.Editor
                     if (EditorGUI.EndChangeCheck())
                     {
                         np.y = 0f;
-                        if (isAnchor) np.z = FIRE_Z;
+                        if (isAnchor && _editingBranchIndex < 0) np.z = FIRE_Z;
+                        if (_editingBranchIndex >= 0)
+                        {
+                            np = SnapToMainSpline(np, i == _knots.Count - 1);
+                        }
                         _knots[i] = np;
                         _selKnot  = i;
                         SyncPreviewSpline();
@@ -736,11 +839,24 @@ namespace BlockShooter.Editor
             EnsureTangentLists();
             Handles.color = new Color(.35f, .65f, 1f, .85f);
 
-            for (int i = 0; i < _knots.Count; i++)
+            bool isOpen = _editingBranchIndex >= 0;
+            int count = isOpen ? _knots.Count - 1 : _knots.Count;
+
+            for (int i = 0; i < count; i++)
             {
-                int nxt  = (i + 1) % _knots.Count;
-                int prv  = (i - 1 + _knots.Count) % _knots.Count;
-                int nxt2 = (nxt + 1) % _knots.Count;
+                int nxt, prv, nxt2;
+                if (isOpen)
+                {
+                    nxt = i + 1;
+                    prv = i == 0 ? i : i - 1;
+                    nxt2 = nxt == _knots.Count - 1 ? nxt : nxt + 1;
+                }
+                else
+                {
+                    nxt  = (i + 1) % _knots.Count;
+                    prv  = (i - 1 + _knots.Count) % _knots.Count;
+                    nxt2 = (nxt + 1) % _knots.Count;
+                }
 
                 bool iAutoSmooth   = _tangentModes[i]   == TangentMode.AutoSmooth;
                 bool nxtAutoSmooth = _tangentModes[nxt] == TangentMode.AutoSmooth;
@@ -892,7 +1008,17 @@ namespace BlockShooter.Editor
         {
             if (_previewGo == null) return;
             var sc = _previewGo.GetComponentInChildren<SplineContainer>();
-            if (sc != null) WriteKnotsToContainer(sc, 0f, -0.5f);
+            if (sc != null)
+            {
+                if (_editingBranchIndex >= 0)
+                {
+                    WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), 0f, -0.5f);
+                }
+                else
+                {
+                    WriteKnotsToContainer(sc, 0f, -0.5f);
+                }
+            }
             SceneView.RepaintAll();
         }
 
@@ -905,6 +1031,25 @@ namespace BlockShooter.Editor
             if (_tangentsIn.Count > _knots.Count)   _tangentsIn.RemoveRange(_knots.Count, _tangentsIn.Count - _knots.Count);
             if (_tangentsOut.Count > _knots.Count)  _tangentsOut.RemoveRange(_knots.Count, _tangentsOut.Count - _knots.Count);
             if (_tangentModes.Count > _knots.Count) _tangentModes.RemoveRange(_knots.Count, _tangentModes.Count - _knots.Count);
+        }
+
+        private void WriteKnotsToContainer(SplineContainer sc, List<Vector3> knots, List<Vector3> tangentsIn, List<Vector3> tangentsOut, List<int> tangentModes, float yOffset = 0f, float zOffset = 0f)
+        {
+            var spline = sc.Spline;
+            spline.Clear();
+            for (int i = 0; i < knots.Count; i++)
+            {
+                var k = knots[i];
+                var tanIn  = i < tangentsIn.Count ? (Unity.Mathematics.float3)(Vector3)tangentsIn[i] : Unity.Mathematics.float3.zero;
+                var tanOut = i < tangentsOut.Count ? (Unity.Mathematics.float3)(Vector3)tangentsOut[i] : Unity.Mathematics.float3.zero;
+                spline.Add(new BezierKnot(new Unity.Mathematics.float3(k.x, k.y + yOffset, k.z + zOffset), tanIn, tanOut));
+            }
+            spline.Closed = false;
+            for (int i = 0; i < spline.Count; i++)
+            {
+                var mode = i < tangentModes.Count ? (TangentMode)tangentModes[i] : TangentMode.AutoSmooth;
+                spline.SetTangentMode(i, mode);
+            }
         }
 
         private void WriteKnotsToContainer(SplineContainer sc, float yOffset = 0f, float zOffset = 0f)
@@ -959,6 +1104,95 @@ namespace BlockShooter.Editor
             float t = -ray.origin.y / ray.direction.y;
             if (t < 0f) return Vector3.positiveInfinity;
             return ray.origin + ray.direction * t;
+        }
+
+        private Vector3 SnapToMainSpline(Vector3 position, bool isConnectionKnot = false)
+        {
+            if (_levelPreviewGo == null) return position;
+
+            var conveyorSys = _levelPreviewGo.transform.Find("ConveyorSystem");
+            if (conveyorSys == null) return position;
+            var mainTrack = conveyorSys.Find("Track");
+            if (mainTrack == null) return position;
+            var mainSplineContainer = mainTrack.GetComponent<SplineContainer>();
+            if (mainSplineContainer == null || mainSplineContainer.Spline == null) return position;
+
+            var mainTrackTransform = mainTrack.transform;
+            Vector3 localPos = mainTrackTransform.InverseTransformPoint(position);
+
+            SplineUtility.GetNearestPoint(
+                mainSplineContainer.Spline,
+                localPos,
+                out var nearestLocal,
+                out float t,
+                8, // resolution
+                4  // iterations
+            );
+
+            Vector3 nearestWorld = mainTrackTransform.TransformPoint((Vector3)nearestLocal);
+            nearestWorld.y = 0f;
+
+            if (Vector3.Distance(position, nearestWorld) < 0.6f)
+            {
+                if (isConnectionKnot && _editingBranchIndex >= 0 && _editingBranchIndex < _branches.Count)
+                {
+                    _branches[_editingBranchIndex].mergeT = t;
+
+                    var lr = _levelPreviewGo.GetComponent<LevelRoot>();
+                    if (lr != null && lr.branches != null && _editingBranchIndex < lr.branches.Count)
+                    {
+                        lr.branches[_editingBranchIndex].mergeT = t;
+                        var mainTrackBuilder = mainTrack.GetComponent<ConveyorTrackMeshBuilder>();
+                        if (mainTrackBuilder != null)
+                        {
+                            mainTrackBuilder.BuildMesh();
+                        }
+                    }
+                }
+                return nearestWorld;
+            }
+
+            return position;
+        }
+
+        private float GetMainSplineLength()
+        {
+            if (_knots.Count < 2) return 0f;
+            var tempSpline = new Spline();
+            for (int i = 0; i < _knots.Count; i++)
+            {
+                var k = _knots[i];
+                var tanIn  = i < _tangentsIn.Count ? (float3)(Vector3)_tangentsIn[i] : float3.zero;
+                var tanOut = i < _tangentsOut.Count ? (float3)(Vector3)_tangentsOut[i] : float3.zero;
+                tempSpline.Add(new BezierKnot((float3)k, tanIn, tanOut));
+            }
+            tempSpline.Closed = true;
+            for (int i = 0; i < tempSpline.Count; i++)
+            {
+                var mode = i < _tangentModes.Count ? _tangentModes[i] : TangentMode.AutoSmooth;
+                tempSpline.SetTangentMode(i, mode);
+            }
+            return SplineUtility.CalculateLength(tempSpline, Matrix4x4.identity);
+        }
+
+        private float GetBranchSplineLength(BranchPathData b)
+        {
+            if (b.splineKnots.Count < 2) return 0f;
+            var tempSpline = new Spline();
+            for (int i = 0; i < b.splineKnots.Count; i++)
+            {
+                var k = b.splineKnots[i];
+                var tanIn  = i < b.splineTangentsIn.Count ? (float3)(Vector3)b.splineTangentsIn[i] : float3.zero;
+                var tanOut = i < b.splineTangentsOut.Count ? (float3)(Vector3)b.splineTangentsOut[i] : float3.zero;
+                tempSpline.Add(new BezierKnot((float3)k, tanIn, tanOut));
+            }
+            tempSpline.Closed = false;
+            for (int i = 0; i < tempSpline.Count; i++)
+            {
+                var mode = i < b.splineTangentModes.Count ? (TangentMode)b.splineTangentModes[i] : TangentMode.AutoSmooth;
+                tempSpline.SetTangentMode(i, mode);
+            }
+            return SplineUtility.CalculateLength(tempSpline, Matrix4x4.identity);
         }
 
         private int FindInsertIndex(Vector3 pos)
@@ -1080,6 +1314,27 @@ namespace BlockShooter.Editor
         private void DrawGroupsSection()
         {
             Hdr("CONVEYOR GROUPS");
+
+            // Calculate capacity
+            float mainLen = GetMainSplineLength();
+            float rowSpacing = _cfg != null ? _cfg.rowSpacing : 0.18f;
+            int maxMainRows = Mathf.Max(0, Mathf.FloorToInt(mainLen / rowSpacing));
+            int assignedMainRows = _groups.Sum(g => g.rowCount);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            if (assignedMainRows > maxMainRows)
+            {
+                GUI.color = new Color(1f, 0.3f, 0.3f);
+                GUILayout.Label($"⚠️ CAPACITY WARNING: {assignedMainRows} / {maxMainRows} Rows assigned! (Exceeds capacity by {assignedMainRows - maxMainRows} rows, overlap will occur)", EditorStyles.boldLabel);
+                GUI.color = Color.white;
+            }
+            else
+            {
+                GUILayout.Label($"Conveyor Capacity: {assignedMainRows} / {maxMainRows} Rows ({(maxMainRows > 0 ? (assignedMainRows * 100 / maxMainRows) : 0)}% used)", EditorStyles.miniLabel);
+            }
+            EditorGUILayout.EndVertical();
+            GUILayout.Space(4);
+
             for (int i = _groups.Count - 1; i >= 0; i--)
             {
                 var g = _groups[i];
@@ -1090,7 +1345,8 @@ namespace BlockShooter.Editor
                 GUI.backgroundColor = prev;
                 g.color     = (BlockColorType)EditorGUILayout.EnumPopup(g.color, GUILayout.Width(72));
                 GUILayout.Label("Rows",  GUILayout.Width(32)); g.rowCount  = EditorGUILayout.IntField(g.rowCount,  GUILayout.Width(36));
-                GUILayout.Label("Lanes", GUILayout.Width(36)); g.laneCount = EditorGUILayout.IntField(g.laneCount, GUILayout.Width(28));
+                g.laneCount = 5;
+                GUILayout.Label("Lanes: 5", EditorStyles.miniLabel, GUILayout.Width(50));
                 if (GUILayout.Button("✕", GUILayout.Width(20), GUILayout.Height(20))) _groups.RemoveAt(i);
                 EditorGUILayout.EndHorizontal();
             }
@@ -1098,7 +1354,7 @@ namespace BlockShooter.Editor
                 _groups.Add(new LevelConveyorGroup
                     { color = BlockColorType.Red,
                       rowCount  = _cfg?.rowsPerGroup ?? 20,
-                      laneCount = _cfg?.laneCount    ?? 5 });
+                      laneCount = 5 });
             GUILayout.Space(8);
 
             Hdr("OPEN ZONE");
@@ -1424,6 +1680,23 @@ namespace BlockShooter.Editor
             foreach (var g in lr.groups)
                 _groups.Add(new LevelConveyorGroup { color=g.color, rowCount=g.rowCount, laneCount=g.laneCount });
 
+            _branches.Clear();
+            foreach (var b in lr.branches)
+            {
+                var bCopy = new BranchPathData
+                {
+                    branchName = b.branchName,
+                    mergeT = b.mergeT,
+                    connectFromLeft = b.connectFromLeft,
+                    splineKnots = new List<Vector3>(b.splineKnots),
+                    splineTangentsIn = new List<Vector3>(b.splineTangentsIn),
+                    splineTangentsOut = new List<Vector3>(b.splineTangentsOut),
+                    splineTangentModes = new List<int>(b.splineTangentModes),
+                    groups = b.groups.Select(g => new LevelConveyorGroup { color = g.color, rowCount = g.rowCount, laneCount = g.laneCount }).ToList()
+                };
+                _branches.Add(bCopy);
+            }
+
             if (lr.splineKnots.Count >= 3)
             {
                 _knots = new List<Vector3>(lr.splineKnots);
@@ -1553,7 +1826,11 @@ namespace BlockShooter.Editor
         {
             if (_cfg == null) { EditorUtility.DisplayDialog("Error","LevelEditorConfig not found!","OK"); return; }
 
-            if (_editingSpline) StopSplineEdit(save: true);
+            if (_editingSpline)
+            {
+                StopSplineEdit(save: true);
+                return;
+            }
 
             string dir  = _cfg.levelSavePath.TrimEnd('/');
             string name = $"Level_{_levelIndex:000}";
@@ -1568,6 +1845,7 @@ namespace BlockShooter.Editor
             // Save generated meshes as persistent assets so prefab can reference them
             SaveTrackMeshAsset(root.transform, dir, name);
             SaveDeckMeshAsset(root.transform, dir, name);
+            SaveBranchMeshAssets(root.transform, dir, name);
 
             PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
             DestroyImmediate(root);
@@ -1614,6 +1892,23 @@ namespace BlockShooter.Editor
             lr.groups.Clear();
             foreach (var g in _groups)
                 lr.groups.Add(new LevelConveyorGroup { color=g.color, rowCount=g.rowCount, laneCount=g.laneCount });
+
+            lr.branches.Clear();
+            foreach (var b in _branches)
+            {
+                var bData = new BranchPathData
+                {
+                    branchName = b.branchName,
+                    mergeT = b.mergeT,
+                    connectFromLeft = b.connectFromLeft,
+                    splineKnots = new List<Vector3>(b.splineKnots),
+                    splineTangentsIn = new List<Vector3>(b.splineTangentsIn),
+                    splineTangentsOut = new List<Vector3>(b.splineTangentsOut),
+                    splineTangentModes = new List<int>(b.splineTangentModes),
+                    groups = b.groups.Select(g => new LevelConveyorGroup { color = g.color, rowCount = g.rowCount, laneCount = g.laneCount }).ToList()
+                };
+                lr.branches.Add(bData);
+            }
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -1691,6 +1986,109 @@ namespace BlockShooter.Editor
                             bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
                         }
                     }
+            }
+
+            // ── Branch Paths ──
+            if (_branches != null && _branches.Count > 0)
+            {
+                var branchesGroupGo = Go(conveyorSys.transform, "Branches");
+                int branchIdx = 0;
+                foreach (var b in _branches)
+                {
+                    var branchGo = Go(branchesGroupGo.transform, b.branchName);
+                    branchGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+                    
+                    var bSc = branchGo.AddComponent<SplineContainer>();
+                    WriteKnotsToContainer(bSc, b.splineKnots, b.splineTangentsIn, b.splineTangentsOut, b.splineTangentModes, trackRailHeight, -0.5f);
+
+                    var bp = branchGo.AddComponent<BranchPath>();
+                    bp.mergeT = b.mergeT;
+                    bp.data = b;
+
+                    var bMeshBuilder = branchGo.AddComponent<ConveyorTrackMeshBuilder>();
+                    bMeshBuilder.resolution    = 60;
+                    bMeshBuilder.openZoneEnabled = false;
+                    bMeshBuilder.beltHalfWidth = _cfg.beltHalfWidth;
+                    bMeshBuilder.wallAboveBelt = _cfg.wallAboveBelt;
+                    bMeshBuilder.railHeight    = trackRailHeight;
+                    bMeshBuilder.railWidth     = _cfg.railWidth;
+                    bMeshBuilder.bevelSize     = _cfg.trackBevelSize;
+                    bMeshBuilder.BuildMesh();
+
+                    var bMr = branchGo.GetComponent<MeshRenderer>();
+                    if (bMr != null)
+                    {
+                        bMr.sharedMaterials = new Material[]
+                        {
+                            _cfg.trackSideMaterial,
+                            _cfg.trackBeltMaterial,
+                        };
+                    }
+
+                    // Calculate branch spline length for block placement
+                    float branchSplineLen = SplineUtility.CalculateLength(bSc.Spline, branchGo.transform.localToWorldMatrix);
+                    float mainTrackHalfWidth = _cfg.beltHalfWidth + _cfg.railWidth;
+                    float mergeStopT = branchSplineLen > 0f
+                        ? Mathf.Clamp01(1.0f - (mainTrackHalfWidth / branchSplineLen))
+                        : 0.95f;
+
+                    // Place block groups along the branch spline
+                    var bGroupsGo = Go(branchGo.transform, "Groups");
+                    int globalRowIdx = 0;
+                    foreach (var gd in b.groups)
+                    {
+                        var gGo = Go(bGroupsGo.transform, $"Group_{gd.color}");
+                        var bg  = gGo.AddComponent<BlockGroup>();
+                        bg.colorType   = gd.color;
+                        bg.rowCount    = gd.rowCount;
+                        bg.laneCount   = 5;
+                        bg.laneSpacing = _cfg.laneSpacing;
+                        bg.rowSpacing  = _cfg.rowSpacing;
+
+                        if (_cfg.conveyorBlockPrefab != null)
+                            for (int row = 0; row < gd.rowCount; row++)
+                            {
+                                // Calculate T position for this row on the branch spline
+                                float rowT = mergeStopT - (globalRowIdx * _cfg.rowSpacing) / branchSplineLen;
+                                rowT = Mathf.Clamp01(rowT);
+
+                                // Evaluate spline at this T to get world position and orientation
+                                bSc.Spline.Evaluate(rowT, out var spPos, out var spTan, out var spUp);
+                                Vector3 worldPos = branchGo.transform.TransformPoint(spPos);
+                                Vector3 fwd = branchGo.transform.TransformDirection((Vector3)spTan).normalized;
+                                Vector3 upDir = branchGo.transform.TransformDirection((Vector3)spUp).normalized;
+                                if (upDir == Vector3.zero) upDir = Vector3.up;
+                                Vector3 right = Vector3.Cross(upDir, fwd).normalized;
+                                Quaternion rot = fwd != Vector3.zero ? Quaternion.LookRotation(fwd, upDir) : Quaternion.identity;
+
+                                var rowGo = Go(gGo.transform, $"Row_{row}");
+                                for (int lane = 0; lane < 5; lane++)
+                                {
+                                    var bGo = (GameObject)PrefabUtility.InstantiatePrefab(
+                                        _cfg.conveyorBlockPrefab, rowGo.transform);
+                                    bGo.name = $"Block_{lane}";
+
+                                    // Position block at the correct lane offset along the spline
+                                    float xOff = (lane - 2f) * _cfg.laneSpacing;
+                                    bGo.transform.position = worldPos + right * xOff;
+                                    bGo.transform.rotation = rot;
+
+                                    PrefabUtility.RecordPrefabInstancePropertyModifications(bGo.transform);
+                                    bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
+
+                                    // Apply color material
+                                    var cb = bGo.GetComponent<ConveyorBlock3D>();
+                                    if (cb != null && cb.blockRenderer != null && _gameCfg != null)
+                                    {
+                                        var mat = _gameCfg.GetMaterial(gd.color);
+                                        if (mat != null) cb.blockRenderer.sharedMaterial = mat;
+                                    }
+                                }
+                                globalRowIdx++;
+                            }
+                    }
+                    branchIdx++;
+                }
             }
 
             // Create logical parent groups
@@ -1870,6 +2268,36 @@ namespace BlockShooter.Editor
             }
         }
 
+        private static void SaveBranchMeshAssets(Transform root, string dir, string name)
+        {
+            var branches = FindDeepChild(root, "Branches");
+            if (branches == null) return;
+
+            const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
+            EnsureDir(meshDir);
+
+            int idx = 0;
+            foreach (Transform branchChild in branches)
+            {
+                var mf = branchChild.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) { idx++; continue; }
+
+                string meshPath = $"{meshDir}/{name}_BranchMesh_{idx}.asset";
+                var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+                if (existing != null)
+                {
+                    existing.Clear();
+                    EditorUtility.CopySerialized(mf.sharedMesh, existing);
+                    mf.sharedMesh = existing;
+                }
+                else
+                {
+                    AssetDatabase.CreateAsset(mf.sharedMesh, meshPath);
+                }
+                idx++;
+            }
+        }
+
         private static Transform FindDeepChild(Transform parent, string name)
         {
             foreach (Transform child in parent)
@@ -1951,6 +2379,157 @@ namespace BlockShooter.Editor
             EditorGUI.DrawRect(
                 GUILayoutUtility.GetRect(1,float.MaxValue,GUILayout.Width(1),GUILayout.ExpandHeight(true)),
                 new Color(.22f,.22f,.22f));
+        }
+
+        private void DrawBranchesSection()
+        {
+            Hdr("BRANCH CONVEYORS");
+
+            for (int i = _branches.Count - 1; i >= 0; i--)
+            {
+                var b = _branches[i];
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+                bool isThisEditing = _editingSpline && _editingBranchIndex == i;
+                bool otherEditing = _editingSpline && !isThisEditing;
+
+                EditorGUI.BeginDisabledGroup(otherEditing);
+                
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Branch Name:", GUILayout.Width(80));
+                b.branchName = EditorGUILayout.TextField(b.branchName);
+                
+                // Disable Remove button if currently editing any spline
+                EditorGUI.BeginDisabledGroup(_editingSpline);
+                GUI.backgroundColor = new Color(.9f, .3f, .3f);
+                if (GUILayout.Button("✕ Remove Branch", GUILayout.Width(110)))
+                {
+                    _branches.RemoveAt(i);
+                    EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.EndVertical();
+                    EditorGUI.EndDisabledGroup(); // end inner disabled group
+                    EditorGUI.EndDisabledGroup(); // end outer disabled group
+                    continue;
+                }
+                GUI.backgroundColor = Color.white;
+                EditorGUI.EndDisabledGroup(); // end inner disabled group
+                EditorGUILayout.EndHorizontal();
+
+                // Connections
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Merge T (0-1):", GUILayout.Width(90));
+                b.mergeT = EditorGUILayout.Slider(b.mergeT, 0f, 1f);
+                EditorGUILayout.EndHorizontal();
+
+                float branchLen = GetBranchSplineLength(b);
+                float rowSpacingBranch = _cfg != null ? _cfg.rowSpacing : 0.18f;
+                int maxBranchRows = Mathf.Max(0, Mathf.FloorToInt(branchLen / rowSpacingBranch));
+                int assignedBranchRows = b.groups.Sum(g => g.rowCount);
+
+                EditorGUILayout.BeginHorizontal();
+                if (assignedBranchRows > maxBranchRows)
+                {
+                    GUI.color = new Color(1f, 0.3f, 0.3f);
+                    GUILayout.Label($"⚠️ OVERLAP WARNING: {assignedBranchRows} / {maxBranchRows} Rows assigned!", EditorStyles.boldLabel);
+                    GUI.color = Color.white;
+                }
+                else
+                {
+                    GUILayout.Label($"Branch Capacity: {assignedBranchRows} / {maxBranchRows} Rows ({(maxBranchRows > 0 ? (assignedBranchRows * 100 / maxBranchRows) : 0)}% used)", EditorStyles.miniLabel);
+                }
+                EditorGUILayout.EndHorizontal();
+
+                // Edit Spline button
+                EditorGUILayout.BeginHorizontal();
+                if (_editingSpline && _editingBranchIndex == i)
+                {
+                    GUI.backgroundColor = new Color(.3f, .85f, .45f);
+                    if (GUILayout.Button("✓ Done Editing Branch Spline", GUILayout.Height(24)))
+                    {
+                        StopSplineEdit(save: true);
+                    }
+                    GUI.backgroundColor = Color.white;
+                }
+                else
+                {
+                    GUI.backgroundColor = new Color(.4f, .7f, 1f);
+                    if (GUILayout.Button("✏ Edit Branch Spline", GUILayout.Height(24)))
+                    {
+                        if (_editingSpline) StopSplineEdit(save: false);
+                        _editingBranchIndex = i;
+                        StartSplineEdit();
+                    }
+                    GUI.backgroundColor = Color.white;
+                }
+                EditorGUILayout.EndHorizontal();
+
+                GUILayout.Space(4);
+                GUILayout.Label("Branch Groups:", EditorStyles.boldLabel);
+                // Draw group list for branch
+                for (int gIdx = b.groups.Count - 1; gIdx >= 0; gIdx--)
+                {
+                    var g = b.groups[gIdx];
+                    EditorGUILayout.BeginHorizontal();
+                    Color prev = GUI.backgroundColor;
+                    GUI.backgroundColor = PC(g.color);
+                    GUILayout.Box("", GUILayout.Width(16), GUILayout.Height(16));
+                    GUI.backgroundColor = prev;
+                    g.color = (BlockColorType)EditorGUILayout.EnumPopup(g.color, GUILayout.Width(72));
+                    GUILayout.Label("Rows", GUILayout.Width(32)); g.rowCount = EditorGUILayout.IntField(g.rowCount, GUILayout.Width(36));
+                    g.laneCount = 5; // Hardcoded to 5
+                    GUILayout.Label("Lanes: 5", EditorStyles.miniLabel, GUILayout.Width(50));
+                    
+                    // Disable group remove button if editing any spline
+                    EditorGUI.BeginDisabledGroup(_editingSpline);
+                    if (GUILayout.Button("✕", GUILayout.Width(18), GUILayout.Height(18))) b.groups.RemoveAt(gIdx);
+                    EditorGUI.EndDisabledGroup();
+                    
+                    EditorGUILayout.EndHorizontal();
+                }
+                
+                // Disable Add Group button if editing any spline
+                EditorGUI.BeginDisabledGroup(_editingSpline);
+                if (GUILayout.Button("+ Add Group to Branch", EditorStyles.miniButton, GUILayout.Height(18)))
+                {
+                    b.groups.Add(new LevelConveyorGroup
+                    {
+                        color = BlockColorType.Red,
+                        rowCount = 10,
+                        laneCount = 5
+                    });
+                }
+                EditorGUI.EndDisabledGroup();
+
+                EditorGUI.EndDisabledGroup(); // end otherEditing disabled group
+
+                EditorGUILayout.EndVertical();
+                GUILayout.Space(6);
+            }
+
+            EditorGUI.BeginDisabledGroup(_editingSpline);
+            GUI.backgroundColor = new Color(.45f, .85f, .5f);
+            if (GUILayout.Button("+ Add Branch Path", GUILayout.Height(26)))
+            {
+                var newBranch = new BranchPathData
+                {
+                    branchName = $"Branch_{_branches.Count}",
+                    mergeT = 0.5f,
+                    connectFromLeft = false,
+                    splineKnots = new List<Vector3>
+                    {
+                        new Vector3(-4f, 0f, 2f),
+                        new Vector3(-2f, 0f, 3f),
+                        new Vector3(0f, 0f, 3.5f)
+                    },
+                    splineTangentsIn = new List<Vector3> { Vector3.zero, Vector3.zero, Vector3.zero },
+                    splineTangentsOut = new List<Vector3> { Vector3.zero, Vector3.zero, Vector3.zero },
+                    splineTangentModes = new List<int> { (int)TangentMode.AutoSmooth, (int)TangentMode.AutoSmooth, (int)TangentMode.AutoSmooth }
+                };
+                _branches.Add(newBranch);
+            }
+            GUI.backgroundColor = Color.white;
+            EditorGUI.EndDisabledGroup();
+            GUILayout.Space(8);
         }
 
         private static GameObject Go(Transform p, string n)

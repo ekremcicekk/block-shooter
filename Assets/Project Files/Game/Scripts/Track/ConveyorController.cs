@@ -76,10 +76,20 @@ namespace BlockShooter
             float currentT = 0f;
             foreach (var group in blockGroups)
             {
+                // Skip block groups that belong to branch paths
+                if (group.GetComponentInParent<BranchPath>() != null) continue;
+
                 group.Initialize();
                 AddGroup(group, currentT);
                 currentT += WorldLengthToT(group.SplineLength);
                 if (currentT >= 1f) currentT -= 1f;
+            }
+
+            // Initialize all branch paths in the scene
+            var branchPaths = FindObjectsOfType<BranchPath>();
+            foreach (var bp in branchPaths)
+            {
+                bp.Initialize();
             }
 
             SpawnArrows();
@@ -159,7 +169,7 @@ namespace BlockShooter
             {
                 Group = group,
                 HeadT = startT,
-                TailT = startT + groupTLength
+                TailT = (startT + groupTLength) % 1f
             });
             group.transform.SetParent(transform, false);
             PlaceGroupAtT(group, startT);
@@ -259,11 +269,63 @@ namespace BlockShooter
         private void HandleGroupCleared(BlockGroup group)
         {
             group.OnGroupCleared -= HandleGroupCleared;
+            _groups.RemoveAll(e => e.Group == group);
+            if (group != null && group.gameObject != null)
+            {
+                Destroy(group.gameObject);
+            }
         }
 
         private float WorldLengthToT(float worldLen)
         {
             return _splineWorldLength > 0f ? worldLen / _splineWorldLength : 0f;
+        }
+
+        public bool IsRangeEmpty(float startT, float endT)
+        {
+            startT = (startT % 1f + 1f) % 1f;
+            endT = (endT % 1f + 1f) % 1f;
+
+            foreach (var entry in _groups)
+            {
+                if (entry.Group == null || !entry.Group.gameObject.activeInHierarchy || entry.Group.IsEmpty) continue;
+
+                float head = entry.HeadT;
+                float tail = entry.TailT;
+
+                if (Overlays(startT, endT, head, tail))
+                {
+                    Debug.LogWarning($"[IsRangeEmpty] Merge blocked: check range [{startT:F3}..{endT:F3}] overlaps group '{entry.Group.name}' at [{head:F3}..{tail:F3}]");
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private bool Overlays(float s1, float e1, float s2, float e2)
+        {
+            if (s1 <= e1)
+            {
+                if (s2 <= e2)
+                {
+                    return s1 <= e2 && e1 >= s2;
+                }
+                else
+                {
+                    return s1 <= e2 || e1 >= s2;
+                }
+            }
+            else
+            {
+                if (s2 <= e2)
+                {
+                    return s2 <= e1 || e2 >= s1;
+                }
+                else
+                {
+                    return true;
+                }
+            }
         }
     }
 }

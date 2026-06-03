@@ -24,6 +24,21 @@ namespace BlockShooter
         public int            laneCount = 5;
     }
 
+    [Serializable]
+    public class BranchPathData
+    {
+        public string branchName = "Branch_0";
+        public float mergeT = 0.5f;
+        public bool connectFromLeft = false;
+
+        public List<Vector3> splineKnots = new();
+        public List<Vector3> splineTangentsIn = new();
+        public List<Vector3> splineTangentsOut = new();
+        public List<int> splineTangentModes = new();
+
+        public List<LevelConveyorGroup> groups = new();
+    }
+
     public class LevelRoot : MonoBehaviour
     {
         [Header("Sub-Systems")]
@@ -52,6 +67,7 @@ namespace BlockShooter
         [HideInInspector] public float openZoneHalfT = 0.08f;
         [HideInInspector] public List<LevelGridCell>     cells       = new();
         [HideInInspector] public List<LevelConveyorGroup> groups     = new();
+        [HideInInspector] public List<BranchPathData>     branches   = new();
 
         public void Initialize()
         {

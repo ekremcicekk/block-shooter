@@ -176,6 +176,12 @@ namespace BlockShooter
             int s_capFirst = gapHalf;
             int s_capB     = resolution - gapHalf;
 
+            // Find LevelRoot
+            var root = GetComponentInParent<LevelRoot>();
+            if (root == null) root = FindObjectOfType<LevelRoot>();
+
+            bool isMainTrack = GetComponent<ConveyorController>() != null;
+
             // ── Triangles ─────────────────────────────────────────────────────
             for (int e = 0; e < edgeCount; e++)
             {
@@ -186,6 +192,16 @@ namespace BlockShooter
                 {
                     int b = stripBase + s * 2;
 
+                    // If it's a branch track, skip the end part that intersects with the main conveyor
+                    if (!isMainTrack)
+                    {
+                        float distToEnd = Vector3.Distance(wPos[s], wPos[resolution]);
+                        if (distToEnd < (beltHalfWidth + railWidth + 0.05f))
+                        {
+                            continue;
+                        }
+                    }
+
                     if (isBelt)
                     {
                         trisBelt.Add(b);   trisBelt.Add(b+2); trisBelt.Add(b+1);
@@ -193,11 +209,21 @@ namespace BlockShooter
                     }
                     else
                     {
-                        // e=6..10 : entire right wall → skip inside gap (symmetric gapHalf steps each side).
-                        // e=0..4  : left wall → never cut.
                         if (openZoneEnabled && e >= 6 && e <= 10)
                         {
                             if (s < gapHalf || s >= resolution - gapHalf) continue;
+                        }
+
+                        // Branch path connection gaps
+                        if (isMainTrack)
+                        {
+                            float tSample = (float)s / resolution;
+                            bool skipLeft, skipRight;
+                            if (IsInBranchGap(tSample, root, out skipLeft, out skipRight))
+                            {
+                                if (skipLeft && e >= 0 && e <= 4) continue;
+                                if (skipRight && e >= 6 && e <= 10) continue;
+                            }
                         }
 
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
@@ -382,6 +408,65 @@ namespace BlockShooter
                     dist[s] = (dist[s] / total) * vTiling;
 
             return dist;
+        }
+
+        private bool IsInBranchGap(float t, LevelRoot root, out bool skipLeft, out bool skipRight)
+        {
+            skipLeft = false;
+            skipRight = false;
+            if (root == null || root.branches == null) return false;
+
+            float splineLength = SplineUtility.CalculateLength(_spline.Spline, transform.localToWorldMatrix);
+            float branchHalfWidthWorld = beltHalfWidth + railWidth;
+            float gapHalfT = splineLength > 0f ? (branchHalfWidthWorld / splineLength) : 0.025f;
+
+            foreach (var branch in root.branches)
+            {
+                float center = branch.mergeT;
+                float min = center - gapHalfT;
+                float max = center + gapHalfT;
+
+                bool inGap = false;
+                if (min <= max)
+                {
+                    inGap = (t >= min && t <= max);
+                }
+                else
+                {
+                    inGap = (t >= min || t <= max);
+                }
+
+                if (inGap)
+                {
+                    bool fromLeft = true;
+                    if (branch.splineKnots != null && branch.splineKnots.Count >= 2)
+                    {
+                        _spline.Spline.Evaluate(center, out _, out var mainTanLocal, out var mainUpLocal);
+                        // Transform from spline-local space to world space
+                        Vector3 mainTan = transform.TransformDirection((Vector3)mainTanLocal).normalized;
+                        Vector3 mainUp = transform.TransformDirection((Vector3)mainUpLocal).normalized;
+                        if (mainUp == Vector3.zero) mainUp = Vector3.up;
+                        Vector3 mainRight = Vector3.Cross(mainUp, mainTan).normalized;
+
+                        // Branch knots are in world space
+                        Vector3 branchLast = branch.splineKnots[branch.splineKnots.Count - 1];
+                        Vector3 branchSecondLast = branch.splineKnots[branch.splineKnots.Count - 2];
+                        Vector3 toBranch = (branchSecondLast - branchLast).normalized;
+                        float dot = Vector3.Dot(toBranch, mainRight);
+                        fromLeft = (dot < 0f);
+                    }
+                    else
+                    {
+                        fromLeft = branch.connectFromLeft;
+                    }
+
+                    // Only skip the OUTER wall — the wall that faces the approaching branch
+                    if (fromLeft) skipLeft = true;
+                    else skipRight = true;
+                }
+            }
+
+            return skipLeft || skipRight;
         }
 
         // ─────────────────────────────────────────────────────────────────────
