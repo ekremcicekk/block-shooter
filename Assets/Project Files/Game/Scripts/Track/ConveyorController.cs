@@ -142,7 +142,7 @@ namespace BlockShooter
             for (int i = 0; i < _groups.Count; i++)
             {
                 var entry = _groups[i];
-                if (entry.Group == null || entry.Group.IsEmpty) continue;
+                if (entry.Group == null) continue;
 
                 entry.HeadT = (entry.HeadT + delta) % 1f;
                 entry.TailT = (entry.TailT + delta) % 1f;
@@ -177,6 +177,18 @@ namespace BlockShooter
         }
 
         public void InsertGroupAt(BlockGroup group, float t) => AddGroup(group, t);
+
+        public void ForceUpdateGroupPosition(BlockGroup group)
+        {
+            foreach (var entry in _groups)
+            {
+                if (entry.Group == group)
+                {
+                    PlaceGroupAtT(group, entry.HeadT);
+                    break;
+                }
+            }
+        }
 
         public bool IsGapAt(float t) => IsTrackEmptyAt(t);
 
@@ -240,7 +252,10 @@ namespace BlockShooter
                     var block = group.GetBlock(row, lane);
                     if (block == null || !block.gameObject.activeSelf) continue;
                     float xOff = (lane - (group.LaneCount - 1) * 0.5f) * group.LaneSpacing;
-                    block.transform.SetPositionAndRotation(worldPos + right * xOff, rot);
+                    Vector3 targetPos = worldPos + right * xOff;
+                    Quaternion targetRot = rot;
+                    block.transform.position = targetPos + block.transitionOffset;
+                    block.transform.rotation = targetRot * block.transitionRotOffset;
                 }
             }
 
@@ -252,7 +267,7 @@ namespace BlockShooter
         {
             foreach (var entry in _groups)
             {
-                if (entry.Group == null || entry.Group.IsEmpty) continue;
+                if (entry.Group == null) continue;
                 float head = entry.HeadT, tail = entry.TailT;
                 if (head <= tail)
                 {
@@ -288,18 +303,71 @@ namespace BlockShooter
 
             foreach (var entry in _groups)
             {
-                if (entry.Group == null || !entry.Group.gameObject.activeInHierarchy || entry.Group.IsEmpty) continue;
+                if (entry.Group == null || !entry.Group.gameObject.activeInHierarchy) continue;
 
                 float head = entry.HeadT;
                 float tail = entry.TailT;
 
                 if (Overlays(startT, endT, head, tail))
                 {
-                    Debug.LogWarning($"[IsRangeEmpty] Merge blocked: check range [{startT:F3}..{endT:F3}] overlaps group '{entry.Group.name}' at [{head:F3}..{tail:F3}]");
                     return false;
                 }
             }
             return true;
+        }
+
+        public bool IsRangeEmptyForLane(float startT, float endT, int laneIndex)
+        {
+            startT = (startT % 1f + 1f) % 1f;
+            endT = (endT % 1f + 1f) % 1f;
+
+            foreach (var entry in _groups)
+            {
+                var group = entry.Group;
+                if (group == null || !group.gameObject.activeInHierarchy) continue;
+
+                float head = entry.HeadT;
+                float tail = entry.TailT;
+
+                // Treat empty groups (newly created merged groups) as occupying all lanes
+                if (group.IsEmpty)
+                {
+                    if (Overlays(startT, endT, head, tail))
+                    {
+                        return false;
+                    }
+                    continue;
+                }
+
+                float groupTLength = group.SplineLength / _splineWorldLength;
+
+                for (int row = 0; row < group.RowCount; row++)
+                {
+                    var block = group.GetBlock(row, laneIndex);
+                    if (block == null || !block.gameObject.activeSelf || block.IsDestroyed) continue;
+
+                    // Calculate the exact T of this row along the spline
+                    float rowT = (head + (float)(group.RowCount - 1 - row) / group.RowCount * groupTLength) % 1f;
+
+                    if (IsTInRange(rowT, startT, endT))
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        private bool IsTInRange(float t, float start, float end)
+        {
+            if (start <= end)
+            {
+                return t >= start && t <= end;
+            }
+            else
+            {
+                return t >= start || t <= end;
+            }
         }
 
         private bool Overlays(float s1, float e1, float s2, float e2)

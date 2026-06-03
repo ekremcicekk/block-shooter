@@ -53,6 +53,17 @@ namespace BlockShooter
             }
         }
 
+        public void RegisterMergedBlock(ConveyorBlock3D block, int lane)
+        {
+            if (_blocks == null) _blocks = new ConveyorBlock3D[rowCount, laneCount];
+            if (_blocks[0, lane] == null)
+            {
+                _blocks[0, lane] = block;
+                block.OnDestroyed += HandleBlockDestroyed;
+                _aliveCount++;
+            }
+        }
+
         public ConveyorBlock3D GetBlock(int row, int lane)
         {
             if (_blocks == null) return null;

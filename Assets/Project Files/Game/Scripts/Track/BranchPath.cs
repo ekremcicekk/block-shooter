@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Splines;
+using DG.Tweening;
 
 namespace BlockShooter
 {
@@ -22,6 +23,8 @@ namespace BlockShooter
             public float CurrentT; // Position along branch spline (0.0 to 1.0)
             public float RowSpacing;
             public BlockGroup OriginalGroup;
+            public BlockGroup MergedGroup;
+            public bool[] MergedLanes;
         }
 
         public void Initialize()
@@ -52,8 +55,11 @@ namespace BlockShooter
             {
                 firstRowSpacing = groupList[0].rowSpacing;
             }
+            float laneSpacing = GetMainTrackLaneSpacing();
 
-            float safetyOffset = mainTrackHalfWidth + firstRowSpacing + 0.1f;
+            // Align the closest possible block (lane 0 or 4, which is offset by 2 * laneSpacing)
+            // exactly 0.05m outside the conveyor outer wall
+            float safetyOffset = mainTrackHalfWidth + 2f * laneSpacing + 0.05f;
 
             if (_splineLength > 0f)
             {
@@ -91,7 +97,9 @@ namespace BlockShooter
                             ColorType = group.colorType,
                             CurrentT = initialT,
                             RowSpacing = rowSpacing,
-                            OriginalGroup = group
+                            OriginalGroup = group,
+                            MergedGroup = null,
+                            MergedLanes = new bool[5]
                         });
                         globalRowIndex++;
                     }
@@ -131,12 +139,19 @@ namespace BlockShooter
             for (int i = 0; i < _rows.Count; i++)
             {
                 var entry = _rows[i];
-                // Cap at _mergeStopT for the front row, or behind the row in front
-                float maxT = _mergeStopT;
-                if (i > 0)
+                float maxT = 1.0f;
+                if (i == 0)
+                {
+                    maxT = (entry.MergedGroup != null) ? 1.0f : _mergeStopT;
+                }
+                else
                 {
                     float spacingInT = _rows[i].RowSpacing / _splineLength;
                     maxT = _rows[i - 1].CurrentT - spacingInT;
+                    if (entry.MergedGroup == null)
+                    {
+                        maxT = Mathf.Min(maxT, _mergeStopT);
+                    }
                 }
 
                 entry.CurrentT = Mathf.Min(entry.CurrentT + delta, maxT);
@@ -145,17 +160,21 @@ namespace BlockShooter
                 PlaceRowAtT(entry);
             }
 
-            var frontRow = _rows[0];
-            if (frontRow.CurrentT >= _mergeStopT - 0.001f)
+            // Check and merge blocks for all rows that have reached the stop point or are already merging
+            for (int i = 0; i < _rows.Count; i++)
             {
-                float checkHalfSize = (1.5f * frontRow.RowSpacing) / ConveyorController.Instance.SplineWorldLength;
-                bool canMerge = ConveyorController.Instance.IsRangeEmpty(mergeT - checkHalfSize, mergeT + checkHalfSize);
-
-                if (canMerge)
+                var entry = _rows[i];
+                if (entry.CurrentT >= _mergeStopT - 0.001f || entry.MergedGroup != null)
                 {
-                    MergeRow(frontRow);
-                    _rows.RemoveAt(0);
+                    CheckAndMergeBlocks(ref entry);
+                    _rows[i] = entry;
                 }
+            }
+
+            // Remove fully merged rows from the front
+            while (_rows.Count > 0 && AllLanesMerged(_rows[0]))
+            {
+                _rows.RemoveAt(0);
             }
         }
 
@@ -173,36 +192,247 @@ namespace BlockShooter
             Quaternion rot = fwd != Vector3.zero ? Quaternion.LookRotation(fwd, upDir) : Quaternion.identity;
 
             const int totalLanes = 5;
-            float laneSpacing = row.OriginalGroup != null ? row.OriginalGroup.laneSpacing : 0.22f;
+            float laneSpacing = GetMainTrackLaneSpacing();
 
             foreach (var block in row.Blocks)
             {
                 if (block == null || block.IsDestroyed) continue;
+                if (row.MergedLanes != null && row.MergedLanes[block.LaneIndex]) continue; // skip merged
+                
                 int lane = block.LaneIndex;
                 float xOff = (lane - (totalLanes - 1) * 0.5f) * laneSpacing;
                 block.transform.SetPositionAndRotation(worldPos + right * xOff, rot);
             }
         }
 
-        private void MergeRow(BranchRowEntry row)
+        private bool AllLanesMerged(BranchRowEntry row)
         {
-            GameObject tempGo = new GameObject("MergedRowGroup");
-            var newGroup = tempGo.AddComponent<BlockGroup>();
-            newGroup.colorType = row.ColorType;
-            newGroup.rowCount = 1;
-            newGroup.laneCount = 5;
-            newGroup.laneSpacing = row.OriginalGroup != null ? row.OriginalGroup.laneSpacing : 0.22f;
-            newGroup.rowSpacing = row.RowSpacing;
-
+            if (row.MergedLanes == null) return false;
             foreach (var block in row.Blocks)
             {
                 if (block == null || block.IsDestroyed) continue;
-                block.transform.SetParent(tempGo.transform, true);
-                block.SetGroupIndex(0, block.LaneIndex);
+                if (!row.MergedLanes[block.LaneIndex]) return false;
+            }
+            return true;
+        }
+
+        private void CheckAndMergeBlocks(ref BranchRowEntry row)
+        {
+            if (row.MergedLanes == null) row.MergedLanes = new bool[5];
+
+            // If no blocks have merged yet, check if we can start the merge
+            if (row.MergedGroup == null)
+            {
+                // Only start merging if the row has reached the merge stop point
+                if (row.CurrentT < _mergeStopT - 0.001f) return;
+
+                // Check if the conveyor is clear for the lanes that have active blocks in our row
+                float checkHalfSize = row.RowSpacing / ConveyorController.Instance.SplineWorldLength;
+                bool canMerge = true;
+                foreach (var block in row.Blocks)
+                {
+                    if (block == null || block.IsDestroyed) continue;
+                    if (!ConveyorController.Instance.IsRangeEmptyForLane(mergeT - checkHalfSize, mergeT + checkHalfSize, block.LaneIndex))
+                    {
+                        canMerge = false;
+                        break;
+                    }
+                }
+
+                if (!canMerge) return; // wait until the conveyor is clear
+
+                Debug.Log($"[BranchPath] Merge STARTING on {gameObject.name}: Conveyor is clear. Creating MergedGroup at mergeT {mergeT:F3} for color {row.ColorType}.");
+
+                // Create the MergedGroup immediately to start the merging state
+                GameObject tempGo = new GameObject("MergedRowGroup");
+                var newGroup = tempGo.AddComponent<BlockGroup>();
+                newGroup.colorType = row.ColorType;
+                newGroup.rowCount = 1;
+                newGroup.laneCount = 5;
+                newGroup.laneSpacing = GetMainTrackLaneSpacing();
+                newGroup.rowSpacing = row.RowSpacing;
+                newGroup.Initialize();
+
+                row.MergedGroup = newGroup;
+                ConveyorController.Instance.InsertGroupAt(newGroup, mergeT);
             }
 
-            newGroup.Initialize();
-            ConveyorController.Instance.InsertGroupAt(newGroup, mergeT);
+            // Now that MergedGroup is created, we are in the merging state.
+            // As the row moves forward (up to maxT = 1.0f), blocks will cross the conveyor boundary.
+            // We check and merge each block when it crosses the boundary.
+            for (int lane = 0; lane < 5; lane++)
+            {
+                var block = GetBlockFromEntry(row, lane);
+                if (block == null || block.IsDestroyed) continue;
+
+                if (row.MergedLanes[lane]) continue;
+
+                Vector3 worldPos = GetBlockBranchPosition(row, lane);
+                if (IsPositionInsideConveyor(worldPos))
+                {
+                    MergeBlock(ref row, block, lane);
+                    row.MergedLanes[lane] = true;
+                }
+            }
+        }
+
+        private ConveyorBlock3D GetBlockFromEntry(BranchRowEntry row, int lane)
+        {
+            foreach (var b in row.Blocks)
+            {
+                if (b != null && b.LaneIndex == lane) return b;
+            }
+            return null;
+        }
+
+        private Vector3 GetBlockBranchPosition(BranchRowEntry row, int lane)
+        {
+            if (_splineContainer == null) return Vector3.zero;
+            _splineContainer.Spline.Evaluate(row.CurrentT, out var pos, out var tangent, out var up);
+
+            Vector3 worldPos = transform.TransformPoint(pos);
+            Vector3 fwd = transform.TransformDirection((Vector3)tangent).normalized;
+            Vector3 upDir = transform.TransformDirection((Vector3)up).normalized;
+            if (upDir == Vector3.zero) upDir = Vector3.up;
+            Vector3 right = Vector3.Cross(upDir, fwd).normalized;
+            
+            float laneSpacing = GetMainTrackLaneSpacing();
+            float xOff = (lane - 2f) * laneSpacing;
+            return worldPos + right * xOff;
+        }
+
+        private bool IsPositionInsideConveyor(Vector3 worldPos)
+        {
+            var cc = ConveyorController.Instance;
+            if (cc == null) return false;
+
+            var mainSpline = cc.SplineContainer;
+            if (mainSpline == null) return false;
+
+            var mainTrackBuilder = FindFirstMainTrackBuilder();
+            if (mainTrackBuilder == null) return false;
+
+            Vector3 mainLocalPos = mainSpline.transform.InverseTransformPoint(worldPos);
+
+            SplineUtility.GetNearestPoint(
+                mainSpline.Spline,
+                mainLocalPos,
+                out var nearestLocal,
+                out float t,
+                8,
+                4
+            );
+
+            Vector3 worldNearest = mainSpline.transform.TransformPoint((Vector3)nearestLocal);
+            mainSpline.Spline.Evaluate(t, out var mPos, out var mTan, out var mUpLocal);
+            Vector3 localTan = ((Vector3)mTan).normalized;
+            Vector3 localUp = ((Vector3)mUpLocal).normalized;
+            if (localUp.sqrMagnitude < 0.001f) localUp = Vector3.up;
+            Vector3 localRight = Vector3.Cross(localUp, localTan).normalized;
+            Vector3 worldRight = mainSpline.transform.TransformDirection(localRight).normalized;
+            
+            // Read from branch builder if available
+            var branchBuilder = GetComponent<ConveyorTrackMeshBuilder>();
+            bool branchOnRight = branchBuilder != null ? branchBuilder.branchOnRightSide : true;
+            Vector3 outwardDirection = branchOnRight ? worldRight : -worldRight;
+
+            Vector3 toPos = worldPos - worldNearest;
+            float projection = Vector3.Dot(toPos, outwardDirection);
+            float R = mainTrackBuilder.beltHalfWidth + mainTrackBuilder.railWidth;
+
+            return projection < R;
+        }
+
+        private void MergeBlock(ref BranchRowEntry row, ConveyorBlock3D block, int lane)
+        {
+            // MergedGroup is already created in CheckAndMergeBlocks
+            Vector3 prevPosition = block.transform.position;
+            Quaternion prevRotation = block.transform.rotation;
+
+            block.transform.SetParent(row.MergedGroup.transform, true);
+            block.SetGroupIndex(0, lane);
+            row.MergedGroup.RegisterMergedBlock(block, lane);
+
+            // Force update Conveyor positions so target position is updated
+            ConveyorController.Instance.ForceUpdateGroupPosition(row.MergedGroup);
+
+            Vector3 targetWorldPos = block.transform.position;
+            Quaternion targetWorldRot = block.transform.rotation;
+
+            block.transitionOffset = prevPosition - targetWorldPos;
+            block.transitionRotOffset = Quaternion.Inverse(targetWorldRot) * prevRotation;
+
+            // Immediately set the position and rotation back to the transition starting state
+            // to prevent 1-frame visual flicker
+            block.transform.position = prevPosition;
+            block.transform.rotation = prevRotation;
+
+            // Get MergedGroup reference to a local variable to use inside lambda expressions,
+            // as ref parameters like 'row' cannot be captured by closures.
+            var mergedGroup = row.MergedGroup;
+
+            float duration = 0.12f; // Extremely snappy, fast and smooth jump transition duration (0.12s)
+            float jumpHeight = 0.12f; // Peak height of the jump arc (lower height for a quick hop)
+            Vector3 startOffset = block.transitionOffset;
+            Quaternion initialRotOffset = block.transitionRotOffset;
+
+            // Clean up any existing tweens on this block to avoid collisions
+            DOTween.Kill(block);
+
+            // Jump tween for position offset (uses Ease.OutQuad for quick leap and smooth landing)
+            DOTween.To(tVal => {
+                if (block == null || mergedGroup == null) return;
+                
+                // Interpolate X and Z offsets linearly to 0
+                float x = Mathf.Lerp(startOffset.x, 0f, tVal);
+                float z = Mathf.Lerp(startOffset.z, 0f, tVal);
+                
+                // Parabolic vertical arc added to the Y offset
+                float yNormal = Mathf.Lerp(startOffset.y, 0f, tVal);
+                float arc = Mathf.Sin(tVal * Mathf.PI) * jumpHeight;
+                float y = yNormal + arc;
+                
+                block.transitionOffset = new Vector3(x, y, z);
+            }, 0f, 1f, duration).SetEase(Ease.OutQuad).SetId(block);
+
+            // Slerp tween for rotation offset (uses Ease.OutQuad to match position snappiness)
+            DOTween.To(tVal => {
+                if (block == null) return;
+                block.transitionRotOffset = Quaternion.Slerp(initialRotOffset, Quaternion.identity, tVal);
+            }, 0f, 1f, duration).SetEase(Ease.OutQuad).SetId(block);
+
+            Debug.Log($"[BranchPath] Merged block {block.name} (lane {lane}) on {gameObject.name} onto conveyor. Jump initiated.");
+        }
+
+        private float GetMainTrackLaneSpacing()
+        {
+            // 1. Try to read from the branch path's own groups first (they have the correct level lane spacing)
+            var branchGroups = GetComponentsInChildren<BlockGroup>(true);
+            if (branchGroups != null && branchGroups.Length > 0)
+            {
+                foreach (var g in branchGroups)
+                {
+                    if (g != null && g.laneSpacing > 0.01f)
+                    {
+                        return g.laneSpacing;
+                    }
+                }
+            }
+
+            // 2. Try to read from any active block groups on the main conveyor controller
+            var cc = ConveyorController.Instance;
+            if (cc != null)
+            {
+                var mainGroups = cc.GetComponentsInChildren<BlockGroup>(true);
+                foreach (var g in mainGroups)
+                {
+                    if (g != null && g.GetComponentInParent<BranchPath>() == null && g.laneSpacing > 0.01f)
+                    {
+                        return g.laneSpacing;
+                    }
+                }
+            }
+            return 0.18f; // Fallback to level default
         }
     }
 }

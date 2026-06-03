@@ -58,6 +58,16 @@ namespace BlockShooter
             }
         }
 
+        public void RegisterBlockManually(ConveyorBlock3D block)
+        {
+            if (block == null || block.IsDestroyed) return;
+            if (_blocksInRange.Contains(block)) return;
+            _blocksInRange.Add(block);
+            block.MarkEnteredFireRange();
+            OnBlockEntered?.Invoke(block);
+            block.OnDestroyed += HandleBlockDestroyed;
+        }
+
         /// <summary>Returns the world-space bounds of this trigger collider.</summary>
         public Bounds GetBounds() => GetComponent<Collider>().bounds;
 

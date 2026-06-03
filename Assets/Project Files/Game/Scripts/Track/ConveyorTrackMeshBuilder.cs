@@ -244,17 +244,7 @@ namespace BlockShooter
                             if (s < gapHalf || s >= resolution - gapHalf) continue;
                         }
 
-                        // Branch path connection gaps
-                        if (isMainTrack)
-                        {
-                            float tSample = (float)s / resolution;
-                            bool skipLeft, skipRight;
-                            if (IsInBranchGap(tSample, root, out skipLeft, out skipRight))
-                            {
-                                if (skipLeft && e >= 0 && e <= 4) continue;
-                                if (skipRight && e >= 6 && e <= 10) continue;
-                            }
-                        }
+
 
                         trisWall.Add(b);   trisWall.Add(b+2); trisWall.Add(b+1);
                         trisWall.Add(b+1); trisWall.Add(b+2); trisWall.Add(b+3);

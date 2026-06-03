@@ -26,6 +26,9 @@ namespace BlockShooter
         public void SetTargeted(bool v)      => IsTargeted = v;
         public void MarkEnteredFireRange()   => HasEnteredFireRange = true;
 
+        [HideInInspector] public Vector3 transitionOffset = Vector3.zero;
+        [HideInInspector] public Quaternion transitionRotOffset = Quaternion.identity;
+
         // Serialized so the Level Editor can bake row/lane into the prefab hierarchy.
         [SerializeField] private int _rowIndex;
         [SerializeField] private int _laneIndex;
@@ -106,6 +109,17 @@ namespace BlockShooter
 
             transform.DOScale(Vector3.zero, 0.15f).SetEase(Ease.InBack)
                 .OnComplete(() => gameObject.SetActive(false));
+        }
+
+        private void Update()
+        {
+            if (!_isDestroyed && !HasEnteredFireRange && FireRange.Instance != null)
+            {
+                if (FireRange.Instance.GetBounds().Contains(transform.position))
+                {
+                    FireRange.Instance.RegisterBlockManually(this);
+                }
+            }
         }
 
         private void OnDisable()
