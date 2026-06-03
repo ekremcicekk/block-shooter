@@ -190,13 +190,18 @@ namespace BlockShooter
 
         private BlockGroup FindMatchingGroup()
         {
-            if (ConveyorController.Instance == null) return null;
-            foreach (var bg in ConveyorController.Instance.GetComponentsInChildren<BlockGroup>(true))
+            if (FireRange.Instance == null) return null;
+
+            // Find the most urgent block in range that matches our color requirements
+            var targetBlock = _isRainbowMode
+                ? FireRange.Instance.GetFirstTarget()
+                : FireRange.Instance.GetFirstTarget(_colorType);
+
+            if (targetBlock != null && !targetBlock.IsDestroyed)
             {
-                if (bg.IsEmpty) continue;
-                if (!_isRainbowMode && bg.colorType != _colorType) continue;
-                return bg;
+                return targetBlock.GetComponentInParent<BlockGroup>();
             }
+
             return null;
         }
 

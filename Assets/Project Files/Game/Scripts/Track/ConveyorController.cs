@@ -291,6 +291,14 @@ namespace BlockShooter
             }
         }
 
+        public void RemoveGroup(BlockGroup group)
+        {
+            if (group == null) return;
+            group.OnGroupCleared -= HandleGroupCleared;
+            _groups.RemoveAll(e => e.Group == group);
+            Destroy(group.gameObject);
+        }
+
         private float WorldLengthToT(float worldLen)
         {
             return _splineWorldLength > 0f ? worldLen / _splineWorldLength : 0f;

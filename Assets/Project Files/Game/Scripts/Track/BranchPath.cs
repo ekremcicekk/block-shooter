@@ -174,6 +174,11 @@ namespace BlockShooter
             // Remove fully merged rows from the front
             while (_rows.Count > 0 && AllLanesMerged(_rows[0]))
             {
+                var firstRow = _rows[0];
+                if (firstRow.MergedGroup != null && firstRow.MergedGroup.IsEmpty)
+                {
+                    ConveyorController.Instance.RemoveGroup(firstRow.MergedGroup);
+                }
                 _rows.RemoveAt(0);
             }
         }
@@ -260,6 +265,9 @@ namespace BlockShooter
             // Now that MergedGroup is created, we are in the merging state.
             // As the row moves forward (up to maxT = 1.0f), blocks will cross the conveyor boundary.
             // We check and merge each block when it crosses the boundary.
+            float safetyThreshold = Mathf.Lerp(_mergeStopT, 1.0f, 0.8f);
+            bool forceMergeAll = (row.CurrentT >= safetyThreshold);
+
             for (int lane = 0; lane < 5; lane++)
             {
                 var block = GetBlockFromEntry(row, lane);
@@ -268,7 +276,7 @@ namespace BlockShooter
                 if (row.MergedLanes[lane]) continue;
 
                 Vector3 worldPos = GetBlockBranchPosition(row, lane);
-                if (IsPositionInsideConveyor(worldPos))
+                if (forceMergeAll || IsPositionInsideConveyor(worldPos))
                 {
                     MergeBlock(ref row, block, lane);
                     row.MergedLanes[lane] = true;
@@ -371,8 +379,8 @@ namespace BlockShooter
             // as ref parameters like 'row' cannot be captured by closures.
             var mergedGroup = row.MergedGroup;
 
-            float duration = 0.12f; // Extremely snappy, fast and smooth jump transition duration (0.12s)
-            float jumpHeight = 0.12f; // Peak height of the jump arc (lower height for a quick hop)
+            float duration = 0.16f; // Snappy jump transition duration (0.16s for a clean arc)
+            float jumpHeight = 0.35f; // Higher peak height to jump clearly over the outer wall (0.35m)
             Vector3 startOffset = block.transitionOffset;
             Quaternion initialRotOffset = block.transitionRotOffset;
 
