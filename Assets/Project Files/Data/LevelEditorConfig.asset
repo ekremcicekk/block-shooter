@@ -29,6 +29,7 @@ MonoBehaviour:
   railHeight: 0.5
   railWidth: 0.1
   trackBevelSize: 0.02
+  trackResolution: 120
   slotCount: 4
   gridCellSize: 1.2
   defaultShots: 3

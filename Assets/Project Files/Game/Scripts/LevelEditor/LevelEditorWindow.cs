@@ -44,14 +44,14 @@ namespace BlockShooter.Editor
         private int[,]            _shots, _doors;
 
         private List<LevelConveyorGroup> _groups = new();
-        private List<BranchPathData> _branches = new();
-        private float _openZoneHalfT = 0.08f;
+        [SerializeField] private List<BranchPathData> _branches = new();
+        [SerializeField] private float _openZoneHalfT = 0.08f;
 
         // ── Spline ────────────────────────────────────────────────────────────
-        private List<Vector3>     _knots        = new();
-        private List<Vector3>     _tangentsIn   = new();
-        private List<Vector3>     _tangentsOut  = new();
-        private List<TangentMode> _tangentModes = new();
+        [SerializeField] private List<Vector3>     _knots        = new();
+        [SerializeField] private List<Vector3>     _tangentsIn   = new();
+        [SerializeField] private List<Vector3>     _tangentsOut  = new();
+        [SerializeField] private List<TangentMode> _tangentModes = new();
         private float             _splineWidth = 3.5f;
         private float             _splineDepth = 5f;
         private int               _splinePreset = 0;  // 0=Oval 1=Wide 2=Rectangle
@@ -119,6 +119,7 @@ namespace BlockShooter.Editor
         private void OnEnable()
         {
             SceneView.duringSceneGui += OnSceneGUI;
+            Undo.undoRedoPerformed += OnUndoRedo;
             LoadCfg();
             RefreshList();
             if (_type == null) InitGrid();
@@ -132,8 +133,16 @@ namespace BlockShooter.Editor
         private void OnDisable()
         {
             SceneView.duringSceneGui -= OnSceneGUI;
+            Undo.undoRedoPerformed -= OnUndoRedo;
             DestroyPreview();
             DestroyLevelPreview();
+        }
+
+        private void OnUndoRedo()
+        {
+            EnsureTangentLists();
+            SyncPreviewSpline();
+            Repaint();
         }
 
         // ── Load config ───────────────────────────────────────────────────────
@@ -458,9 +467,13 @@ namespace BlockShooter.Editor
             _selKnot       = -1;
             _addKnotMode   = false;
 
-            if (_editingBranchIndex < 0)
+            if (_editingBranchIndex < 0 && _levelPreviewGo != null)
             {
-                DestroyLevelPreview(); // hide mesh preview while editing knots
+                var mainTrack = _levelPreviewGo.transform.Find("ConveyorSystem/Track");
+                if (mainTrack != null)
+                {
+                    mainTrack.gameObject.SetActive(false);
+                }
             }
             else if (_levelPreviewGo != null)
             {
@@ -473,21 +486,81 @@ namespace BlockShooter.Editor
             }
             DestroyPreview();
 
-            // Lightweight preview: just a Track GO with SplineContainer
+            // Lightweight preview: just a Track GO with SplineContainer and Mesh Builder
             _previewGo = new GameObject("[SplinePreview]");
             var track = new GameObject("Track");
             track.transform.SetParent(_previewGo.transform, false);
             track.transform.localPosition = new Vector3(0f, 0f, 0.5f);
             var sc = track.AddComponent<SplineContainer>();
             
+            float trackRailHeight = _cfg.railHeight;
             if (_editingBranchIndex >= 0)
             {
-                WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), 0f, -0.5f);
+                WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), trackRailHeight, -0.5f);
             }
             else
             {
-                WriteKnotsToContainer(sc, 0f, -0.5f);
+                WriteKnotsToContainer(sc, trackRailHeight, -0.5f);
             }
+
+            var meshBuilder = track.AddComponent<ConveyorTrackMeshBuilder>();
+            meshBuilder.resolution    = _cfg.trackResolution;
+            meshBuilder.beltHalfWidth = _cfg.beltHalfWidth;
+            meshBuilder.wallAboveBelt = _cfg.wallAboveBelt;
+            meshBuilder.railHeight    = trackRailHeight;
+            meshBuilder.railWidth     = _cfg.railWidth;
+            meshBuilder.bevelSize     = _cfg.trackBevelSize;
+
+            if (_editingBranchIndex >= 0)
+            {
+                var branch = _branches[_editingBranchIndex];
+                meshBuilder.trimBranchEnd = true;
+                meshBuilder.openZoneEnabled = false;
+
+                if (_levelPreviewGo != null)
+                {
+                    var mainTrack = _levelPreviewGo.transform.Find("ConveyorSystem/Track");
+                    if (mainTrack != null)
+                    {
+                        var mainSc = mainTrack.GetComponent<SplineContainer>();
+                        meshBuilder.mainTrackSpline = mainSc;
+
+                        if (mainSc != null && _knots != null && _knots.Count >= 2)
+                        {
+                            mainSc.Spline.Evaluate(branch.mergeT, out var mPos, out var mTan, out var mUp);
+                            Vector3 worldMergePos = mainTrack.TransformPoint(mPos);
+                            Vector3 worldMergeTan = mainTrack.TransformDirection((Vector3)mTan).normalized;
+                            Vector3 worldMergeUp  = mainTrack.TransformDirection((Vector3)mUp).normalized;
+                            if (worldMergeUp.sqrMagnitude < 0.001f) worldMergeUp = Vector3.up;
+                            Vector3 worldMergeRight = Vector3.Cross(worldMergeUp, worldMergeTan).normalized;
+
+                            Vector3 branchLast = _knots[_knots.Count - 1];
+                            Vector3 branchSecondLast = _knots[_knots.Count - 2];
+                            Vector3 toBranch = (branchSecondLast - branchLast).normalized;
+                            float dot = Vector3.Dot(toBranch, worldMergeRight);
+
+                            meshBuilder.branchOnRightSide = (dot >= 0f);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                meshBuilder.openZoneEnabled = true;
+                meshBuilder.openZoneHalfT   = _openZoneHalfT;
+            }
+
+            var mr = track.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                mr.sharedMaterials = new Material[]
+                {
+                    _cfg.trackSideMaterial,
+                    _cfg.trackBeltMaterial,
+                };
+            }
+
+            meshBuilder.BuildMesh();
 
             // Select track and frame it in the scene
             Selection.activeGameObject = track;
@@ -741,6 +814,7 @@ namespace BlockShooter.Editor
                     {
                         hitPos = SnapToMainSpline(hitPos);
                     }
+                    Undo.RegisterCompleteObjectUndo(this, "Add Spline Knot");
                     int insertAt = FindInsertIndex(hitPos);
                     _knots.Insert(insertAt, hitPos);
                     EnsureTangentLists();
@@ -755,6 +829,7 @@ namespace BlockShooter.Editor
             {
                 if (_selKnot > 0 && _knots.Count > 3)
                 {
+                    Undo.RegisterCompleteObjectUndo(this, "Delete Spline Knot");
                     _knots.RemoveAt(_selKnot);
                     EnsureTangentLists();
                     _selKnot = Mathf.Min(_selKnot, _knots.Count - 1);
@@ -796,6 +871,7 @@ namespace BlockShooter.Editor
                         Vector3.zero, Handles.SphereHandleCap);
                     if (EditorGUI.EndChangeCheck())
                     {
+                        Undo.RecordObject(this, "Move Spline Knot");
                         np.y = 0f;
                         if (isAnchor && _editingBranchIndex < 0) np.z = FIRE_Z;
                         if (_editingBranchIndex >= 0)
@@ -824,6 +900,7 @@ namespace BlockShooter.Editor
                     Vector3 newIn = Handles.FreeMoveHandle(inWorld, tsz, Vector3.zero, Handles.DotHandleCap);
                     if (EditorGUI.EndChangeCheck())
                     {
+                        Undo.RecordObject(this, "Modify Tangent In");
                         newIn.y = 0f;
                         _tangentsIn[i] = newIn - kpos;
                         if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
@@ -840,6 +917,7 @@ namespace BlockShooter.Editor
                     Vector3 newOut = Handles.FreeMoveHandle(outWorld, tsz, Vector3.zero, Handles.DotHandleCap);
                     if (EditorGUI.EndChangeCheck())
                     {
+                        Undo.RecordObject(this, "Modify Tangent Out");
                         newOut.y = 0f;
                         _tangentsOut[i] = newOut - kpos;
                         if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
@@ -897,6 +975,8 @@ namespace BlockShooter.Editor
         // ── Spline helpers ────────────────────────────────────────────────────
         private void ApplyPreset()
         {
+            Undo.RegisterCompleteObjectUndo(this, "Apply Spline Preset");
+
             // Save current spline as backup so "↩ Restore" can undo accidental preset clicks
             if (_knots.Count >= 3)
             {
@@ -991,6 +1071,8 @@ namespace BlockShooter.Editor
                 return;
             }
 
+            Undo.RegisterCompleteObjectUndo(this, "Copy Spline");
+
             int n = lr.splineKnots.Count;
 
             var newKnots  = new List<Vector3>(lr.splineKnots);
@@ -1028,13 +1110,44 @@ namespace BlockShooter.Editor
             var sc = _previewGo.GetComponentInChildren<SplineContainer>();
             if (sc != null)
             {
+                float trackRailHeight = _cfg.railHeight;
                 if (_editingBranchIndex >= 0)
                 {
-                    WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), 0f, -0.5f);
+                    WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), trackRailHeight, -0.5f);
                 }
                 else
                 {
-                    WriteKnotsToContainer(sc, 0f, -0.5f);
+                    WriteKnotsToContainer(sc, trackRailHeight, -0.5f);
+                }
+
+                var meshBuilder = _previewGo.GetComponentInChildren<ConveyorTrackMeshBuilder>();
+                if (meshBuilder != null)
+                {
+                    if (_editingBranchIndex >= 0 && meshBuilder.mainTrackSpline != null)
+                    {
+                        var mainTrackSpline = meshBuilder.mainTrackSpline;
+                        var mainTrack = mainTrackSpline.transform;
+                        float mergeT = _branches[_editingBranchIndex].mergeT;
+                        
+                        mainTrackSpline.Spline.Evaluate(mergeT, out var mPos, out var mTan, out var mUp);
+                        Vector3 worldMergePos = mainTrack.TransformPoint(mPos);
+                        Vector3 worldMergeTan = mainTrack.TransformDirection((Vector3)mTan).normalized;
+                        Vector3 worldMergeUp  = mainTrack.TransformDirection((Vector3)mUp).normalized;
+                        if (worldMergeUp.sqrMagnitude < 0.001f) worldMergeUp = Vector3.up;
+                        Vector3 worldMergeRight = Vector3.Cross(worldMergeUp, worldMergeTan).normalized;
+
+                        if (_knots != null && _knots.Count >= 2)
+                        {
+                            Vector3 branchLast = _knots[_knots.Count - 1];
+                            Vector3 branchSecondLast = _knots[_knots.Count - 2];
+                            Vector3 toBranch = (branchSecondLast - branchLast).normalized;
+                            float dot = Vector3.Dot(toBranch, worldMergeRight);
+                            meshBuilder.branchOnRightSide = (dot >= 0f);
+                        }
+                    }
+
+                    meshBuilder.resolution = _cfg.trackResolution;
+                    meshBuilder.BuildMesh();
                 }
             }
             SceneView.RepaintAll();
@@ -1431,6 +1544,7 @@ namespace BlockShooter.Editor
 
             if (EditorGUI.EndChangeCheck() && !anch)
             {
+                Undo.RecordObject(this, "Modify Knot Position");
                 _knots[i] = new Vector3(nx, 0f, nz);
                 SyncPreviewSpline();
                 SceneView.RepaintAll();
@@ -1445,6 +1559,7 @@ namespace BlockShooter.Editor
             TangentMode newMode = (TangentMode)EditorGUILayout.EnumPopup(_tangentModes[i]);
             if (newMode != _tangentModes[i])
             {
+                Undo.RegisterCompleteObjectUndo(this, "Change Tangent Mode");
                 _tangentModes[i] = newMode;
                 if (newMode == TangentMode.AutoSmooth)
                 {
@@ -1463,6 +1578,7 @@ namespace BlockShooter.Editor
                 Vector3 newTanIn = EditorGUILayout.Vector3Field("", _tangentsIn[i]);
                 if (EditorGUI.EndChangeCheck())
                 {
+                    Undo.RecordObject(this, "Modify Tangent In");
                     newTanIn.y = 0f;
                     _tangentsIn[i] = newTanIn;
                     if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
@@ -1475,6 +1591,7 @@ namespace BlockShooter.Editor
                 Vector3 newTanOut = EditorGUILayout.Vector3Field("", _tangentsOut[i]);
                 if (EditorGUI.EndChangeCheck())
                 {
+                    Undo.RecordObject(this, "Modify Tangent Out");
                     newTanOut.y = 0f;
                     _tangentsOut[i] = newTanOut;
                     if (_tangentModes[i] == TangentMode.Mirrored || _tangentModes[i] == TangentMode.Continuous)
@@ -1490,6 +1607,7 @@ namespace BlockShooter.Editor
                 GUI.backgroundColor = new Color(1f,.4f,.4f);
                 if (GUILayout.Button("Delete Knot", GUILayout.Height(24)))
                 {
+                    Undo.RegisterCompleteObjectUndo(this, "Delete Spline Knot");
                     _knots.RemoveAt(i);
                     EnsureTangentLists();
                     _selKnot = Mathf.Min(i, _knots.Count - 1);
@@ -1953,7 +2071,7 @@ namespace BlockShooter.Editor
 
             // Track mesh — ConveyorTrackMeshBuilder (RequireComponent auto-adds MeshFilter + MeshRenderer)
             var meshBuilder = trackGo.AddComponent<ConveyorTrackMeshBuilder>();
-            meshBuilder.resolution    = 60;
+            meshBuilder.resolution    = _cfg.trackResolution;
             meshBuilder.openZoneHalfT = _openZoneHalfT;
             meshBuilder.beltHalfWidth = _cfg.beltHalfWidth;
             meshBuilder.wallAboveBelt = _cfg.wallAboveBelt;
@@ -2024,7 +2142,7 @@ namespace BlockShooter.Editor
                     bp.data = b;
 
                     var bMeshBuilder = branchGo.AddComponent<ConveyorTrackMeshBuilder>();
-                    bMeshBuilder.resolution    = 60;
+                    bMeshBuilder.resolution    = _cfg.trackResolution;
                     bMeshBuilder.openZoneEnabled = false;
                     bMeshBuilder.beltHalfWidth = _cfg.beltHalfWidth;
                     bMeshBuilder.wallAboveBelt = _cfg.wallAboveBelt;

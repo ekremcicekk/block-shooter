@@ -37,6 +37,8 @@ namespace BlockShooter
         public float railWidth        = 0.1f;
         [Tooltip("Chamfer size on the top-OUTER corner of each wall")]
         public float trackBevelSize   = 0.02f;
+        [Tooltip("Number of cross-section rings along the spline")]
+        public int   trackResolution  = 60;
 
         [Header("Slot Defaults")]
         public int slotCount = 4;
