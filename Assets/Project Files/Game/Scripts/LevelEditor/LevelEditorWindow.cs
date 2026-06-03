@@ -2013,6 +2013,33 @@ namespace BlockShooter.Editor
                     bMeshBuilder.railHeight    = trackRailHeight;
                     bMeshBuilder.railWidth     = _cfg.railWidth;
                     bMeshBuilder.bevelSize     = _cfg.trackBevelSize;
+
+                    // Calculate the main conveyor wall plane at the merge point for flush trimming
+                    if (sc != null && b.splineKnots != null && b.splineKnots.Count >= 2)
+                    {
+                        sc.Spline.Evaluate(b.mergeT, out var mPos, out var mTan, out var mUp);
+                        Vector3 worldMergePos = trackGo.transform.TransformPoint(mPos);
+                        Vector3 worldMergeTan = trackGo.transform.TransformDirection((Vector3)mTan).normalized;
+                        Vector3 worldMergeUp  = trackGo.transform.TransformDirection((Vector3)mUp).normalized;
+                        if (worldMergeUp.sqrMagnitude < 0.001f) worldMergeUp = Vector3.up;
+                        Vector3 worldMergeRight = Vector3.Cross(worldMergeUp, worldMergeTan).normalized;
+
+                        // Determine which side the branch approaches from
+                        Vector3 branchLast = b.splineKnots[b.splineKnots.Count - 1];
+                        Vector3 branchSecondLast = b.splineKnots[b.splineKnots.Count - 2];
+                        Vector3 toBranch = (branchSecondLast - branchLast).normalized;
+                        float dot = Vector3.Dot(toBranch, worldMergeRight);
+
+                        // Wall normal points outward toward the branch
+                        Vector3 wallNormal = dot < 0f ? -worldMergeRight : worldMergeRight;
+                        float wallOffset = _cfg.beltHalfWidth + _cfg.railWidth;
+                        Vector3 wallPoint = worldMergePos + wallNormal * wallOffset;
+
+                        bMeshBuilder.trimBranchEnd = true;
+                        bMeshBuilder.mainTrackSpline = sc;
+                        bMeshBuilder.branchOnRightSide = (dot >= 0f);
+                    }
+
                     bMeshBuilder.BuildMesh();
 
                     var bMr = branchGo.GetComponent<MeshRenderer>();
@@ -2028,8 +2055,9 @@ namespace BlockShooter.Editor
                     // Calculate branch spline length for block placement
                     float branchSplineLen = SplineUtility.CalculateLength(bSc.Spline, branchGo.transform.localToWorldMatrix);
                     float mainTrackHalfWidth = _cfg.beltHalfWidth + _cfg.railWidth;
+                    float safetyOffset = mainTrackHalfWidth + _cfg.rowSpacing + 0.1f;
                     float mergeStopT = branchSplineLen > 0f
-                        ? Mathf.Clamp01(1.0f - (mainTrackHalfWidth / branchSplineLen))
+                        ? Mathf.Clamp01(1.0f - (safetyOffset / branchSplineLen))
                         : 0.95f;
 
                     // Place block groups along the branch spline

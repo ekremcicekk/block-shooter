@@ -60,6 +60,12 @@ namespace BlockShooter
         [Range(0f, 0.25f)]
         public float openZoneHalfT   = 0.015f;
 
+        // ── Branch Connection Trimming ────────────────────────────────────────
+        [Header("Branch End Trim (set by editor)")]
+        [HideInInspector] public bool  trimBranchEnd = false;
+        [HideInInspector] public SplineContainer mainTrackSpline;
+        [HideInInspector] public bool branchOnRightSide = true;
+
         // ── Private ───────────────────────────────────────────────────────────
         private SplineContainer _spline;
         private MeshFilter      _meshFilter;
@@ -139,7 +145,10 @@ namespace BlockShooter
             var wPos   = new Vector3[sCount];
             var wRight = new Vector3[sCount];
             var wUp    = new Vector3[sCount];
-            SampleFrames(sCount, wPos, wRight, wUp);
+            var wFwd   = new Vector3[sCount];
+            SampleFrames(sCount, wPos, wRight, wUp, wFwd);
+
+            // Spline-based clipping will be performed using mainTrackSpline
 
             float[] perimU  = ComputeProfilePerimU(profile);
             float[] splineV = ComputeSplineV(wPos, sCount);
@@ -162,8 +171,17 @@ namespace BlockShooter
 
                 for (int s = 0; s < sCount; s++)
                 {
-                    verts.Add(ToWorld(pa, s, wPos, wRight, wUp));
-                    verts.Add(ToWorld(pb, s, wPos, wRight, wUp));
+                    Vector3 posA = ToWorld(pa, s, wPos, wRight, wUp);
+                    Vector3 posB = ToWorld(pb, s, wPos, wRight, wUp);
+
+                    if (trimBranchEnd && mainTrackSpline != null)
+                    {
+                        posA = ClipVertex(posA);
+                        posB = ClipVertex(posB);
+                    }
+
+                    verts.Add(posA);
+                    verts.Add(posB);
                     float v = splineV[s];
                     uvs.Add(new Vector2(uA, v));
                     uvs.Add(new Vector2(uB, v));
@@ -192,13 +210,25 @@ namespace BlockShooter
                 {
                     int b = stripBase + s * 2;
 
-                    // If it's a branch track, skip the end part that intersects with the main conveyor
+                    // If it's a branch track, handle end clipping
                     if (!isMainTrack)
                     {
-                        float distToEnd = Vector3.Distance(wPos[s], wPos[resolution]);
-                        if (distToEnd < (beltHalfWidth + railWidth + 0.05f))
+                        if (trimBranchEnd && mainTrackSpline != null)
                         {
-                            continue;
+                            if (IsRingFullyInsideConveyor(s, profile, wPos, wRight, wUp) &&
+                                IsRingFullyInsideConveyor(s + 1, profile, wPos, wRight, wUp))
+                            {
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            // Fallback to simple distance check if spline info is not available
+                            float distToEnd = Vector3.Distance(wPos[s], wPos[resolution]);
+                            if (distToEnd < (beltHalfWidth + railWidth + 0.05f))
+                            {
+                                continue;
+                            }
                         }
                     }
 
@@ -346,11 +376,11 @@ namespace BlockShooter
             => wPos[s] + wRight[s] * p.x + wUp[s] * p.y;
 
         /// <summary>
-        /// Samples position + right + up for every ring along the spline.
+        /// Samples position + right + up + forward for every ring along the spline.
         /// All values are in LOCAL space — mesh vertices are stored in local coordinates.
         /// Do NOT convert to world space here; that would double-apply the transform offset.
         /// </summary>
-        private void SampleFrames(int sCount, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp)
+        private void SampleFrames(int sCount, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp, Vector3[] wFwd)
         {
             for (int s = 0; s < sCount; s++)
             {
@@ -359,13 +389,101 @@ namespace BlockShooter
 
                 // Spline.Evaluate returns local-space values — use them directly for mesh verts
                 Vector3 fwd = ((Vector3)tan).normalized;
+                if (fwd.sqrMagnitude < 0.001f) fwd = Vector3.forward;
                 Vector3 upL = ((Vector3)up).normalized;
                 if (upL.sqrMagnitude < 0.001f) upL = Vector3.up;
 
                 wPos[s]   = (Vector3)pos;
                 wRight[s] = Vector3.Cross(upL, fwd).normalized;
                 wUp[s]    = upL;
+                wFwd[s]   = fwd;
             }
+        }
+
+        private Vector3 ClipVertex(Vector3 localPos)
+        {
+            if (mainTrackSpline == null) return localPos;
+
+            // Convert to world space
+            Vector3 worldPos = transform.TransformPoint(localPos);
+
+            // Convert to main track local space
+            Vector3 mainLocalPos = mainTrackSpline.transform.InverseTransformPoint(worldPos);
+
+            // Get nearest point on main spline
+            SplineUtility.GetNearestPoint(
+                mainTrackSpline.Spline,
+                mainLocalPos,
+                out var nearestLocal,
+                out float t,
+                8, // resolution
+                4  // iterations
+            );
+
+            Vector3 worldNearest = mainTrackSpline.transform.TransformPoint((Vector3)nearestLocal);
+            
+            // Evaluate main spline at t to get local right and convert to world space
+            mainTrackSpline.Spline.Evaluate(t, out var mPos, out var mTan, out var mUpLocal);
+            Vector3 localTan = ((Vector3)mTan).normalized;
+            Vector3 localUp = ((Vector3)mUpLocal).normalized;
+            if (localUp.sqrMagnitude < 0.001f) localUp = Vector3.up;
+            Vector3 localRight = Vector3.Cross(localUp, localTan).normalized;
+            Vector3 worldRight = mainTrackSpline.transform.TransformDirection(localRight).normalized;
+            Vector3 outwardDirection = branchOnRightSide ? worldRight : -worldRight;
+
+            Vector3 toPos = worldPos - worldNearest;
+            float projection = Vector3.Dot(toPos, outwardDirection);
+            float R = beltHalfWidth + railWidth;
+
+            if (projection < R) // penetrated inside the outer wall
+            {
+                Vector3 worldClipped = worldNearest + outwardDirection * R;
+                worldClipped.y = worldPos.y; // preserve height
+                return transform.InverseTransformPoint(worldClipped);
+            }
+
+            return localPos;
+        }
+
+        private bool IsRingFullyInsideConveyor(int s, Vector2[] profile, Vector3[] wPos, Vector3[] wRight, Vector3[] wUp)
+        {
+            if (mainTrackSpline == null) return false;
+
+            float R = beltHalfWidth + railWidth;
+
+            for (int p = 0; p < profile.Length; p++)
+            {
+                Vector3 localV = ToWorld(profile[p], s, wPos, wRight, wUp);
+                Vector3 worldV = transform.TransformPoint(localV);
+                Vector3 mainLocalV = mainTrackSpline.transform.InverseTransformPoint(worldV);
+
+                SplineUtility.GetNearestPoint(
+                    mainTrackSpline.Spline,
+                    mainLocalV,
+                    out var nearestLocal,
+                    out float t,
+                    8,
+                    4
+                );
+
+                Vector3 worldNearest = mainTrackSpline.transform.TransformPoint((Vector3)nearestLocal);
+                mainTrackSpline.Spline.Evaluate(t, out var mPos, out var mTan, out var mUpLocal);
+                Vector3 localTan = ((Vector3)mTan).normalized;
+                Vector3 localUp = ((Vector3)mUpLocal).normalized;
+                if (localUp.sqrMagnitude < 0.001f) localUp = Vector3.up;
+                Vector3 localRight = Vector3.Cross(localUp, localTan).normalized;
+                Vector3 worldRight = mainTrackSpline.transform.TransformDirection(localRight).normalized;
+                Vector3 outwardDirection = branchOnRightSide ? worldRight : -worldRight;
+
+                Vector3 toPos = worldV - worldNearest;
+                float projection = Vector3.Dot(toPos, outwardDirection);
+
+                if (projection >= R)
+                {
+                    return false; // at least one vertex is still outside
+                }
+            }
+            return true; // all vertices are inside
         }
 
         /// <summary>
@@ -414,55 +532,61 @@ namespace BlockShooter
         {
             skipLeft = false;
             skipRight = false;
-            if (root == null || root.branches == null) return false;
+            if (root == null) return false;
 
-            float splineLength = SplineUtility.CalculateLength(_spline.Spline, transform.localToWorldMatrix);
-            float branchHalfWidthWorld = beltHalfWidth + railWidth;
-            float gapHalfT = splineLength > 0f ? (branchHalfWidthWorld / splineLength) : 0.025f;
+            // Evaluate main spline at t in local space
+            _spline.Spline.Evaluate(t, out var mPos, out var mTan, out var mUp);
+            Vector3 worldPos = transform.TransformPoint(mPos);
+            Vector3 worldTan = transform.TransformDirection((Vector3)mTan).normalized;
+            Vector3 worldUp  = transform.TransformDirection((Vector3)mUp).normalized;
+            if (worldUp.sqrMagnitude < 0.001f) worldUp = Vector3.up;
+            Vector3 worldRight = Vector3.Cross(worldUp, worldTan).normalized;
 
-            foreach (var branch in root.branches)
+            float R = beltHalfWidth + railWidth;
+
+            // Find all active BranchPath components in the level
+            var branches = root.GetComponentsInChildren<BranchPath>();
+            foreach (var branch in branches)
             {
-                float center = branch.mergeT;
-                float min = center - gapHalfT;
-                float max = center + gapHalfT;
+                var branchSpline = branch.GetComponent<SplineContainer>();
+                if (branchSpline == null || branchSpline.Spline == null) continue;
 
-                bool inGap = false;
-                if (min <= max)
+                // Left wall of main conveyor at t
+                Vector3 worldLeftWall = worldPos - worldRight * R;
+                Vector3 branchLocalLeft = branch.transform.InverseTransformPoint(worldLeftWall);
+                SplineUtility.GetNearestPoint(
+                    branchSpline.Spline,
+                    branchLocalLeft,
+                    out var nearestLocalLeft,
+                    out float tLeft,
+                    8,
+                    4
+                );
+                Vector3 worldNearestLeft = branch.transform.TransformPoint((Vector3)nearestLocalLeft);
+                Vector3 diffLeft = worldLeftWall - worldNearestLeft;
+                diffLeft.y = 0f;
+                if (diffLeft.magnitude < R)
                 {
-                    inGap = (t >= min && t <= max);
+                    skipLeft = true;
                 }
-                else
+
+                // Right wall of main conveyor at t
+                Vector3 worldRightWall = worldPos + worldRight * R;
+                Vector3 branchLocalRight = branch.transform.InverseTransformPoint(worldRightWall);
+                SplineUtility.GetNearestPoint(
+                    branchSpline.Spline,
+                    branchLocalRight,
+                    out var nearestLocalRight,
+                    out float tRight,
+                    8,
+                    4
+                );
+                Vector3 worldNearestRight = branch.transform.TransformPoint((Vector3)nearestLocalRight);
+                Vector3 diffRight = worldRightWall - worldNearestRight;
+                diffRight.y = 0f;
+                if (diffRight.magnitude < R)
                 {
-                    inGap = (t >= min || t <= max);
-                }
-
-                if (inGap)
-                {
-                    bool fromLeft = true;
-                    if (branch.splineKnots != null && branch.splineKnots.Count >= 2)
-                    {
-                        _spline.Spline.Evaluate(center, out _, out var mainTanLocal, out var mainUpLocal);
-                        // Transform from spline-local space to world space
-                        Vector3 mainTan = transform.TransformDirection((Vector3)mainTanLocal).normalized;
-                        Vector3 mainUp = transform.TransformDirection((Vector3)mainUpLocal).normalized;
-                        if (mainUp == Vector3.zero) mainUp = Vector3.up;
-                        Vector3 mainRight = Vector3.Cross(mainUp, mainTan).normalized;
-
-                        // Branch knots are in world space
-                        Vector3 branchLast = branch.splineKnots[branch.splineKnots.Count - 1];
-                        Vector3 branchSecondLast = branch.splineKnots[branch.splineKnots.Count - 2];
-                        Vector3 toBranch = (branchSecondLast - branchLast).normalized;
-                        float dot = Vector3.Dot(toBranch, mainRight);
-                        fromLeft = (dot < 0f);
-                    }
-                    else
-                    {
-                        fromLeft = branch.connectFromLeft;
-                    }
-
-                    // Only skip the OUTER wall — the wall that faces the approaching branch
-                    if (fromLeft) skipLeft = true;
-                    else skipRight = true;
+                    skipRight = true;
                 }
             }
 

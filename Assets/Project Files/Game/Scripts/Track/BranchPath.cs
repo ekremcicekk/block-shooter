@@ -32,6 +32,7 @@ namespace BlockShooter
 
             // Calculate stop T: blocks should stop at the outer edge of the main conveyor
             // The last knot is at the center of the main track, so we offset by the track half-width
+            // plus half the block's row spacing and a small safety margin to prevent clipping
             float mainTrackHalfWidth = 0f;
             var mainTrackBuilder = FindFirstMainTrackBuilder();
             if (mainTrackBuilder != null)
@@ -43,14 +44,23 @@ namespace BlockShooter
                 mainTrackHalfWidth = 0.55f; // fallback
             }
 
-            if (_splineLength > 0f)
-            {
-                _mergeStopT = Mathf.Clamp01(1.0f - (mainTrackHalfWidth / _splineLength));
-            }
-
+            float firstRowSpacing = 0.18f; // fallback
             var blockGroups = GetComponentsInChildren<BlockGroup>(true);
             var groupList = new List<BlockGroup>(blockGroups);
             groupList.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.Ordinal));
+            if (groupList.Count > 0)
+            {
+                firstRowSpacing = groupList[0].rowSpacing;
+            }
+
+            float safetyOffset = mainTrackHalfWidth + firstRowSpacing + 0.1f;
+
+            if (_splineLength > 0f)
+            {
+                _mergeStopT = Mathf.Clamp01(1.0f - (safetyOffset / _splineLength));
+            }
+
+
 
             _rows.Clear();
 
