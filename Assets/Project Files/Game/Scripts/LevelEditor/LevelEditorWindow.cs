@@ -191,8 +191,11 @@ namespace BlockShooter.Editor
             DrawLeft();
             VDiv();
             DrawCenter();
-            VDiv();
-            DrawRight();
+            if (_activeIdx >= 0)
+            {
+                VDiv();
+                DrawRight();
+            }
             EditorGUILayout.EndHorizontal();
         }
 
@@ -261,13 +264,16 @@ namespace BlockShooter.Editor
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndScrollView();
 
-            GUILayout.Space(6);
-            Hdr("SETTINGS");
-            _levelIndex = EditorGUILayout.IntField ("Index",  _levelIndex);
-            _levelName  = EditorGUILayout.TextField("Name",   _levelName);
-            _goalType   = (LevelGoalType)EditorGUILayout.EnumPopup("Goal", _goalType);
-            if (_goalType != LevelGoalType.ClearAllBlocks)
-                _goalAmount = EditorGUILayout.IntField("Amount", _goalAmount);
+            if (_activeIdx >= 0)
+            {
+                GUILayout.Space(6);
+                Hdr("SETTINGS");
+                _levelIndex = EditorGUILayout.IntField ("Index",  _levelIndex);
+                _levelName  = EditorGUILayout.TextField("Name",   _levelName);
+                _goalType   = (LevelGoalType)EditorGUILayout.EnumPopup("Goal", _goalType);
+                if (_goalType != LevelGoalType.ClearAllBlocks)
+                    _goalAmount = EditorGUILayout.IntField("Amount", _goalAmount);
+            }
 
             EditorGUILayout.EndVertical();
             EditorGUI.EndDisabledGroup();
@@ -276,12 +282,22 @@ namespace BlockShooter.Editor
         // ── Center panel ──────────────────────────────────────────────────────
         private void DrawCenter()
         {
+            EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+
+            if (_activeIdx < 0)
+            {
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.HelpBox("Please select or create a level from the left panel to begin editing.", MessageType.Info);
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.EndVertical();
+                return;
+            }
+
             // Reserve space for toolbar (~21px) and footer buttons (~52px)
             const float toolbarH = 21f;
             const float footerH  = 52f;
             float scrollH = Mathf.Max(80f, position.height - toolbarH - footerH);
 
-            EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             _midScroll = EditorGUILayout.BeginScrollView(_midScroll,
                 GUILayout.ExpandWidth(true), GUILayout.Height(scrollH));
 
@@ -589,6 +605,8 @@ namespace BlockShooter.Editor
         // ── Scene View handles ────────────────────────────────────────────────
         private void OnSceneGUI(SceneView sv)
         {
+            if (_activeIdx < 0) return;
+
             // Always draw guides and curve preview
             DrawSceneGuides();
             DrawSplineCurveHandles();

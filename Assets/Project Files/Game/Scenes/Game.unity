@@ -380,7 +380,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   levelPrefabs:
-  - {fileID: 5319296754045709006, guid: 8b13e61a582ec8443a815e5bdb99fde2, type: 3}
+  - {fileID: 3106933310930561449, guid: 8b13e61a582ec8443a815e5bdb99fde2, type: 3}
   levelSpawnParent: {fileID: 2135566055}
 --- !u!1 &665016363
 GameObject:
