@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fde13544529fa5d46ae2f03929ac8a98, type: 3}
   m_Name: BoosterData
   m_EditorClassIdentifier: 
-  boosterType: 2
+  boosterType: 0
   boosterName: 
   description: 
   icon: {fileID: 0}
-  unlockLevel: 0
+  unlockLevel: 1
   duration: 8
   tintColor: {r: 1, g: 1, b: 1, a: 1}

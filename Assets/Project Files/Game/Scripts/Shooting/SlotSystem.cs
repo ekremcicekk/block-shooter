@@ -28,6 +28,7 @@ namespace BlockShooter
         private readonly List<Vector3>      _slotPositions = new();
         private readonly List<ShooterBlock> _occupied      = new();
         private readonly List<GameObject>   _indicators    = new();
+        private readonly List<Transform>    _slotTransforms = new();
 
         private float   _slotSpacing = 1.2f;
         private Vector3 _extraSlotDir = Vector3.right;
@@ -69,6 +70,7 @@ namespace BlockShooter
             _slotPositions.Clear();
             _occupied.Clear();
             _indicators.Clear();
+            _slotTransforms.Clear();
 
             // Collect and sort child slot markers
             var slotTransforms = new List<Transform>();
@@ -97,6 +99,7 @@ namespace BlockShooter
 
                 _slotPositions.Add(pos);
                 _occupied.Add(null);
+                _slotTransforms.Add(t);
 
                 GameObject ind = null;
                 if (t.childCount > 0)
@@ -152,29 +155,65 @@ namespace BlockShooter
             }
         }
 
-        /// <summary>ExtraSlot booster — appends one more slot at the end of the row.</summary>
+        /// <summary>ExtraSlot booster — appends one more slot and dynamically re-centers all slots with a smooth animation.</summary>
         public void AddExtraSlot()
         {
-            Vector3 newPos = _slotPositions.Count > 0
-                ? _slotPositions[_slotPositions.Count - 1] + _extraSlotDir * _slotSpacing
-                : transform.position;
+            int count = _slotTransforms.Count + 1;
+            float tw = (count - 1) * _slotSpacing;
 
-            newPos.y = 0.3f; // Force extra slot Y coordinate to 0.3f
+            // 1. Re-center and animate existing slots
+            for (int i = 0; i < _slotTransforms.Count; i++)
+            {
+                Transform t = _slotTransforms[i];
+                Vector3 targetLocalPos = new Vector3(-tw * 0.5f + i * _slotSpacing, t.localPosition.y, 0f);
+                
+                // Animate slot transform
+                t.DOLocalMove(targetLocalPos, 0.4f).SetEase(Ease.OutQuad);
 
-            _slotPositions.Add(newPos);
+                // Update slot position tracker (world position)
+                Vector3 newWorldPos = t.parent.TransformPoint(targetLocalPos);
+                newWorldPos.y = 0.3f;
+                _slotPositions[i] = newWorldPos;
+
+                // Animate occupied shooter block if present
+                if (_occupied[i] != null)
+                {
+                    Vector3 blockTargetPos = newWorldPos;
+                    blockTargetPos.y += 0.05f; // offset Y slightly to sit on indicator
+                    _occupied[i].transform.DOMove(blockTargetPos, 0.4f).SetEase(Ease.OutQuad);
+                }
+            }
+
+            // 2. Create the new slot
+            var slotGo = new GameObject($"Slot_{count - 1}");
+            slotGo.transform.SetParent(transform, false);
+            
+            // Position new slot at its centered position, preserving local Y height
+            float defaultLocalY = _slotTransforms.Count > 0 ? _slotTransforms[0].localPosition.y : 0.3f;
+            Vector3 newSlotLocalPos = new Vector3(-tw * 0.5f + (count - 1) * _slotSpacing, defaultLocalY, 0f);
+            slotGo.transform.localPosition = newSlotLocalPos;
+            
+            _slotTransforms.Add(slotGo.transform);
+
+            Vector3 newWorldPosNewSlot = transform.TransformPoint(newSlotLocalPos);
+            newWorldPosNewSlot.y = 0.3f;
+            _slotPositions.Add(newWorldPosNewSlot);
             _occupied.Add(null);
             _maxSlots++;
 
+            // 3. Instantiate and animate new slot indicator
             GameObject ind = slotIndicatorPrefab != null
-                ? Instantiate(slotIndicatorPrefab, newPos, Quaternion.identity, transform)
-                : CreateDefaultIndicator(transform);
-            if (slotIndicatorPrefab == null)
-            {
-                ind.transform.position = newPos;
-            }
+                ? Instantiate(slotIndicatorPrefab, slotGo.transform)
+                : CreateDefaultIndicator(slotGo.transform);
+            
+            ind.name = "SlotIndicator";
+            ind.transform.localPosition = Vector3.zero;
+            ind.transform.localRotation = Quaternion.identity;
+
             Vector3 originalScale = ind.transform.localScale;
             ind.transform.localScale = Vector3.zero;
             ind.transform.DOScale(originalScale, 0.4f).SetEase(Ease.OutBack);
+            
             _indicators.Add(ind);
         }
 
