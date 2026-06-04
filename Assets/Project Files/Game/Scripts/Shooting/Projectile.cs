@@ -117,30 +117,9 @@ namespace BlockShooter
 
         private void ApplyColor(BlockColorType colorType)
         {
-            var config = GameManager.Instance?.config;
-            var mat    = config?.GetMaterial(colorType);
-
-            if (ballRenderer != null)
-            {
-                if (mat != null)
-                {
-                    ballRenderer.sharedMaterial = mat;
-                    ballRenderer.SetPropertyBlock(null);
-                }
-                else
-                {
-                    Color c = config?.GetColor(colorType) ?? Color.white;
-                    var mpb = new MaterialPropertyBlock();
-                    mpb.SetColor(ColorProp, c);
-                    ballRenderer.SetPropertyBlock(mpb);
-                }
-            }
-
             if (trail != null)
             {
-                Color c = config?.GetColor(colorType) ?? Color.white;
                 trail.Clear();
-                trail.startColor = c;
             }
         }
 
