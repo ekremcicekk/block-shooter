@@ -655,14 +655,7 @@ namespace BlockShooter.Editor
             foreach (Transform t in _levelPreviewGo.GetComponentsInChildren<Transform>(true))
                 t.gameObject.hideFlags = HideFlags.DontSave | HideFlags.NotEditable;
 
-            // Frame the track in scene view
-            var sv = SceneView.lastActiveSceneView;
-            if (sv != null)
-            {
-                Selection.activeGameObject = _levelPreviewGo;
-                sv.FrameSelected();
-                Selection.activeGameObject = null;
-            }
+            // Scene view auto-focus/framing is disabled to avoid camera jumps when selecting a level
             SceneView.RepaintAll();
         }
 
@@ -723,11 +716,10 @@ namespace BlockShooter.Editor
             // Grid cell outlines
             if (_type == null) return;
             float hw = (_gridCols - 1) * cs * .5f;
-            float hd = (_gridRows - 1) * cs * .5f;
             for (int r = 0; r < _gridRows; r++)
             for (int c = 0; c < _gridCols; c++)
             {
-                var pos = new Vector3(-hw + c * cs, 0f, -3.5f - hd + r * cs);
+                var pos = new Vector3(-hw + c * cs, 0f, -1.75f + (r - _gridRows + 0.5f) * cs);
                 Color col = _type[c, r] == GridCellType.Empty
                     ? new Color(.3f, .3f, .3f, .25f)
                     : new Color(PC(_color[c, r]).r, PC(_color[c, r]).g, PC(_color[c, r]).b, .55f);
@@ -2054,7 +2046,7 @@ namespace BlockShooter.Editor
         {
             float cs   = _cfg.gridCellSize;
             float slotZ = -0.75f;
-            float gridZ = -3.5f;
+            float gridZ = -1.75f;
 
             // Create ConveyorSystem parent group
             var conveyorSys = Go(root, "ConveyorSystem");
@@ -2311,12 +2303,11 @@ namespace BlockShooter.Editor
             lr.shooterGrid = sg;
 
             float hw = (_gridCols - 1) * cs * .5f;
-            float hd = (_gridRows - 1) * cs * .5f;
 
             for (int r = 0; r < _gridRows; r++)
             for (int c = 0; c < _gridCols; c++)
             {
-                var pos = new Vector3(-hw + c*cs, 0f, -hd + r*cs);
+                var pos = new Vector3(-hw + c*cs, 0f, (r - _gridRows + 0.5f) * cs);
                 string nm = $"Cell_r{r}_c{c}";
 
                 switch (_type[c, r])

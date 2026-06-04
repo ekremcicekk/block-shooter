@@ -26,7 +26,6 @@ namespace BlockShooter
             if (_mf == null) _mf = GetComponent<MeshFilter>();
 
             float gHW = gridCols * cellSize * 0.5f;
-            float gHD = gridRows * cellSize * 0.5f;
             float yT  = tileHeight;
             float yB  = 0f;
             float R   = Mathf.Clamp(bevelSize, 0f, Mathf.Min(cellSize * 0.5f, Mathf.Min(sideWingWidth, backDepth) * 0.9f));
@@ -35,10 +34,10 @@ namespace BlockShooter
             var cx = new float[gridCols + 1];
             var cz = new float[gridRows + 1];
             for (int i = 0; i <= gridCols; i++) cx[i] = -gHW + i * cellSize;
-            for (int j = 0; j <= gridRows; j++) cz[j] = -gHD + j * cellSize;
+            for (int j = 0; j <= gridRows; j++) cz[j] = -gridRows * cellSize + j * cellSize;
 
-            float zBack  = cz[0] - backDepth;
-            float zFront = cz[gridRows];
+            float zBack  = -gridRows * cellSize - backDepth;
+            float zFront = 0f;
             float xL     = cx[0]        - sideWingWidth;
             float xR     = cx[gridCols] + sideWingWidth;
 
