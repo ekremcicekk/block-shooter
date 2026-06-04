@@ -62,6 +62,7 @@ namespace BlockShooter.Editor
 
         // Spline edit state
         private bool         _editingSpline = false;
+        private bool         _isDraggingSpline = false;
         private bool         _addKnotMode   = false;
         private int          _selKnot       = -1;
         private GameObject   _previewGo     = null; // lightweight spline preview only
@@ -673,6 +674,28 @@ namespace BlockShooter.Editor
         {
             if (_activeIdx < 0) return;
 
+            Event e = Event.current;
+            if (_editingSpline)
+            {
+                if (e.rawType == EventType.MouseDrag && e.button == 0)
+                {
+                    _isDraggingSpline = true;
+                }
+                else if (e.rawType == EventType.MouseUp && e.button == 0)
+                {
+                    if (_isDraggingSpline)
+                    {
+                        _isDraggingSpline = false;
+                        // Rebuild high quality mesh immediately on release
+                        SyncPreviewSpline();
+                    }
+                }
+            }
+            else
+            {
+                _isDraggingSpline = false;
+            }
+
             // Always draw guides and curve preview
             DrawSceneGuides();
             DrawSplineCurveHandles();
@@ -1113,6 +1136,7 @@ namespace BlockShooter.Editor
                 var meshBuilder = _previewGo.GetComponentInChildren<ConveyorTrackMeshBuilder>();
                 if (meshBuilder != null)
                 {
+                    meshBuilder.isDraggingInEditor = _isDraggingSpline;
                     if (_editingBranchIndex >= 0 && meshBuilder.mainTrackSpline != null)
                     {
                         var mainTrackSpline = meshBuilder.mainTrackSpline;
@@ -1291,6 +1315,7 @@ namespace BlockShooter.Editor
                         var mainTrackBuilder = mainTrack.GetComponent<ConveyorTrackMeshBuilder>();
                         if (mainTrackBuilder != null)
                         {
+                            mainTrackBuilder.isDraggingInEditor = _isDraggingSpline;
                             mainTrackBuilder.BuildMesh();
                         }
                     }

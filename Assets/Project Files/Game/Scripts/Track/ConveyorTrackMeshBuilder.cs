@@ -65,6 +65,7 @@ namespace BlockShooter
         [HideInInspector] public bool  trimBranchEnd = false;
         [HideInInspector] public SplineContainer mainTrackSpline;
         [HideInInspector] public bool branchOnRightSide = true;
+        [HideInInspector] public bool isDraggingInEditor = false;
 
         // ── Private ───────────────────────────────────────────────────────────
         private SplineContainer _spline;
@@ -174,7 +175,7 @@ namespace BlockShooter
                     Vector3 posA = ToWorld(pa, s, wPos, wRight, wUp);
                     Vector3 posB = ToWorld(pb, s, wPos, wRight, wUp);
 
-                    if (trimBranchEnd && mainTrackSpline != null)
+                    if (trimBranchEnd && mainTrackSpline != null && !isDraggingInEditor)
                     {
                         posA = ClipVertex(posA);
                         posB = ClipVertex(posB);
@@ -213,7 +214,7 @@ namespace BlockShooter
                     // If it's a branch track, handle end clipping
                     if (!isMainTrack)
                     {
-                        if (trimBranchEnd && mainTrackSpline != null)
+                        if (trimBranchEnd && mainTrackSpline != null && !isDraggingInEditor)
                         {
                             if (IsRingFullyInsideConveyor(s, profile, wPos, wRight, wUp) &&
                                 IsRingFullyInsideConveyor(s + 1, profile, wPos, wRight, wUp))
