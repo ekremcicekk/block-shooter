@@ -808,8 +808,7 @@ namespace BlockShooter.Editor
                     }
                     Undo.RegisterCompleteObjectUndo(this, "Add Spline Knot");
                     int insertAt = FindInsertIndex(hitPos);
-                    _knots.Insert(insertAt, hitPos);
-                    EnsureTangentLists();
+                    InsertKnot(insertAt, hitPos);
                     _selKnot = insertAt;
                     SyncPreviewSpline();
                     e.Use(); Repaint(); return;
@@ -822,8 +821,7 @@ namespace BlockShooter.Editor
                 if (_selKnot > 0 && _knots.Count > 3)
                 {
                     Undo.RegisterCompleteObjectUndo(this, "Delete Spline Knot");
-                    _knots.RemoveAt(_selKnot);
-                    EnsureTangentLists();
+                    RemoveKnot(_selKnot);
                     _selKnot = Mathf.Min(_selKnot, _knots.Count - 1);
                     SyncPreviewSpline();
                     e.Use(); Repaint(); return;
@@ -1143,6 +1141,31 @@ namespace BlockShooter.Editor
                 }
             }
             SceneView.RepaintAll();
+        }
+
+        private void InsertKnot(int index, Vector3 pos)
+        {
+            _knots.Insert(index, pos);
+            if (_tangentsIn.Count >= index) _tangentsIn.Insert(index, Vector3.zero);
+            else _tangentsIn.Add(Vector3.zero);
+
+            if (_tangentsOut.Count >= index) _tangentsOut.Insert(index, Vector3.zero);
+            else _tangentsOut.Add(Vector3.zero);
+
+            if (_tangentModes.Count >= index) _tangentModes.Insert(index, TangentMode.AutoSmooth);
+            else _tangentModes.Add(TangentMode.AutoSmooth);
+
+            EnsureTangentLists();
+        }
+
+        private void RemoveKnot(int index)
+        {
+            if (index < 0 || index >= _knots.Count) return;
+            _knots.RemoveAt(index);
+            if (index < _tangentsIn.Count) _tangentsIn.RemoveAt(index);
+            if (index < _tangentsOut.Count) _tangentsOut.RemoveAt(index);
+            if (index < _tangentModes.Count) _tangentModes.RemoveAt(index);
+            EnsureTangentLists();
         }
 
         private void EnsureTangentLists()
@@ -1600,8 +1623,7 @@ namespace BlockShooter.Editor
                 if (GUILayout.Button("Delete Knot", GUILayout.Height(24)))
                 {
                     Undo.RegisterCompleteObjectUndo(this, "Delete Spline Knot");
-                    _knots.RemoveAt(i);
-                    EnsureTangentLists();
+                    RemoveKnot(i);
                     _selKnot = Mathf.Min(i, _knots.Count - 1);
                     SyncPreviewSpline();
                     SceneView.RepaintAll(); Repaint();
