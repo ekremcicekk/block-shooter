@@ -42,6 +42,7 @@ namespace BlockShooter
 
         [Header("Slot Defaults")]
         public int slotCount = 4;
+        public float slotSpacing = 1.2f;
 
         [Header("Grid Defaults")]
         public float gridCellSize  = 1.2f;

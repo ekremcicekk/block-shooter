@@ -69,6 +69,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   blockRenderer: {fileID: 1128186263903456349}
   destroyParticle: {fileID: 0}
+  transitionOffset: {x: 0, y: 0, z: 0}
+  transitionRotOffset: {x: 0, y: 0, z: 0, w: 1}
+  _rowIndex: 0
+  _laneIndex: 0
 --- !u!1 &8998996283065257540
 GameObject:
   m_ObjectHideFlags: 0
@@ -97,8 +101,8 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0.1, z: 0}
-  m_LocalScale: {x: 0.09, y: 0.09, z: 0.09}
-  m_ConstrainProportionsScale: 1
+  m_LocalScale: {x: 0.09, y: 0.11, z: 0.09}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4113131332127196300}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

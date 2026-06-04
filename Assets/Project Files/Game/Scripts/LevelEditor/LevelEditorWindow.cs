@@ -21,7 +21,7 @@ namespace BlockShooter.Editor
         private const int   MaxRows  = 6;
 
         // FireRange world Z — all splines pass through this point
-        private const float FIRE_Z = 0.5f;
+        private const float FIRE_Z = 0.0f;
 
         // ── Config ────────────────────────────────────────────────────────────
         private LevelEditorConfig _cfg;
@@ -490,17 +490,17 @@ namespace BlockShooter.Editor
             _previewGo = new GameObject("[SplinePreview]");
             var track = new GameObject("Track");
             track.transform.SetParent(_previewGo.transform, false);
-            track.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+            track.transform.localPosition = new Vector3(0f, 0f, 0.0f);
             var sc = track.AddComponent<SplineContainer>();
             
             float trackRailHeight = _cfg.railHeight;
             if (_editingBranchIndex >= 0)
             {
-                WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), trackRailHeight, -0.5f);
+                WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), trackRailHeight, 0f);
             }
             else
             {
-                WriteKnotsToContainer(sc, trackRailHeight, -0.5f);
+                WriteKnotsToContainer(sc, trackRailHeight, 0f);
             }
 
             var meshBuilder = track.AddComponent<ConveyorTrackMeshBuilder>();
@@ -704,11 +704,11 @@ namespace BlockShooter.Editor
 
             // Slot indicators (yellow)
             int slots = _cfg.slotCount;
-            float tw = (slots - 1) * cs;
+            float tw = (slots - 1) * _cfg.slotSpacing;
             Handles.color = new Color(1f, .9f, .1f, .8f);
             for (int i = 0; i < slots; i++)
             {
-                var p = new Vector3(-tw * .5f + i * cs, 0f, -0.75f);
+                var p = new Vector3(-tw * .5f + i * _cfg.slotSpacing, 0f, -1.5f);
                 float sz = HandleUtility.GetHandleSize(p) * .12f;
                 Handles.SphereHandleCap(0, p, Quaternion.identity, sz, EventType.Repaint);
             }
@@ -719,7 +719,7 @@ namespace BlockShooter.Editor
             for (int r = 0; r < _gridRows; r++)
             for (int c = 0; c < _gridCols; c++)
             {
-                var pos = new Vector3(-hw + c * cs, 0f, -1.75f + (r - _gridRows + 0.5f) * cs);
+                var pos = new Vector3(-hw + c * cs, 0f, -2.5f + (r - _gridRows + 0.5f) * cs);
                 Color col = _type[c, r] == GridCellType.Empty
                     ? new Color(.3f, .3f, .3f, .25f)
                     : new Color(PC(_color[c, r]).r, PC(_color[c, r]).g, PC(_color[c, r]).b, .55f);
@@ -1103,11 +1103,11 @@ namespace BlockShooter.Editor
                 float trackRailHeight = _cfg.railHeight;
                 if (_editingBranchIndex >= 0)
                 {
-                    WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), trackRailHeight, -0.5f);
+                    WriteKnotsToContainer(sc, _knots, _tangentsIn, _tangentsOut, _tangentModes.Select(m => (int)m).ToList(), trackRailHeight, 0f);
                 }
                 else
                 {
-                    WriteKnotsToContainer(sc, trackRailHeight, -0.5f);
+                    WriteKnotsToContainer(sc, trackRailHeight, 0f);
                 }
 
                 var meshBuilder = _previewGo.GetComponentInChildren<ConveyorTrackMeshBuilder>();
@@ -2067,18 +2067,18 @@ namespace BlockShooter.Editor
         private void BuildHierarchy(Transform root, LevelRoot lr)
         {
             float cs   = _cfg.gridCellSize;
-            float slotZ = -0.75f;
-            float gridZ = -1.75f;
+            float slotZ = -1.5f;
+            float gridZ = -2.5f;
 
             // Create ConveyorSystem parent group
             var conveyorSys = Go(root, "ConveyorSystem");
 
             // ── Track ──
             var trackGo = Go(conveyorSys.transform, "Track");
-            trackGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+            trackGo.transform.localPosition = new Vector3(0f, 0f, 0f);
             var sc = trackGo.AddComponent<SplineContainer>();
             float trackRailHeight = _cfg.railHeight;
-            WriteKnotsToContainer(sc, trackRailHeight, -0.5f);
+            WriteKnotsToContainer(sc, trackRailHeight, 0f);
             var cc = trackGo.AddComponent<ConveyorController>();
             cc.speed = _cfg.conveyorSpeed;
             lr.conveyorController = cc;
@@ -2146,10 +2146,10 @@ namespace BlockShooter.Editor
                 foreach (var b in _branches)
                 {
                     var branchGo = Go(branchesGroupGo.transform, b.branchName);
-                    branchGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+                    branchGo.transform.localPosition = new Vector3(0f, 0f, 0f);
                     
                     var bSc = branchGo.AddComponent<SplineContainer>();
-                    WriteKnotsToContainer(bSc, b.splineKnots, b.splineTangentsIn, b.splineTangentsOut, b.splineTangentModes, trackRailHeight, -0.5f);
+                    WriteKnotsToContainer(bSc, b.splineKnots, b.splineTangentsIn, b.splineTangentsOut, b.splineTangentModes, trackRailHeight, 0f);
 
                     var bp = branchGo.AddComponent<BranchPath>();
                     bp.mergeT = b.mergeT;
@@ -2273,22 +2273,22 @@ namespace BlockShooter.Editor
             var gameplayLogic = Go(root, "GameplayLogic");
             var boardPlatform = Go(root, "BoardPlatform");
 
-            // ── FireRange ── (always anchored at FIRE_Z)
+            // ── FireRange ── (inside Track object)
             GameObject frGo;
             if (_cfg.fireRangePrefab != null)
             {
-                frGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.fireRangePrefab, gameplayLogic.transform);
+                frGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.fireRangePrefab, trackGo.transform);
                 frGo.name = "FireRange";
             }
             else
             {
-                frGo = Go(gameplayLogic.transform, "FireRange");
+                frGo = Go(trackGo.transform, "FireRange");
                 var fc = frGo.AddComponent<BoxCollider>();
                 fc.isTrigger = true;
                 fc.size = new Vector3(1.8f, 2f, 0.8f);
                 frGo.AddComponent<FireRange>();
             }
-            frGo.transform.localPosition = new Vector3(0f, 0f, FIRE_Z);
+            frGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
             if (PrefabUtility.IsPartOfPrefabInstance(frGo))
                 PrefabUtility.RecordPrefabInstancePropertyModifications(frGo.transform);
             lr.fireRange = frGo.GetComponent<FireRange>();
@@ -2301,11 +2301,11 @@ namespace BlockShooter.Editor
             lr.slotSystem = ss;
 
             int   slots = _cfg.slotCount;
-            float tw    = (slots - 1) * cs;
+            float tw    = (slots - 1) * _cfg.slotSpacing;
             for (int i = 0; i < slots; i++)
             {
                 var slotGo = Go(deckGo.transform, $"Slot_{i}");
-                slotGo.transform.localPosition = new Vector3(-tw * .5f + i * cs, 0f, 0f);
+                slotGo.transform.localPosition = new Vector3(-tw * .5f + i * _cfg.slotSpacing, 0f, 0f);
 
                 if (_cfg.slotIndicatorPrefab != null)
                 {

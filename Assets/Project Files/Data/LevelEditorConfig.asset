@@ -22,15 +22,16 @@ MonoBehaviour:
   conveyorSpeed: 0.75
   laneCount: 5
   laneSpacing: 0.18
-  rowSpacing: 0.18
+  rowSpacing: 0.16
   rowsPerGroup: 20
   beltHalfWidth: 0.45
-  wallAboveBelt: 0.3
-  railHeight: 0.5
-  railWidth: 0.1
-  trackBevelSize: 0.02
-  trackResolution: 120
+  wallAboveBelt: 0.25
+  railHeight: 0.43
+  railWidth: 0.08
+  trackBevelSize: 0.017
+  trackResolution: 100
   slotCount: 4
+  slotSpacing: 1.5
   gridCellSize: 1.2
   defaultShots: 3
   arrowSpacing: 1.75
