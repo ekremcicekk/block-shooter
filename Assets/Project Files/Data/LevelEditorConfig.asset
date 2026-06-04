@@ -41,5 +41,5 @@ MonoBehaviour:
   deckTileHeight: 0.35
   bevelSize: 0.1
   bevelSegments: 3
-  deckTopMaterial: {fileID: 2100000, guid: fb0a40a42cd09724dbb5ec66b917d204, type: 2}
+  deckTopMaterial: {fileID: 2100000, guid: b345164cc58f5a946a8a2fc35606fb13, type: 2}
   deckWallMaterial: {fileID: 2100000, guid: 4b4f972e845c754428d7d8f762e7f4ee, type: 2}

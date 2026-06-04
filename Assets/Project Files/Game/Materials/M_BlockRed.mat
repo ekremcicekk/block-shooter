@@ -174,7 +174,7 @@ Material:
     - _ShnRange: 0.15
     - _ShnSmooth: 1
     - _SingleIndirectColor: 0
-    - _Smoothness: 0.5
+    - _Smoothness: 0.4
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SpecularMapType: 0
