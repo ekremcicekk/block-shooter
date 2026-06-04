@@ -16,8 +16,11 @@ MonoBehaviour:
   - {fileID: 3106933310930561449, guid: 8b13e61a582ec8443a815e5bdb99fde2, type: 3}
   - {fileID: 9001423813352505060, guid: 23918af0ccc30d14c8c07edfb3070565, type: 3}
   - {fileID: 3106933310930561449, guid: ddc1e11dca41c1c48b51a6633a539920, type: 3}
+  - {fileID: 3049688755618369644, guid: f489050e34be27a43877cd9554c00485, type: 3}
+  - {fileID: 6048735237768013363, guid: 3ab3dcb80f09b894b95441278d4d08a2, type: 3}
   fireRate: 0.05
-  projectileSpeed: 20
+  projectileSpeed: 25
+  mysteryShooterUnlockLevel: 2
   redMaterial: {fileID: 2100000, guid: 33257ab040a58eb4bbcd20bc6f183a1a, type: 2}
   blueMaterial: {fileID: 2100000, guid: 34378ae5269e41041a904673f4f0bc67, type: 2}
   greenMaterial: {fileID: 2100000, guid: 18f9dd7617a8de54da7342ef6fbf37bf, type: 2}

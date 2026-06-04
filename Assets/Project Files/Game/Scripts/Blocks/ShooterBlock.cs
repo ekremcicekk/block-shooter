@@ -35,6 +35,9 @@ namespace BlockShooter
         public Transform bodyMesh;
         public Transform shootPoint;
 
+        [Header("Mystery Shooter Settings")]
+        [SerializeField] private bool _isMystery;
+
         // ── State ──────────────────────────────────────────────────────────────
         // Serialized so the Level Editor can bake color/shots/position into the prefab.
         [SerializeField] private BlockColorType _colorType;
@@ -61,6 +64,8 @@ namespace BlockShooter
         public bool IsInSlot             => State == BlockState.InSlot;
         public int  GridColumn           => _gridColumn;
         public int  GridRow              => _gridRow;
+        public int  ShotCount            => _shotCount;
+        public bool isMystery            { get => _isMystery; set => _isMystery = value; }
 
         // Events
         public event Action<ShooterBlock> OnSlotted;
@@ -77,9 +82,16 @@ namespace BlockShooter
             _isAccessible = false;
             _visibleShotsLeft = UnityEngine.Random.Range(1, 3);
             _invisibleShotsLeft = 0;
-            ApplyColor();
             UpdateShotCountUI();
             if (shotCountText != null) shotCountText.gameObject.SetActive(false);
+            
+            // Only apply color if this block is not currently in a mystery state.
+            // Mystery block materials are managed by MysteryBlockFeature.
+            if (!_isMystery)
+            {
+                ApplyColor();
+            }
+
             SetAccessible(false);
         }
 
@@ -95,15 +107,37 @@ namespace BlockShooter
             Initialize();
         }
 
+        /// <summary>
+        /// Called by MysteryBlockFeature to reveal the block's true visuals.
+        /// </summary>
+        public void RevealFromFeature()
+        {
+            ApplyColor();
+            UpdateShotCountUI();
+        }
+
 #if UNITY_EDITOR
         /// <summary>Editor-only: bakes values into serialized fields and applies the material so the prefab shows the correct color.</summary>
-        public void EditorSetup(BlockColorType colorType, int shotCount, int col, int row)
+        public void EditorSetup(BlockColorType colorType, int shotCount, int col, int row, bool isMystery = false)
         {
             _colorType  = colorType;
             _shotCount  = shotCount;
             _gridColumn = col;
             _gridRow    = row;
-            EditorApplyMaterial();
+            _isMystery  = isMystery;
+
+            // Try to sync with MysteryBlockFeature if present on the prefab instance
+            var feature = GetComponent<MysteryBlockFeature>();
+            if (feature != null)
+            {
+                if (feature.mysteryVisual != null) feature.mysteryVisual.SetActive(isMystery);
+                if (feature.baseVisual != null) feature.baseVisual.SetActive(!isMystery);
+            }
+
+            if (!isMystery)
+            {
+                EditorApplyMaterial();
+            }
         }
 
         private void EditorApplyMaterial()
@@ -421,6 +455,8 @@ namespace BlockShooter
 
         public void SetAccessible(bool accessible)
         {
+            if (_isMystery) accessible = false;
+
             bool changed = (_isAccessible != accessible);
             _isAccessible = accessible;
             if (accessibleIndicator != null)

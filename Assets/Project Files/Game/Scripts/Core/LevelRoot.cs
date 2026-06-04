@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace BlockShooter
 {
-    public enum GridCellType { Empty, ShooterBlock, Door }
+    public enum GridCellType { Empty, ShooterBlock, Door, MysteryShooter }
 
     [Serializable]
     public class LevelGridCell

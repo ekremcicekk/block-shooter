@@ -155,6 +155,7 @@ namespace BlockShooter.Editor
         {
             SceneView.duringSceneGui += OnSceneGUI;
             Undo.undoRedoPerformed += OnUndoRedo;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             LoadCfg();
             RefreshList();
 
@@ -164,15 +165,18 @@ namespace BlockShooter.Editor
             if (_activeIdx < 0 && _paths.Count > 0)
                 _activeIdx = 0;
 
-            if (_activeIdx >= 0 && _activeIdx < _paths.Count)
+            if (!EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                LoadLevel(_activeIdx);
-            }
-            else
-            {
-                if (_type == null) InitGrid();
-                if (_knots.Count == 0) ApplyPreset();
-                if (_groups.Count == 0) DefaultGroups();
+                if (_activeIdx >= 0 && _activeIdx < _paths.Count)
+                {
+                    LoadLevel(_activeIdx);
+                }
+                else
+                {
+                    if (_type == null) InitGrid();
+                    if (_knots.Count == 0) ApplyPreset();
+                    if (_groups.Count == 0) DefaultGroups();
+                }
             }
         }
 
@@ -180,8 +184,25 @@ namespace BlockShooter.Editor
         {
             SceneView.duringSceneGui -= OnSceneGUI;
             Undo.undoRedoPerformed -= OnUndoRedo;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             DestroyPreview();
             DestroyLevelPreview();
+        }
+
+        private void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.ExitingPlayMode)
+            {
+                DestroyPreview();
+                DestroyLevelPreview();
+            }
+            else if (state == PlayModeStateChange.EnteredEditMode)
+            {
+                if (_activeIdx >= 0 && _activeIdx < _paths.Count)
+                {
+                    LoadLevel(_activeIdx);
+                }
+            }
         }
 
         private void OnUndoRedo()
@@ -386,6 +407,14 @@ namespace BlockShooter.Editor
             if (_cfg == null) { DrawNoCfg(); return; }
             if (_gameCfgSerialized != null) _gameCfgSerialized.Update();
             DrawToolbar();
+
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                GUILayout.Space(12);
+                EditorGUILayout.HelpBox("Level Editor is disabled during Play Mode.", MessageType.Info);
+                return;
+            }
+
             EditorGUILayout.BeginHorizontal();
             DrawLeft();
             VDiv();
@@ -617,6 +646,8 @@ namespace BlockShooter.Editor
         // ── Start spline edit mode ────────────────────────────────────────────
         private void StartSplineEdit()
         {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+
             // Point references to active target
             if (_editingBranchIndex >= 0)
             {
@@ -834,6 +865,7 @@ namespace BlockShooter.Editor
 
         private void ShowLevelPreview(string path)
         {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             DestroyLevelPreview();
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) return;
@@ -884,6 +916,7 @@ namespace BlockShooter.Editor
         // ── Scene View handles ────────────────────────────────────────────────
         private void OnSceneGUI(SceneView sv)
         {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             if (_activeIdx < 0) return;
 
             Event e = Event.current;
@@ -1654,6 +1687,7 @@ namespace BlockShooter.Editor
             // Labels
             string lbl1 = t == GridCellType.Empty ? "+"
                         : t == GridCellType.Door   ? "DOOR"
+                        : t == GridCellType.MysteryShooter ? "?"
                         : col.ToString().Substring(0, 3).ToUpper();
             string lbl2 = t == GridCellType.Empty ? ""
                         : t == GridCellType.Door   ? $"×{_doors[c,r]}"
@@ -1875,10 +1909,10 @@ namespace BlockShooter.Editor
             int c = _selC, r = _selR;
             Hdr($"CELL  ({c}, {r})");
 
-            bool isBlock = _type[c, r] == GridCellType.ShooterBlock;
+            bool isBlock = _type[c, r] == GridCellType.ShooterBlock || _type[c, r] == GridCellType.MysteryShooter;
             bool isDoor  = _type[c, r] == GridCellType.Door;
 
-            // ── Shooter Block ─────────────────────────────────────────────────
+            // ── Shooter Block / Mystery Shooter ───────────────────────────────
             if (isBlock)
             {
                 // Color palette — always shown at top
@@ -1913,6 +1947,30 @@ namespace BlockShooter.Editor
                 int displayVal = _shots[c, r] <= 0 ? 100 : _shots[c, r];
                 int newVal = EditorGUILayout.IntField(displayVal);
                 _shots[c, r] = Mathf.Max(1, newVal);
+
+                GUILayout.Space(8);
+
+                // Converter Buttons
+                bool mysteryUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.mysteryShooterUnlockLevel;
+                if (mysteryUnlocked)
+                {
+                    if (_type[c, r] == GridCellType.ShooterBlock)
+                    {
+                        if (GUILayout.Button("→ Convert to Mystery", GUILayout.Height(20)))
+                        { _type[c, r] = GridCellType.MysteryShooter; Repaint(); }
+                    }
+                    else
+                    {
+                        if (GUILayout.Button("→ Convert to Standard", GUILayout.Height(20)))
+                        { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
+                    }
+                }
+                else
+                {
+                    GUI.enabled = false;
+                    GUILayout.Button($"Mystery locked (Req. Lvl {_gameCfg?.mysteryShooterUnlockLevel ?? 4})", GUILayout.Height(20));
+                    GUI.enabled = true;
+                }
 
                 GUILayout.Space(8);
 
@@ -1969,10 +2027,25 @@ namespace BlockShooter.Editor
                 }
 
                 GUILayout.Space(6);
+                EditorGUILayout.BeginHorizontal();
                 GUI.backgroundColor = new Color(.5f,.3f,.9f);
                 if (GUILayout.Button("→ Set as Door", GUILayout.Height(22)))
                 { _type[c, r] = GridCellType.Door; Repaint(); }
+                
+                bool mysteryUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.mysteryShooterUnlockLevel;
+                if (mysteryUnlocked)
+                {
+                    GUI.backgroundColor = new Color(0.2f, 0.7f, 0.9f);
+                    if (GUILayout.Button("→ Set as Mystery", GUILayout.Height(22)))
+                    {
+                        _type[c, r] = GridCellType.MysteryShooter;
+                        _color[c, r] = BlockColorType.Red;
+                        _shots[c, r] = 100;
+                        Repaint();
+                    }
+                }
                 GUI.backgroundColor = Color.white;
+                EditorGUILayout.EndHorizontal();
             }
         }
 
@@ -2580,12 +2653,26 @@ namespace BlockShooter.Editor
                         PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
                         int sh = Mathf.Max(1, _shots[c,r]);
                         var sb = go.GetComponent<ShooterBlock>();
-                        sb?.EditorSetup(_color[c,r], sh, c, r);
+                        sb?.EditorSetup(_color[c,r], sh, c, r, isMystery: false);
                         // Apply material directly so prefab shows colors in editor
                         if (sb?.blockRenderer != null && _gameCfg != null)
                         {
                             var mat = _gameCfg.GetMaterial(_color[c,r]);
                             if (mat != null) sb.blockRenderer.sharedMaterial = mat;
+                        }
+                        break;
+                    }
+                    case GridCellType.MysteryShooter:
+                    {
+                        var prefab = _cfg.shooterBlockPrefab;
+                        if (prefab != null)
+                        {
+                            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
+                            go.name = nm; go.transform.localPosition = pos;
+                            PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
+                            int sh = Mathf.Max(1, _shots[c,r]);
+                            var sb = go.GetComponent<ShooterBlock>();
+                            sb?.EditorSetup(_color[c,r], sh, c, r, isMystery: true);
                         }
                         break;
                     }

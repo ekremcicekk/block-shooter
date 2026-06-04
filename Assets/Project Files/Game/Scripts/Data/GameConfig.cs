@@ -11,6 +11,7 @@ namespace BlockShooter
         [Header("Block Settings")]
         public float fireRate = 0.15f;
         public float projectileSpeed = 12f;
+        public int mysteryShooterUnlockLevel = 4;
 
         [Header("Block Materials (Legacy - Migrated to Colors List)")]
         public Material redMaterial;
