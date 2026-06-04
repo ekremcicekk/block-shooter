@@ -32,7 +32,7 @@ namespace BlockShooter.Editor
         // ── Level list ────────────────────────────────────────────────────────
         private List<string> _paths  = new();
         private List<string> _labels = new();
-        private int          _activeIdx = -1;
+        [SerializeField] private int _activeIdx = -1;
 
         // ── Design data ───────────────────────────────────────────────────────
         private int           _levelIndex  = 1;
@@ -98,17 +98,49 @@ namespace BlockShooter.Editor
         private Vector2 _listScroll, _midScroll;
 
         // ── Color palette ─────────────────────────────────────────────────────
-        private static readonly (BlockColorType t, Color c, string n)[] Pal =
+        private Color PC(BlockColorType t)
         {
-            (BlockColorType.Red,    new Color(.90f,.20f,.20f), "Red"   ),
-            (BlockColorType.Blue,   new Color(.20f,.50f,.90f), "Blue"  ),
-            (BlockColorType.Green,  new Color(.20f,.80f,.30f), "Green" ),
-            (BlockColorType.Yellow, new Color(1.00f,.85f,.10f),"Yellow"),
-            (BlockColorType.Purple, new Color(.60f,.20f,.90f), "Purple"),
-            (BlockColorType.Orange, new Color(1.00f,.55f,.10f),"Orange"),
-        };
-        private static Color PC(BlockColorType t) =>
-            Pal.FirstOrDefault(x => x.t == t).c;
+            if (_gameCfg != null)
+            {
+                return _gameCfg.GetColor(t);
+            }
+            return Color.white;
+        }
+
+        private (BlockColorType t, Color c, string n)[] GetActiveColors()
+        {
+            if (_gameCfg != null && _gameCfg.colors != null && _gameCfg.colors.Count > 0)
+            {
+                var list = new List<(BlockColorType, Color, string)>();
+                foreach (var def in _gameCfg.colors)
+                {
+                    if (def == null) continue;
+                    list.Add((def.colorType, _gameCfg.GetColor(def.colorType), def.displayName));
+                }
+                return list.ToArray();
+            }
+
+            return new[]
+            {
+                (BlockColorType.Red,    new Color(.90f,.20f,.20f), "Red"   ),
+                (BlockColorType.Blue,   new Color(.20f,.50f,.90f), "Blue"  ),
+                (BlockColorType.Green,  new Color(.20f,.80f,.30f), "Green" ),
+                (BlockColorType.Yellow, new Color(1.00f,.85f,.10f),"Yellow"),
+                (BlockColorType.Purple, new Color(.60f,.20f,.90f), "Purple"),
+                (BlockColorType.Orange, new Color(1.00f,.55f,.10f),"Orange"),
+            };
+        }
+
+        private BlockColorType DrawColorPopup(BlockColorType selected, GUILayoutOption option)
+        {
+            var pal = GetActiveColors();
+            string[] names = pal.Select(x => x.n).ToArray();
+            int index = System.Array.FindIndex(pal, x => x.t == selected);
+            if (index < 0) index = 0;
+
+            int newIndex = EditorGUILayout.Popup(index, names, option);
+            return pal[newIndex].t;
+        }
 
         // ── Menu ──────────────────────────────────────────────────────────────
         [MenuItem("BlockShooter/Level Editor", false, 10)]
@@ -125,12 +157,23 @@ namespace BlockShooter.Editor
             Undo.undoRedoPerformed += OnUndoRedo;
             LoadCfg();
             RefreshList();
-            if (_type == null) InitGrid();
-            if (_knots.Count == 0) ApplyPreset();
-            if (_groups.Count == 0) DefaultGroups();
-            // Auto-select first level on open if nothing is already selected
+
+            if (_activeIdx >= _paths.Count)
+                _activeIdx = _paths.Count - 1;
+
             if (_activeIdx < 0 && _paths.Count > 0)
-            { _activeIdx = 0; LoadLevel(0); }
+                _activeIdx = 0;
+
+            if (_activeIdx >= 0 && _activeIdx < _paths.Count)
+            {
+                LoadLevel(_activeIdx);
+            }
+            else
+            {
+                if (_type == null) InitGrid();
+                if (_knots.Count == 0) ApplyPreset();
+                if (_groups.Count == 0) DefaultGroups();
+            }
         }
 
         private void OnDisable()
@@ -773,6 +816,20 @@ namespace BlockShooter.Editor
                 DestroyImmediate(_previewGo);
                 _previewGo = null;
             }
+
+            // Clean up any orphaned spline preview objects in the active scene (e.g. after domain reload)
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            if (scene.isLoaded)
+            {
+                var roots = scene.GetRootGameObjects();
+                foreach (var root in roots)
+                {
+                    if (root != null && (root.name == "[SplinePreview]" || root.name.Contains("[SplinePreview]")))
+                    {
+                        DestroyImmediate(root);
+                    }
+                }
+            }
         }
 
         private void ShowLevelPreview(string path)
@@ -798,6 +855,29 @@ namespace BlockShooter.Editor
             {
                 DestroyImmediate(_levelPreviewGo);
                 _levelPreviewGo = null;
+            }
+
+            // Clean up any orphaned level preview objects in the active scene (including inactive/hidden ones)
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            if (scene.isLoaded)
+            {
+                var roots = scene.GetRootGameObjects();
+                foreach (var root in roots)
+                {
+                    if (root == null) continue;
+                    if (root.name == "[LevelPreview]" || root.name.Contains("[LevelPreview]"))
+                    {
+                        DestroyImmediate(root);
+                    }
+                    else
+                    {
+                        var lrs = root.GetComponentsInChildren<LevelRoot>(true);
+                        if (lrs.Length > 0 && !EditorUtility.IsPersistent(root))
+                        {
+                            DestroyImmediate(root);
+                        }
+                    }
+                }
             }
         }
 
@@ -1646,7 +1726,7 @@ namespace BlockShooter.Editor
                 GUI.backgroundColor = PC(g.color);
                 GUILayout.Box("", GUILayout.Width(20), GUILayout.Height(20));
                 GUI.backgroundColor = prev;
-                g.color     = (BlockColorType)EditorGUILayout.EnumPopup(g.color, GUILayout.Width(72));
+                g.color     = DrawColorPopup(g.color, GUILayout.Width(72));
                 GUILayout.Label("Rows",  GUILayout.Width(32)); g.rowCount  = EditorGUILayout.IntField(g.rowCount,  GUILayout.Width(36));
                 g.laneCount = 5;
                 GUILayout.Label("Lanes: 5", EditorStyles.miniLabel, GUILayout.Width(50));
@@ -1803,12 +1883,13 @@ namespace BlockShooter.Editor
             {
                 // Color palette — always shown at top
                 GUILayout.Label("Color:", EditorStyles.miniLabel);
-                for (int i = 0; i < Pal.Length; i += 2)
+                var pal = GetActiveColors();
+                for (int i = 0; i < pal.Length; i += 2)
                 {
                     EditorGUILayout.BeginHorizontal();
-                    for (int j = i; j < Mathf.Min(i + 2, Pal.Length); j++)
+                    for (int j = i; j < Mathf.Min(i + 2, pal.Length); j++)
                     {
-                        var entry = Pal[j];
+                        var entry = pal[j];
                         bool isSel = _color[c, r] == entry.t;
                         GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .4f);
                         var st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
@@ -1868,12 +1949,13 @@ namespace BlockShooter.Editor
             {
                 // Color palette — clicking a color auto-promotes to ShooterBlock
                 GUILayout.Label("Color:", EditorStyles.miniLabel);
-                for (int i = 0; i < Pal.Length; i += 2)
+                var pal = GetActiveColors();
+                for (int i = 0; i < pal.Length; i += 2)
                 {
                     EditorGUILayout.BeginHorizontal();
-                    for (int j = i; j < Mathf.Min(i + 2, Pal.Length); j++)
+                    for (int j = i; j < Mathf.Min(i + 2, pal.Length); j++)
                     {
-                        var entry = Pal[j];
+                        var entry = pal[j];
                         GUI.backgroundColor = Color.Lerp(entry.c, Color.black, .4f);
                         if (GUILayout.Button(entry.n, GUILayout.Height(28)))
                         {
@@ -2656,6 +2738,10 @@ namespace BlockShooter.Editor
             // Kill all DOTween tweens first to prevent MissingReference on destroyed transforms
             DOTween.KillAll();
 
+            // Clean up all preview objects (including hidden and orphaned ones)
+            DestroyLevelPreview();
+            DestroyPreview();
+
             // Remove existing LevelRoot instances from scene
             foreach (var lr in FindObjectsByType<LevelRoot>(FindObjectsSortMode.None))
                 DestroyImmediate(lr.gameObject);
@@ -2814,7 +2900,7 @@ namespace BlockShooter.Editor
                     GUI.backgroundColor = PC(g.color);
                     GUILayout.Box("", GUILayout.Width(16), GUILayout.Height(16));
                     GUI.backgroundColor = prev;
-                    g.color = (BlockColorType)EditorGUILayout.EnumPopup(g.color, GUILayout.Width(72));
+                    g.color = DrawColorPopup(g.color, GUILayout.Width(72));
                     GUILayout.Label("Rows", GUILayout.Width(32)); g.rowCount = EditorGUILayout.IntField(g.rowCount, GUILayout.Width(36));
                     g.laneCount = 5; // Hardcoded to 5
                     GUILayout.Label("Lanes: 5", EditorStyles.miniLabel, GUILayout.Width(50));
