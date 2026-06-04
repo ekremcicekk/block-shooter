@@ -7,10 +7,6 @@ namespace BlockShooter
     {
         public static LevelManager Instance { get; private set; }
 
-        [Header("Level Prefabs")]
-        [Tooltip("Array of self-contained level prefabs (LevelRoot). Loops when exhausted.")]
-        public LevelRoot[] levelPrefabs;
-
         [Header("Spawn Point")]
         [Tooltip("Parent transform under which the active level prefab is instantiated.")]
         public Transform levelSpawnParent;
@@ -33,15 +29,22 @@ namespace BlockShooter
 
         public void LoadCurrentLevel()
         {
-            if (levelPrefabs == null || levelPrefabs.Length == 0)
+            var prefabs = GameManager.Instance != null && GameManager.Instance.config != null && GameManager.Instance.config.levelPrefabs != null && GameManager.Instance.config.levelPrefabs.Count > 0
+                ? GameManager.Instance.config.levelPrefabs
+                : null;
+
+            int count = prefabs != null ? prefabs.Count : 0;
+            if (count == 0)
             {
-                Debug.LogWarning("[LevelManager] No level prefabs assigned.");
+                Debug.LogWarning("[LevelManager] No level prefabs assigned in GameConfig.");
                 return;
             }
 
             int raw   = SaveManager.CurrentLevel - 1;
-            int index = raw % levelPrefabs.Length;
-            SpawnLevel(levelPrefabs[Mathf.Clamp(index, 0, levelPrefabs.Length - 1)]);
+            int index = raw % count;
+            
+            LevelRoot targetPrefab = prefabs[Mathf.Clamp(index, 0, count - 1)];
+            SpawnLevel(targetPrefab);
         }
 
         private void SpawnLevel(LevelRoot prefab)

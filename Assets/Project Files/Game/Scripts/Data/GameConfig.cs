@@ -5,6 +5,9 @@ namespace BlockShooter
     [CreateAssetMenu(fileName = "GameConfig", menuName = "BlockShooter/GameConfig")]
     public class GameConfig : ScriptableObject
     {
+        [Header("Level Sequence")]
+        public System.Collections.Generic.List<LevelRoot> levelPrefabs = new System.Collections.Generic.List<LevelRoot>();
+
         [Header("Block Settings")]
         public float fireRate = 0.15f;
         public float projectileSpeed = 12f;

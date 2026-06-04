@@ -26,6 +26,8 @@ namespace BlockShooter.Editor
         // ── Config ────────────────────────────────────────────────────────────
         private LevelEditorConfig _cfg;
         private GameConfig        _gameCfg;
+        private UnityEditorInternal.ReorderableList _levelList;
+        private SerializedObject _gameCfgSerialized;
 
         // ── Level list ────────────────────────────────────────────────────────
         private List<string> _paths  = new();
@@ -167,19 +169,162 @@ namespace BlockShooter.Editor
             _paths.Clear(); _labels.Clear();
             if (_cfg == null) return;
 
+            SyncLevelsFromFolder();
+
+            if (_gameCfg != null)
+            {
+                foreach (var lr in _gameCfg.levelPrefabs)
+                {
+                    if (lr == null) continue;
+                    string path = AssetDatabase.GetAssetPath(lr);
+                    if (string.IsNullOrEmpty(path)) continue;
+                    _paths.Add(path);
+                    _labels.Add(lr.name);
+                }
+            }
+
+            InitReorderableList();
+            if (_levelList != null) _levelList.index = _activeIdx;
+        }
+
+        private void SyncLevelsFromFolder()
+        {
+            if (_cfg == null || _gameCfg == null) return;
+
+            // 1. Clean up missing/null references
+            _gameCfg.levelPrefabs.RemoveAll(x => x == null);
+
+            // 2. Scan the save folder for prefabs containing LevelRoot component
             string folder = _cfg.levelSavePath.TrimEnd('/');
+            var foundPrefabs = new List<LevelRoot>();
             foreach (var gid in AssetDatabase.FindAssets("t:Prefab", new[] { folder }))
             {
                 string path = AssetDatabase.GUIDToAssetPath(gid);
                 var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (go == null || go.GetComponent<LevelRoot>() == null) continue;
-                _paths.Add(path);
-                _labels.Add(Path.GetFileNameWithoutExtension(path));
+                var lr = go != null ? go.GetComponent<LevelRoot>() : null;
+                if (lr != null) foundPrefabs.Add(lr);
             }
 
-            var s = _paths.Zip(_labels, (p, l) => (p, l)).OrderBy(x => x.l).ToList();
-            _paths  = s.Select(x => x.p).ToList();
-            _labels = s.Select(x => x.l).ToList();
+            bool changed = false;
+
+            // 3. Add newly created level prefabs that aren't in the list
+            foreach (var lr in foundPrefabs)
+            {
+                if (!_gameCfg.levelPrefabs.Contains(lr))
+                {
+                    _gameCfg.levelPrefabs.Add(lr);
+                    changed = true;
+                }
+            }
+
+            // 4. Remove level prefabs that no longer exist in the directory
+            for (int i = _gameCfg.levelPrefabs.Count - 1; i >= 0; i--)
+            {
+                if (!foundPrefabs.Contains(_gameCfg.levelPrefabs[i]))
+                {
+                    _gameCfg.levelPrefabs.RemoveAt(i);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(_gameCfg);
+                AssetDatabase.SaveAssets();
+            }
+        }
+
+        private void InitReorderableList()
+        {
+            if (_gameCfg == null)
+            {
+                _gameCfgSerialized = null;
+                _levelList = null;
+                return;
+            }
+
+            _gameCfgSerialized = new SerializedObject(_gameCfg);
+            var prop = _gameCfgSerialized.FindProperty("levelPrefabs");
+
+            _levelList = new UnityEditorInternal.ReorderableList(_gameCfgSerialized, prop, true, false, false, false);
+            _levelList.headerHeight = 0f;
+            _levelList.footerHeight = 0f;
+            _levelList.elementHeight = 24f;
+
+            _levelList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+            {
+                if (index < 0 || index >= _paths.Count) return;
+
+                bool active = _activeIdx == index;
+
+                // Subtract space for custom duplicate/delete buttons on the right
+                float mainW = rect.width - 48f;
+
+                // Draw background selection highlight
+                if (active)
+                {
+                    EditorGUI.DrawRect(new Rect(rect.x - 2, rect.y, rect.width + 4, rect.height), new Color(.4f, .65f, 1f, 0.25f));
+                }
+
+                // Draw Level Name Label
+                Rect labelRect = new Rect(rect.x, rect.y + 2, mainW, rect.height - 4);
+                string label = _labels[index];
+                
+                GUIStyle style = new GUIStyle(EditorStyles.label);
+                if (active)
+                {
+                    style.fontStyle = FontStyle.Bold;
+                    style.normal.textColor = new Color(0.2f, 0.55f, 1f);
+                }
+
+                if (GUI.Button(labelRect, label, style))
+                {
+                    _activeIdx = index;
+                    _levelList.index = index;
+                    LoadLevel(index);
+                }
+
+                // Custom Duplicate / Delete Buttons
+                var dupIcon = EditorGUIUtility.IconContent("d_TreeEditor.Duplicate");
+                GUIContent dupContent = (dupIcon != null && dupIcon.image != null) ? dupIcon : new GUIContent("⊕");
+                
+                Rect dupRect = new Rect(rect.x + mainW + 2, rect.y + 1, 20, rect.height - 2);
+                Rect delRect = new Rect(rect.x + mainW + 24, rect.y + 1, 20, rect.height - 2);
+
+                GUI.backgroundColor = new Color(.55f, .75f, .4f);
+                if (GUI.Button(dupRect, dupContent))
+                {
+                    DuplicateLevel(index);
+                }
+
+                GUI.backgroundColor = new Color(.9f, .3f, .3f);
+                if (GUI.Button(delRect, "✕"))
+                {
+                    DeleteLevel(index);
+                }
+                GUI.backgroundColor = Color.white;
+            };
+
+            _levelList.onReorderCallbackWithDetails = (UnityEditorInternal.ReorderableList list, int oldIndex, int newIndex) =>
+            {
+                _gameCfgSerialized.ApplyModifiedProperties();
+                EditorUtility.SetDirty(_gameCfg);
+                AssetDatabase.SaveAssets();
+
+                // Sync activeIdx
+                if (_activeIdx == oldIndex) _activeIdx = newIndex;
+                else if (oldIndex < newIndex)
+                {
+                    if (_activeIdx > oldIndex && _activeIdx <= newIndex) _activeIdx--;
+                }
+                else if (oldIndex > newIndex)
+                {
+                    if (_activeIdx >= newIndex && _activeIdx < oldIndex) _activeIdx++;
+                }
+
+                RefreshList();
+                list.index = _activeIdx;
+            };
         }
 
         private void DefaultGroups()
@@ -196,6 +341,7 @@ namespace BlockShooter.Editor
         private void OnGUI()
         {
             if (_cfg == null) { DrawNoCfg(); return; }
+            if (_gameCfgSerialized != null) _gameCfgSerialized.Update();
             DrawToolbar();
             EditorGUILayout.BeginHorizontal();
             DrawLeft();
@@ -253,23 +399,9 @@ namespace BlockShooter.Editor
             GUILayout.Space(3);
 
             _listScroll = EditorGUILayout.BeginScrollView(_listScroll, GUILayout.ExpandHeight(true));
-            var dupIcon = EditorGUIUtility.IconContent("d_TreeEditor.Duplicate");
-            if (dupIcon == null || dupIcon.image == null) dupIcon = new GUIContent("⊕");
-            for (int i = 0; i < _labels.Count; i++)
+            if (_levelList != null)
             {
-                bool active = _activeIdx == i;
-                EditorGUILayout.BeginHorizontal();
-                GUI.backgroundColor = active ? new Color(.4f,.65f,1f) : new Color(.24f,.24f,.26f);
-                if (GUILayout.Button(_labels[i], GUILayout.Height(22)))
-                { _activeIdx = i; LoadLevel(i); }
-                GUI.backgroundColor = new Color(.55f,.75f,.4f);
-                if (GUILayout.Button(dupIcon, GUILayout.Width(22), GUILayout.Height(22)))
-                    DuplicateLevel(i);
-                GUI.backgroundColor = new Color(.9f,.3f,.3f);
-                if (GUILayout.Button("✕", GUILayout.Width(22), GUILayout.Height(22)))
-                    DeleteLevel(i);
-                GUI.backgroundColor = Color.white;
-                EditorGUILayout.EndHorizontal();
+                _levelList.DoLayoutList();
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndScrollView();
@@ -2532,10 +2664,16 @@ namespace BlockShooter.Editor
             var lm = FindFirstObjectByType<LevelManager>();
             if (lm != null)
             {
-                if (lm.levelPrefabs == null || lm.levelPrefabs.Length == 0)
-                    lm.levelPrefabs = new LevelRoot[1];
-                lm.levelPrefabs[0] = prefab.GetComponent<LevelRoot>();
-                EditorUtility.SetDirty(lm);
+                SyncLevelsFromFolder();
+                int prefabIndex = _gameCfg.levelPrefabs.FindIndex(x => x != null && x.gameObject.name == prefab.name);
+                if (prefabIndex >= 0)
+                {
+                    SaveManager.CurrentLevel = prefabIndex + 1;
+                }
+                else
+                {
+                    SaveManager.CurrentLevel = _levelIndex;
+                }
             }
             else
             {
