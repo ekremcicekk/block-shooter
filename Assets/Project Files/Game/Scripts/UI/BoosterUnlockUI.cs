@@ -19,6 +19,7 @@ namespace BlockShooter
         public BoosterData extraSlotData;
         public BoosterData freePickData;
         public BoosterData colorBlastData;
+        public BoosterData moveShooterData;
 
         private void Awake()
         {
@@ -39,6 +40,7 @@ namespace BlockShooter
                 BoosterType.ExtraSlot  => extraSlotData,
                 BoosterType.FreePick   => freePickData,
                 BoosterType.ColorBlast => colorBlastData,
+                BoosterType.MoveShooter => moveShooterData,
                 _ => null
             };
 

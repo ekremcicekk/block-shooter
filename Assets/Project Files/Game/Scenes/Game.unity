@@ -837,6 +837,7 @@ MonoBehaviour:
   extraSlotData: {fileID: 0}
   freePickData: {fileID: 0}
   colorBlastData: {fileID: 0}
+  moveShooterData: {fileID: 0}
   initialBoosterCount: 2
 --- !u!4 &1465183685
 Transform:
@@ -1035,6 +1036,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+    - target: {fileID: 5772893927128486884, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: boosterType
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 6745478345501859296, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0

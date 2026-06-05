@@ -12,7 +12,6 @@ namespace BlockShooter
     {
         [Header("Visuals")]
         public MeshRenderer blockRenderer;
-        public ParticleSystem destroyParticle;
 
         private BlockColorType _colorType;
         private bool _isDestroyed;
@@ -96,14 +95,7 @@ namespace BlockShooter
 
             ScoreManager.Instance?.AddBlockDestroyed();
 
-            if (destroyParticle != null)
-            {
-                var fx = Instantiate(destroyParticle, transform.position, Quaternion.identity);
-                var main = fx.main;
-                main.startColor = GameManager.Instance.config.GetColor(_colorType);
-                fx.Play();
-                Destroy(fx.gameObject, 2f);
-            }
+
 
             OnDestroyed?.Invoke(this);
 

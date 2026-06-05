@@ -20,12 +20,15 @@ namespace BlockShooter
         public BoosterData extraSlotData;
         public BoosterData freePickData;
         public BoosterData colorBlastData;
+        public BoosterData moveShooterData;
 
         [Header("Initial unlock reward")]
         public int initialBoosterCount = 2;
 
         // ColorBlast awaits a tap on a slotted block
         public bool IsAwaitingColorBlastTarget { get; private set; }
+        // MoveShooter awaits a tap on any grid block
+        public bool IsAwaitingMoveShooterTarget { get; private set; }
 
         private Coroutine _freePickCoroutine;
 
@@ -48,6 +51,7 @@ namespace BlockShooter
                 BoosterType.ExtraSlot  => extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,
                 BoosterType.FreePick   => freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,
                 BoosterType.ColorBlast => colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.colorBlastUnlockLevel,
+                BoosterType.MoveShooter => moveShooterData != null ? moveShooterData.unlockLevel : GameManager.Instance.config.moveShooterUnlockLevel,
                 _ => 999
             };
             return SaveManager.CurrentLevel >= unlockLevel;
@@ -63,6 +67,7 @@ namespace BlockShooter
                 case BoosterType.ExtraSlot:  ActivateExtraSlot();  break;
                 case BoosterType.FreePick:   ActivateFreePick();   break;
                 case BoosterType.ColorBlast: ActivateColorBlast(); break;
+                case BoosterType.MoveShooter: ActivateMoveShooter(); break;
             }
             return true;
         }
@@ -159,6 +164,51 @@ namespace BlockShooter
             IsAwaitingColorBlastTarget = false;
         }
 
+        // ── MoveShooter ───────────────────────────────────────────────────────
+        // Enters selection mode. Player can pick any block on the grid
+        // (including locked blocks) and send it directly to an empty slot.
+
+        private void ActivateMoveShooter()
+        {
+            if (ShooterGrid.Instance == null || SlotSystem.Instance == null) return;
+            if (!SlotSystem.Instance.HasEmptySlot) return;
+
+            // Only activate if there is at least one locked/blocked block on the grid
+            if (!ShooterGrid.Instance.HasLockedBlocks()) return;
+
+            IsAwaitingMoveShooterTarget = true;
+
+            // Punch scale/highlight all currently locked blocks to suggest selection
+            foreach (var b in ShooterGrid.Instance.GetActiveBlocks())
+            {
+                if (b.State == ShooterBlock.BlockState.InGrid && !b.IsAccessible)
+                {
+                    b.transform.DOPunchScale(Vector3.one * 0.15f, 0.4f, 4, 0.5f);
+                }
+            }
+
+            StartCoroutine(WaitForMoveShooterTarget());
+        }
+
+        private IEnumerator WaitForMoveShooterTarget()
+        {
+            float timeout = moveShooterData != null ? moveShooterData.duration : 8f;
+            float elapsed = 0f;
+
+            while (elapsed < timeout && IsAwaitingMoveShooterTarget)
+            {
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            IsAwaitingMoveShooterTarget = false;
+        }
+
+        public void CompleteMoveShooter(ShooterBlock block)
+        {
+            IsAwaitingMoveShooterTarget = false;
+        }
+
         private ShooterBlock RaycastBlock()
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -175,6 +225,7 @@ namespace BlockShooter
             TryGiveInitial(BoosterType.ExtraSlot,  extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,  level);
             TryGiveInitial(BoosterType.FreePick,   freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,   level);
             TryGiveInitial(BoosterType.ColorBlast, colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.colorBlastUnlockLevel, level);
+            TryGiveInitial(BoosterType.MoveShooter, moveShooterData != null ? moveShooterData.unlockLevel : GameManager.Instance.config.moveShooterUnlockLevel, level);
         }
 
         private void TryGiveInitial(BoosterType type, int unlockLevel, int currentLevel)
@@ -196,6 +247,7 @@ namespace BlockShooter
             SaveManager.AddBooster(BoosterType.ExtraSlot, 3);
             SaveManager.AddBooster(BoosterType.FreePick, 3);
             SaveManager.AddBooster(BoosterType.ColorBlast, 3);
+            SaveManager.AddBooster(BoosterType.MoveShooter, 3);
         }
 #endif
     }

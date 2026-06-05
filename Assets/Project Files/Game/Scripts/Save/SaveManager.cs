@@ -9,6 +9,7 @@ namespace BlockShooter
         private const string KEY_BOOSTER_SLOT   = "Booster_ExtraSlot";
         private const string KEY_BOOSTER_PICK   = "Booster_FreePick";
         private const string KEY_BOOSTER_BLAST  = "Booster_ColorBlast";
+        private const string KEY_BOOSTER_MOVE   = "Booster_MoveShooter";
 
         public static int CurrentLevel
         {
@@ -56,6 +57,7 @@ namespace BlockShooter
             BoosterType.ExtraSlot  => KEY_BOOSTER_SLOT,
             BoosterType.FreePick   => KEY_BOOSTER_PICK,
             BoosterType.ColorBlast => KEY_BOOSTER_BLAST,
+            BoosterType.MoveShooter => KEY_BOOSTER_MOVE,
             _ => ""
         };
     }

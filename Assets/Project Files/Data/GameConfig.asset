@@ -63,5 +63,6 @@ MonoBehaviour:
   extraSlotUnlockLevel: 1
   freePickUnlockLevel: 3
   colorBlastUnlockLevel: 5
+  moveShooterUnlockLevel: 1
   scorePerBlock: 10
   scoreComboMultiplier: 2

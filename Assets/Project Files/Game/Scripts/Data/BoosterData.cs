@@ -18,6 +18,7 @@ namespace BlockShooter
     {
         ExtraSlot,   // Adds one extra firing slot for this level
         FreePick,    // Pick any block from the grid regardless of row order
-        ColorBlast   // Select a slotted block → it fires at ALL matching-color blocks at once
+        ColorBlast,  // Select a slotted block → it fires at ALL matching-color blocks at once
+        MoveShooter  // Select any block (including locked blocks) on the grid and send it to slot
     }
 }

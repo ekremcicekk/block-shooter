@@ -146,7 +146,7 @@ namespace BlockShooter
                 }
             }
 
-            // 4. Reveal mystery blocks that have open neighbors
+            // 4. Reveal mystery blocks that have a clear path to the front (slots)
             foreach (var block in _activeBlocks)
             {
                 if (block == null) continue;
@@ -156,7 +156,7 @@ namespace BlockShooter
 
                 if (block.isMystery)
                 {
-                    if (IsMysteryRevealed(block.GridColumn, block.GridRow, isBlocked, cols, rows))
+                    if (HasPathToFront(block.GridColumn, block.GridRow, isBlocked, cols, rows))
                     {
                         var feat = block.GetComponent<MysteryBlockFeature>();
                         if (feat != null)
@@ -205,32 +205,7 @@ namespace BlockShooter
             }
         }
 
-        private bool IsMysteryRevealed(int col, int row, bool[,] isBlocked, int cols, int rows)
-        {
-            // Front:
-            int fCol = col;
-            int fRow = row + 1;
-            if (fRow >= rows) return true; // Front of the grid is always open
-            if (!isBlocked[fCol, fRow]) return true;
 
-            // Back:
-            int bCol = col;
-            int bRow = row - 1;
-            if (bRow >= 0 && !isBlocked[bCol, bRow]) return true;
-
-            // Left:
-            int lCol = col - 1;
-            int lRow = row;
-            if (lCol >= 0 && !isBlocked[lCol, lRow]) return true;
-
-            // Right:
-            int rCol = col + 1;
-            int rRow = row;
-            if (rCol < cols && !isBlocked[rCol, rRow]) return true;
-
-            // None of the valid directions are open
-            return false;
-        }
 
         private void RefreshColumnAccessibility(int col)
         {
@@ -337,6 +312,18 @@ namespace BlockShooter
         // ── Queries ───────────────────────────────────────────────────────────
 
         public List<ShooterBlock> GetActiveBlocks() => _activeBlocks;
+
+        public bool HasLockedBlocks()
+        {
+            foreach (var b in _activeBlocks)
+            {
+                if (b != null && b.State == ShooterBlock.BlockState.InGrid && !b.IsAccessible)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         public void SetRainbowMode(bool active)
         {

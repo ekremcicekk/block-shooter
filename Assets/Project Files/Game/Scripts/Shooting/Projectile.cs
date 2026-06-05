@@ -115,9 +115,11 @@ namespace BlockShooter
 
         private void PlayHitFX()
         {
-            if (hitParticle == null) return;
+            if (hitParticle == null || _target == null) return;
             
-            var fx = Instantiate(hitParticle, transform.position, transform.rotation);
+            Vector3 spawnPos = _target.transform.position;
+            spawnPos.y = 0.6f;
+            var fx = Instantiate(hitParticle, spawnPos, Quaternion.identity);
             fx.gameObject.SetActive(true);
             fx.Play();
             Destroy(fx.gameObject, fx.main.duration + fx.main.startLifetime.constantMax);

@@ -66,6 +66,7 @@ namespace BlockShooter
         public int  GridRow              => _gridRow;
         public int  ShotCount            => _shotCount;
         public bool isMystery            { get => _isMystery; set => _isMystery = value; }
+        public bool IsAccessible         => _isAccessible;
 
         // Events
         public event Action<ShooterBlock> OnSlotted;
@@ -167,6 +168,20 @@ namespace BlockShooter
                 return;
             }
 
+            // MoveShooter selection mode: pick any InGrid block
+            if (BoosterManager.Instance != null && BoosterManager.Instance.IsAwaitingMoveShooterTarget)
+            {
+                if (SlotSystem.Instance == null || !SlotSystem.Instance.HasEmptySlot)
+                {
+                    transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                    return;
+                }
+
+                BoosterManager.Instance.CompleteMoveShooter(this);
+                MoveToSlot();
+                return;
+            }
+
             if (!_isAccessible)
             {
                 transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
@@ -187,6 +202,16 @@ namespace BlockShooter
             State = BlockState.MovingToSlot;
             SetAccessible(false);
             if (shotCountText != null) shotCountText.gameObject.SetActive(true);
+
+            // Immediately reveal mystery state when block starts moving to a slot
+            if (_isMystery)
+            {
+                var feature = GetComponent<MysteryBlockFeature>();
+                if (feature != null)
+                {
+                    feature.Reveal();
+                }
+            }
 
             ShooterGrid.Instance?.OnBlockLeftGrid(this);
             SlotSystem.Instance.TrySlotBlock(this);
