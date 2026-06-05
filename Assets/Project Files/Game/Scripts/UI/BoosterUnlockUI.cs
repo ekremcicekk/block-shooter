@@ -18,7 +18,8 @@ namespace BlockShooter
         [Header("Booster Data")]
         public BoosterData extraSlotData;
         public BoosterData freePickData;
-        public BoosterData colorBlastData;
+        [UnityEngine.Serialization.FormerlySerializedAs("colorBlastData")]
+        public BoosterData superShooterData;
         public BoosterData moveShooterData;
 
         private void Awake()
@@ -39,7 +40,7 @@ namespace BlockShooter
             {
                 BoosterType.ExtraSlot  => extraSlotData,
                 BoosterType.FreePick   => freePickData,
-                BoosterType.ColorBlast => colorBlastData,
+                BoosterType.SuperShooter => superShooterData,
                 BoosterType.MoveShooter => moveShooterData,
                 _ => null
             };

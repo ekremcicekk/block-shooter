@@ -56,7 +56,7 @@ namespace BlockShooter
         {
             BoosterType.ExtraSlot  => KEY_BOOSTER_SLOT,
             BoosterType.FreePick   => KEY_BOOSTER_PICK,
-            BoosterType.ColorBlast => KEY_BOOSTER_BLAST,
+            BoosterType.SuperShooter => KEY_BOOSTER_BLAST,
             BoosterType.MoveShooter => KEY_BOOSTER_MOVE,
             _ => ""
         };

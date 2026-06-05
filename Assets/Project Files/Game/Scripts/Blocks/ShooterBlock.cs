@@ -51,6 +51,7 @@ namespace BlockShooter
 
         private bool    _isAccessible;
         private bool    _isShooting;
+        private bool    _isPerformingSuperShooter;
         private Coroutine _shootCoroutine;
         private int     _visibleShotsLeft;
         private int     _invisibleShotsLeft;
@@ -160,10 +161,10 @@ namespace BlockShooter
             if (!GameManager.Instance.IsPlaying) return;
             if (State != BlockState.InGrid) return;
 
-            // ColorBlast selection mode: pick a slotted block
-            if (BoosterManager.Instance != null && BoosterManager.Instance.IsAwaitingColorBlastTarget)
+            // SuperShooter selection mode: pick a slotted block
+            if (BoosterManager.Instance != null && BoosterManager.Instance.IsAwaitingSuperShooterTarget)
             {
-                // Only slotted blocks can be selected for ColorBlast
+                // Only slotted blocks can be selected for SuperShooter
                 // (InGrid blocks shouldn't be selectable in this mode)
                 return;
             }
@@ -413,24 +414,39 @@ namespace BlockShooter
             }
 
             Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
-            Vector3 targetPos = target.transform.position;
-            targetPos.y = spawnPos.y;
-            Vector3 dir = (targetPos - spawnPos).normalized;
+            Vector3 targetCenter = target.transform.position + Vector3.up * 0.3f;
+            Vector3 dir = (targetCenter - spawnPos).normalized;
+
+            float pSpeed = GameManager.Instance.config.projectileSpeed;
+            if (_isPerformingSuperShooter) pSpeed *= 1.8f;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
-            proj.Launch(projColor, GameManager.Instance.config.projectileSpeed, ProjectilePool.Instance, dir, target, isProjectileVisible);
+            proj.Launch(projColor, pSpeed, ProjectilePool.Instance, dir, target, isProjectileVisible);
 
             if (muzzleFlash != null) muzzleFlash.Play();
-            transform.DOKill(false);
-            transform.localScale = Vector3.one;
-            transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);
+            
+            if (!_isPerformingSuperShooter)
+            {
+                transform.DOKill(false);
+                transform.localScale = Vector3.one;
+                transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);
+            }
+            else
+            {
+                if (bodyMesh != null)
+                {
+                    bodyMesh.DOKill(false);
+                    bodyMesh.localScale = Vector3.one;
+                    bodyMesh.DOPunchScale(Vector3.one * 0.12f, 0.08f, 1, 0.5f);
+                }
+            }
 
             _shotCount--;
             UpdateShotCountUI();
-            if (_shotCount <= 0) Deplete();
+            if (_shotCount <= 0 && !_isPerformingSuperShooter) Deplete();
         }
 
-        // kept for external callers (e.g. ColorBlast)
+        // kept for external callers (e.g. SuperShooter)
         public void FireProjectile()
         {
             var target = _isRainbowMode
@@ -439,40 +455,78 @@ namespace BlockShooter
             if (target != null) FireAt(target);
         }
 
-        // ── ColorBlast: fire at ALL matching blocks simultaneously ─────────────
+        // ── SuperShooter: float, zoom camera, and fire at matching blocks sequentially ──
 
-        public void FireColorBlast()
+        public void StartSuperShooter()
         {
             if (State != BlockState.InSlot || IsDepleted) return;
-            StartCoroutine(ColorBlastRoutine());
+            _isPerformingSuperShooter = true;
+            StopShooting();
+            State = BlockState.MovingToSlot; // Prevents normal update shoot cycles
+            StartCoroutine(SuperShooterRoutine());
         }
 
-        private IEnumerator ColorBlastRoutine()
+        private IEnumerator SuperShooterRoutine()
         {
-            StopShooting();
+            float originalCameraSize = Camera.main != null ? Camera.main.orthographicSize : 10f;
 
-            // Fire one projectile per matching block in range
-            var targets = new System.Collections.Generic.List<ConveyorBlock3D>(
-                FireRange.Instance != null ? FireRange.Instance.BlocksInRange : System.Array.Empty<ConveyorBlock3D>());
+            // 1. Camera Zoom to orthographic size 8
+            Camera.main?.DOOrthoSize(8f, 0.35f).SetEase(Ease.OutQuad);
 
-            Vector3 spawnPos = shootPoint != null ? shootPoint.position : transform.position + Vector3.up * 0.3f;
+            // 2. Jump up to floating position
+            Vector3 originalPos = transform.position;
+            Vector3 floatPos = originalPos + Vector3.up * 2.5f + Vector3.back * 1.2f;
 
-            foreach (var t in targets)
+            transform.DOScale(Vector3.one * 1.15f, 0.35f).SetEase(Ease.OutQuad);
+
+            yield return transform.DOJump(floatPos, jumpPower: 1.5f, numJumps: 1, duration: 0.4f)
+                .SetEase(Ease.OutQuad)
+                .WaitForCompletion();
+
+            // Floating bob animation loop
+            var hoverTween = transform.DOMoveY(floatPos.y + 0.12f, 0.35f)
+                .SetLoops(-1, LoopType.Yoyo)
+                .SetEase(Ease.InOutSine);
+
+            // 3. Shoot at matching conveyor blocks sequentially up to _shotCount
+            var targets = ConveyorController.Instance != null 
+                ? ConveyorController.Instance.GetOrderedBlocks(_colorType, anyColor: _isRainbowMode)
+                : new System.Collections.Generic.List<ConveyorBlock3D>();
+
+            targets.RemoveAll(t => t == null || t.IsDestroyed || t.IsTargeted);
+
+            int shotsToFire = Mathf.Min(_shotCount, targets.Count);
+            if (shotsToFire > 0)
             {
-                if (t == null || t.IsDestroyed) continue;
-                if (!_isRainbowMode && t.ColorType != _colorType) continue;
+                for (int i = 0; i < shotsToFire; i++)
+                {
+                    var target = targets[i];
+                    if (target == null || target.IsDestroyed) continue;
 
-                Vector3 targetPos = t.transform.position;
-                targetPos.y = spawnPos.y;
-                Vector3 dir = (targetPos - spawnPos).normalized;
-                Projectile proj = ProjectilePool.Instance?.Get(spawnPos);
-                proj?.Launch(_colorType, GameManager.Instance.config.projectileSpeed * 1.5f,
-                    ProjectilePool.Instance, dir, t);
+                    FireAt(target);
+                    yield return new WaitForSeconds(0.02f);
+                }
 
-                if (muzzleFlash != null) muzzleFlash.Play();
-                yield return new WaitForSeconds(0.05f);
+                // Brief delay to let final projectiles hit their targets
+                yield return new WaitForSeconds(0.15f);
+            }
+            else
+            {
+                yield return new WaitForSeconds(0.3f);
             }
 
+            hoverTween.Kill();
+
+            // 4. Parallel return movement and camera restore
+            Camera.main?.DOOrthoSize(originalCameraSize, 0.35f).SetEase(Ease.OutQuad);
+            transform.DOScale(Vector3.one, 0.35f).SetEase(Ease.InQuad);
+
+            yield return transform.DOMove(originalPos, 0.35f)
+                .SetEase(Ease.OutQuad)
+                .WaitForCompletion();
+
+            // 5. Trigger depletion
+            _isPerformingSuperShooter = false;
             Deplete();
         }
 

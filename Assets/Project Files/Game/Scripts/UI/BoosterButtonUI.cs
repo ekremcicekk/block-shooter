@@ -38,6 +38,14 @@ namespace BlockShooter
             Refresh();
         }
 
+        private void Update()
+        {
+            if (GameManager.Instance != null && GameManager.Instance.IsPlaying)
+            {
+                Refresh();
+            }
+        }
+
         public void Refresh()
         {
             bool unlocked = BoosterManager.Instance != null && BoosterManager.Instance.IsBoosterUnlocked(boosterType);
@@ -46,7 +54,19 @@ namespace BlockShooter
             if (lockOverlay != null) lockOverlay.SetActive(!unlocked);
             if (unlockBadge != null) unlockBadge.SetActive(false);
             if (countText != null) countText.text = count > 0 ? count.ToString() : "0";
-            if (button != null) button.interactable = unlocked && count > 0 && GameManager.Instance.IsPlaying;
+
+            bool canUse = unlocked && count > 0 && GameManager.Instance.IsPlaying;
+            if (canUse && boosterType == BoosterType.SuperShooter)
+            {
+                canUse = SlotSystem.Instance != null && SlotSystem.Instance.GetSlottedBlocks().Count > 0;
+            }
+            if (canUse && boosterType == BoosterType.MoveShooter)
+            {
+                canUse = SlotSystem.Instance != null && SlotSystem.Instance.HasEmptySlot && 
+                         ShooterGrid.Instance != null && ShooterGrid.Instance.HasLockedBlocks();
+            }
+
+            if (button != null) button.interactable = canUse;
         }
 
         private void OnClick()

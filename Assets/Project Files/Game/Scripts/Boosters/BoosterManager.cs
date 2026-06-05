@@ -9,8 +9,8 @@ namespace BlockShooter
     ///
     /// ExtraSlot  — adds one more firing slot for the rest of the level.
     /// FreePick   — for `freePickData.duration` seconds, ALL grid blocks become selectable.
-    /// ColorBlast — enters selection mode; player taps a slotted block;
-    ///              that block fires instantly at every matching-color block in FireRange.
+    /// SuperShooter — enters selection mode; player taps a slotted block;
+    ///              that block floats, zooms camera, and fires at matching-color blocks.
     /// </summary>
     public class BoosterManager : MonoBehaviour
     {
@@ -19,14 +19,15 @@ namespace BlockShooter
         [Header("Booster Config (ScriptableObjects — optional)")]
         public BoosterData extraSlotData;
         public BoosterData freePickData;
-        public BoosterData colorBlastData;
+        [UnityEngine.Serialization.FormerlySerializedAs("colorBlastData")]
+        public BoosterData superShooterData;
         public BoosterData moveShooterData;
 
         [Header("Initial unlock reward")]
         public int initialBoosterCount = 2;
 
-        // ColorBlast awaits a tap on a slotted block
-        public bool IsAwaitingColorBlastTarget { get; private set; }
+        // SuperShooter awaits a tap on a slotted block
+        public bool IsAwaitingSuperShooterTarget { get; private set; }
         // MoveShooter awaits a tap on any grid block
         public bool IsAwaitingMoveShooterTarget { get; private set; }
 
@@ -50,7 +51,7 @@ namespace BlockShooter
             {
                 BoosterType.ExtraSlot  => extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,
                 BoosterType.FreePick   => freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,
-                BoosterType.ColorBlast => colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.colorBlastUnlockLevel,
+                BoosterType.SuperShooter => superShooterData != null ? superShooterData.unlockLevel : GameManager.Instance.config.superShooterUnlockLevel,
                 BoosterType.MoveShooter => moveShooterData != null ? moveShooterData.unlockLevel : GameManager.Instance.config.moveShooterUnlockLevel,
                 _ => 999
             };
@@ -60,13 +61,25 @@ namespace BlockShooter
         public bool ActivateBooster(BoosterType type)
         {
             if (!IsBoosterUnlocked(type)) return false;
+
+            if (type == BoosterType.SuperShooter && IsAwaitingSuperShooterTarget)
+            {
+                CancelSuperShooterSelection();
+                return true;
+            }
+            if (type == BoosterType.MoveShooter && IsAwaitingMoveShooterTarget)
+            {
+                CancelMoveShooterSelection();
+                return true;
+            }
+
             if (!SaveManager.UseBooster(type)) return false;
 
             switch (type)
             {
                 case BoosterType.ExtraSlot:  ActivateExtraSlot();  break;
                 case BoosterType.FreePick:   ActivateFreePick();   break;
-                case BoosterType.ColorBlast: ActivateColorBlast(); break;
+                case BoosterType.SuperShooter: ActivateSuperShooter(); break;
                 case BoosterType.MoveShooter: ActivateMoveShooter(); break;
             }
             return true;
@@ -120,48 +133,88 @@ namespace BlockShooter
             _freePickCoroutine = null;
         }
 
-        // ── ColorBlast ────────────────────────────────────────────────────────
+        // ── SuperShooter ──────────────────────────────────────────────────────
         // Enters selection mode. Player must tap a slotted block.
-        // That block fires at every matching-color block in FireRange simultaneously.
+        // That block floats into the air, zooms the camera, and shoots matching conveyor blocks.
 
-        private void ActivateColorBlast()
+        private void ActivateSuperShooter()
         {
             if (SlotSystem.Instance == null) return;
             var slotted = SlotSystem.Instance.GetSlottedBlocks();
             if (slotted.Count == 0) return;
 
-            IsAwaitingColorBlastTarget = true;
+            IsAwaitingSuperShooterTarget = true;
 
             // Highlight slotted blocks so player knows to tap one
             foreach (var b in slotted)
                 b.transform.DOPunchScale(Vector3.one * 0.2f, 0.4f, 4, 0.5f);
 
-            StartCoroutine(WaitForColorBlastTarget(slotted));
+            StartCoroutine(WaitForSuperShooterTarget(slotted));
         }
 
-        private IEnumerator WaitForColorBlastTarget(System.Collections.Generic.List<ShooterBlock> candidates)
+        private IEnumerator WaitForSuperShooterTarget(System.Collections.Generic.List<ShooterBlock> candidates)
         {
-            float timeout = colorBlastData != null ? colorBlastData.duration : 8f;
+            float timeout = superShooterData != null ? superShooterData.duration : 8f;
             float elapsed = 0f;
 
-            while (elapsed < timeout && IsAwaitingColorBlastTarget)
+            while (elapsed < timeout && IsAwaitingSuperShooterTarget)
             {
                 elapsed += Time.deltaTime;
 
                 if (Input.GetMouseButtonDown(0))
                 {
                     var hit = RaycastBlock();
-                    if (hit != null && candidates.Contains(hit))
+                    if (hit != null)
                     {
-                        IsAwaitingColorBlastTarget = false;
-                        hit.FireColorBlast();
-                        yield break;
+                        if (candidates.Contains(hit))
+                        {
+                            IsAwaitingSuperShooterTarget = false;
+                            ResetSuperShooterCandidatesScale(candidates);
+                            hit.StartSuperShooter();
+                            yield break;
+                        }
+                        else if (hit.State == ShooterBlock.BlockState.InGrid)
+                        {
+                            // Tapped a block still in the grid -> cancel selection and refund
+                            IsAwaitingSuperShooterTarget = false;
+                            SaveManager.AddBooster(BoosterType.SuperShooter, 1);
+                            ResetSuperShooterCandidatesScale(candidates);
+                            yield break;
+                        }
                     }
                 }
                 yield return null;
             }
 
-            IsAwaitingColorBlastTarget = false;
+            if (IsAwaitingSuperShooterTarget)
+            {
+                IsAwaitingSuperShooterTarget = false;
+                SaveManager.AddBooster(BoosterType.SuperShooter, 1);
+            }
+            ResetSuperShooterCandidatesScale(candidates);
+        }
+
+        private void ResetSuperShooterCandidatesScale(System.Collections.Generic.List<ShooterBlock> candidates)
+        {
+            foreach (var b in candidates)
+            {
+                if (b != null)
+                {
+                    b.transform.DOKill(true);
+                    b.transform.localScale = Vector3.one;
+                }
+            }
+        }
+
+        public void CancelSuperShooterSelection()
+        {
+            if (!IsAwaitingSuperShooterTarget) return;
+            IsAwaitingSuperShooterTarget = false;
+            SaveManager.AddBooster(BoosterType.SuperShooter, 1);
+            if (SlotSystem.Instance != null)
+            {
+                ResetSuperShooterCandidatesScale(SlotSystem.Instance.GetSlottedBlocks());
+            }
         }
 
         // ── MoveShooter ───────────────────────────────────────────────────────
@@ -201,12 +254,39 @@ namespace BlockShooter
                 yield return null;
             }
 
+            if (IsAwaitingMoveShooterTarget)
+            {
+                IsAwaitingMoveShooterTarget = false;
+                SaveManager.AddBooster(BoosterType.MoveShooter, 1);
+            }
+            ResetMoveShooterCandidatesScale();
+        }
+
+        private void ResetMoveShooterCandidatesScale()
+        {
+            if (ShooterGrid.Instance == null) return;
+            foreach (var b in ShooterGrid.Instance.GetActiveBlocks())
+            {
+                if (b != null && b.State == ShooterBlock.BlockState.InGrid && !b.IsAccessible)
+                {
+                    b.transform.DOKill(true);
+                    b.transform.localScale = Vector3.one;
+                }
+            }
+        }
+
+        public void CancelMoveShooterSelection()
+        {
+            if (!IsAwaitingMoveShooterTarget) return;
             IsAwaitingMoveShooterTarget = false;
+            SaveManager.AddBooster(BoosterType.MoveShooter, 1);
+            ResetMoveShooterCandidatesScale();
         }
 
         public void CompleteMoveShooter(ShooterBlock block)
         {
             IsAwaitingMoveShooterTarget = false;
+            ResetMoveShooterCandidatesScale();
         }
 
         private ShooterBlock RaycastBlock()
@@ -224,7 +304,7 @@ namespace BlockShooter
             int level = SaveManager.CurrentLevel;
             TryGiveInitial(BoosterType.ExtraSlot,  extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,  level);
             TryGiveInitial(BoosterType.FreePick,   freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,   level);
-            TryGiveInitial(BoosterType.ColorBlast, colorBlastData != null ? colorBlastData.unlockLevel : GameManager.Instance.config.colorBlastUnlockLevel, level);
+            TryGiveInitial(BoosterType.SuperShooter, superShooterData != null ? superShooterData.unlockLevel : GameManager.Instance.config.superShooterUnlockLevel, level);
             TryGiveInitial(BoosterType.MoveShooter, moveShooterData != null ? moveShooterData.unlockLevel : GameManager.Instance.config.moveShooterUnlockLevel, level);
         }
 
@@ -246,7 +326,7 @@ namespace BlockShooter
         {
             SaveManager.AddBooster(BoosterType.ExtraSlot, 3);
             SaveManager.AddBooster(BoosterType.FreePick, 3);
-            SaveManager.AddBooster(BoosterType.ColorBlast, 3);
+            SaveManager.AddBooster(BoosterType.SuperShooter, 3);
             SaveManager.AddBooster(BoosterType.MoveShooter, 3);
         }
 #endif

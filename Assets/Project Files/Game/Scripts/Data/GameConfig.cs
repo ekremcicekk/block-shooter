@@ -36,7 +36,8 @@ namespace BlockShooter
         [Header("Booster Unlock Levels (fallback when BoosterData SO is not assigned)")]
         public int extraSlotUnlockLevel  = 1;
         public int freePickUnlockLevel   = 3;
-        public int colorBlastUnlockLevel = 5;
+        [UnityEngine.Serialization.FormerlySerializedAs("colorBlastUnlockLevel")]
+        public int superShooterUnlockLevel = 5;
         public int moveShooterUnlockLevel = 2;
 
         [Header("Scoring")]

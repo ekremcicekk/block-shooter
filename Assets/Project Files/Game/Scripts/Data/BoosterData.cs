@@ -10,7 +10,7 @@ namespace BlockShooter
         [TextArea] public string description;
         public Sprite icon;
         public int unlockLevel;
-        public float duration = 8f;   // used by FreePick (window to pick) and ColorBlast (rapid-fire duration)
+        public float duration = 8f;   // used by FreePick (window to pick) and SuperShooter (duration)
         public Color tintColor = Color.white;
     }
 
@@ -18,7 +18,7 @@ namespace BlockShooter
     {
         ExtraSlot,   // Adds one extra firing slot for this level
         FreePick,    // Pick any block from the grid regardless of row order
-        ColorBlast,  // Select a slotted block → it fires at ALL matching-color blocks at once
+        SuperShooter, // Select a slotted block → floats, zooms camera, shoots all matching color blocks
         MoveShooter  // Select any block (including locked blocks) on the grid and send it to slot
     }
 }

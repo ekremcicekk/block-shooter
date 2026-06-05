@@ -81,8 +81,7 @@ namespace BlockShooter
                 return;
             }
 
-            Vector3 targetPos = _target.transform.position;
-            targetPos.y = _launchY;
+            Vector3 targetPos = _target.transform.position + Vector3.up * 0.3f;
 
             Vector3 toTarget = targetPos - transform.position;
             float   dist     = toTarget.magnitude;
