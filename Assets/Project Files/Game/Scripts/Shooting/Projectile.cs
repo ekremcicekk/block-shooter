@@ -35,6 +35,11 @@ namespace BlockShooter
             var col = GetComponent<SphereCollider>();
             col.isTrigger = true;
             col.radius    = 0.12f;
+
+            if (hitParticle != null)
+            {
+                hitParticle.gameObject.SetActive(false);
+            }
         }
 
         public void Launch(BlockColorType colorType, float speed, ProjectilePool pool, Vector3 direction,
@@ -111,8 +116,11 @@ namespace BlockShooter
         private void PlayHitFX()
         {
             if (hitParticle == null) return;
-            hitParticle.transform.SetParent(null);
-            hitParticle.Play();
+            
+            var fx = Instantiate(hitParticle, transform.position, transform.rotation);
+            fx.gameObject.SetActive(true);
+            fx.Play();
+            Destroy(fx.gameObject, fx.main.duration + fx.main.startLifetime.constantMax);
         }
 
         private void ApplyColor(BlockColorType colorType)

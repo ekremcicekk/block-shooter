@@ -63,7 +63,33 @@ namespace BlockShooter
 
             if (revealParticle != null)
             {
-                revealParticle.Play();
+                ParticleSystem psToPlay = revealParticle;
+                
+                // Check if it's a project asset prefab (not currently in the scene hierarchy)
+                bool isPrefabAsset = !revealParticle.gameObject.scene.IsValid();
+                
+                if (isPrefabAsset)
+                {
+                    // Instantiate particle at runtime to play it safely
+                    Vector3 spawnPos = transform.position + new Vector3(0f, 0.4f, 0f);
+                    psToPlay = Instantiate(revealParticle, spawnPos, Quaternion.identity);
+                    Destroy(psToPlay.gameObject, psToPlay.main.duration + psToPlay.main.startLifetime.constantMax);
+                }
+                else
+                {
+                    // If it is child of Myster, unparent it to root so it isn't deactivated when Myster turns off
+                    if (mysteryVisual != null && psToPlay.transform.IsChildOf(mysteryVisual.transform))
+                    {
+                        psToPlay.transform.SetParent(transform, true);
+                    }
+                    
+                    psToPlay.gameObject.SetActive(true);
+                    Vector3 localPos = psToPlay.transform.localPosition;
+                    localPos.y = 0.4f;
+                    psToPlay.transform.localPosition = localPos;
+                }
+                
+                psToPlay.Play();
             }
         }
     }

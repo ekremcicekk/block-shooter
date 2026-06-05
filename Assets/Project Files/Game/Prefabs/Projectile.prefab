@@ -184,7 +184,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ballRenderer: {fileID: 4998896454686458981}
   trail: {fileID: 8273857670117284405}
-  hitParticle: {fileID: 0}
+  hitParticle: {fileID: 198792010525850640, guid: 39cbe30f7cb30f2408371e7d7df4c9fa, type: 3}
 --- !u!96 &8273857670117284405
 TrailRenderer:
   serializedVersion: 3
