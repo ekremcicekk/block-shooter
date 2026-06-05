@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 009295d125c21744181026f24b05e4fd, type: 3}
   m_Name: GameplaySettingsConfig
   m_EditorClassIdentifier: 
-  fireRate: 0.05
+  fireRate: 0.15
   projectileSpeed: 35
   mysteryShooterUnlockLevel: 1
   freezeShooterUnlockLevel: 1
