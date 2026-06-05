@@ -189,7 +189,14 @@ namespace BlockShooter
 
             if (!_isAccessible)
             {
-                transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                if (bodyAnimator != null)
+                {
+                    bodyAnimator.SetTrigger("ShooterShake");
+                }
+                else
+                {
+                    transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                }
                 return;
             }
 
