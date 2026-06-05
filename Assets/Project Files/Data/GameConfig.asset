@@ -17,7 +17,6 @@ MonoBehaviour:
   - {fileID: 9001423813352505060, guid: 23918af0ccc30d14c8c07edfb3070565, type: 3}
   - {fileID: 3106933310930561449, guid: ddc1e11dca41c1c48b51a6633a539920, type: 3}
   - {fileID: 3049688755618369644, guid: f489050e34be27a43877cd9554c00485, type: 3}
-  - {fileID: 6048735237768013363, guid: 3ab3dcb80f09b894b95441278d4d08a2, type: 3}
   fireRate: 0.05
   projectileSpeed: 25
   mysteryShooterUnlockLevel: 2
@@ -62,7 +61,7 @@ MonoBehaviour:
     material: {fileID: 2100000, guid: a881a86269c331e4485780f92ae9cf12, type: 2}
   extraSlotUnlockLevel: 1
   freePickUnlockLevel: 3
-  colorBlastUnlockLevel: 5
+  superShooterUnlockLevel: 1
   moveShooterUnlockLevel: 1
   scorePerBlock: 10
   scoreComboMultiplier: 2
