@@ -279,6 +279,10 @@ namespace BlockShooter
             var group = FindMatchingGroup();
             if (group == null) return;
             _isShooting = true;
+
+            if (bodyAnimator != null && bodyAnimator.enabled)
+                bodyAnimator.enabled = false;
+
             _shootCoroutine = StartCoroutine(ShootGroupRoutine(group));
         }
 
@@ -385,6 +389,9 @@ namespace BlockShooter
 
         private void FireAt(ConveyorBlock3D target)
         {
+            if (bodyAnimator != null && bodyAnimator.enabled)
+                bodyAnimator.enabled = false;
+
             if (ProjectilePool.Instance == null || target == null) return;
 
             // Claim this block so no other shooter wastes a shot on it
