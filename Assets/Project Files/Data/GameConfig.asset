@@ -12,56 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 20aa57086e8a2df4da81cf03472bc9e7, type: 3}
   m_Name: GameConfig
   m_EditorClassIdentifier: 
-  levelPrefabs:
-  - {fileID: 3106933310930561449, guid: 8b13e61a582ec8443a815e5bdb99fde2, type: 3}
-  - {fileID: 9001423813352505060, guid: 23918af0ccc30d14c8c07edfb3070565, type: 3}
-  - {fileID: 3106933310930561449, guid: ddc1e11dca41c1c48b51a6633a539920, type: 3}
-  - {fileID: 3049688755618369644, guid: f489050e34be27a43877cd9554c00485, type: 3}
-  fireRate: 0.05
-  projectileSpeed: 25
-  mysteryShooterUnlockLevel: 2
-  redMaterial: {fileID: 2100000, guid: 33257ab040a58eb4bbcd20bc6f183a1a, type: 2}
-  blueMaterial: {fileID: 2100000, guid: 34378ae5269e41041a904673f4f0bc67, type: 2}
-  greenMaterial: {fileID: 2100000, guid: 18f9dd7617a8de54da7342ef6fbf37bf, type: 2}
-  yellowMaterial: {fileID: 2100000, guid: 87ec0a7fff5e49e41943f6b095027aa2, type: 2}
-  purpleMaterial: {fileID: 2100000, guid: 5f01a1d54c8fb42439ca9cd73d3a7ec0, type: 2}
-  orangeMaterial: {fileID: 2100000, guid: 25b93ace3fb5c344bb38ab9de0136cd7, type: 2}
-  colors:
-  - colorType: 1
-    displayName: Red
-    editorColor: {r: 0.9, g: 0.2, b: 0.2, a: 1}
-    material: {fileID: 2100000, guid: 33257ab040a58eb4bbcd20bc6f183a1a, type: 2}
-  - colorType: 2
-    displayName: LightBlue
-    editorColor: {r: 0, g: 0.70988464, b: 1, a: 1}
-    material: {fileID: 2100000, guid: 34378ae5269e41041a904673f4f0bc67, type: 2}
-  - colorType: 3
-    displayName: Green
-    editorColor: {r: 0, g: 1, b: 0.16339874, a: 1}
-    material: {fileID: 2100000, guid: 18f9dd7617a8de54da7342ef6fbf37bf, type: 2}
-  - colorType: 4
-    displayName: Yellow
-    editorColor: {r: 1, g: 0.85, b: 0.1, a: 1}
-    material: {fileID: 2100000, guid: 87ec0a7fff5e49e41943f6b095027aa2, type: 2}
-  - colorType: 5
-    displayName: Purple
-    editorColor: {r: 0.6, g: 0.2, b: 0.9, a: 1}
-    material: {fileID: 2100000, guid: 5f01a1d54c8fb42439ca9cd73d3a7ec0, type: 2}
-  - colorType: 6
-    displayName: Orange
-    editorColor: {r: 1, g: 0.55, b: 0.1, a: 1}
-    material: {fileID: 2100000, guid: 25b93ace3fb5c344bb38ab9de0136cd7, type: 2}
-  - colorType: 7
-    displayName: Gray
-    editorColor: {r: 0.6107601, g: 0.6459161, b: 0.7075472, a: 1}
-    material: {fileID: 2100000, guid: 96cd588f00304a54da5dfd75f5e4daee, type: 2}
-  - colorType: 8
-    displayName: Blue
-    editorColor: {r: 0, g: 0.19224755, b: 0.9622642, a: 1}
-    material: {fileID: 2100000, guid: a881a86269c331e4485780f92ae9cf12, type: 2}
-  extraSlotUnlockLevel: 1
-  freePickUnlockLevel: 3
-  superShooterUnlockLevel: 1
-  moveShooterUnlockLevel: 1
-  scorePerBlock: 10
-  scoreComboMultiplier: 2
+  levelSequence: {fileID: 11400000, guid: aa4ece43d214e7540a1c688b86671c79, type: 2}
+  gameplaySettings: {fileID: 11400000, guid: dd027cd37fbb8c8439d48907493b4cc1, type: 2}
+  colorRegistry: {fileID: 11400000, guid: 2519497fb8dacde43869735cc01cc8a6, type: 2}
+  scoring: {fileID: 11400000, guid: 925032958d70fbe46b2a7344d839c12a, type: 2}

@@ -43,7 +43,7 @@ namespace BlockShooter.Editor
         private int   _gridCols = 4, _gridRows = 2;
         private GridCellType[,]   _type;
         private BlockColorType[,] _color;
-        private int[,]            _shots, _doors;
+        private int[,]            _shots, _doors, _freezeCount;
 
         private List<LevelConveyorGroup> _groups = new();
         [SerializeField] private List<BranchPathData> _branches = new();
@@ -235,9 +235,9 @@ namespace BlockShooter.Editor
 
             SyncLevelsFromFolder();
 
-            if (_gameCfg != null)
+            if (_gameCfg != null && _gameCfg.levelSequence != null)
             {
-                foreach (var lr in _gameCfg.levelPrefabs)
+                foreach (var lr in _gameCfg.levelSequence.levelPrefabs)
                 {
                     if (lr == null) continue;
                     string path = AssetDatabase.GetAssetPath(lr);
@@ -253,10 +253,10 @@ namespace BlockShooter.Editor
 
         private void SyncLevelsFromFolder()
         {
-            if (_cfg == null || _gameCfg == null) return;
+            if (_cfg == null || _gameCfg == null || _gameCfg.levelSequence == null) return;
 
             // 1. Clean up missing/null references
-            _gameCfg.levelPrefabs.RemoveAll(x => x == null);
+            _gameCfg.levelSequence.levelPrefabs.RemoveAll(x => x == null);
 
             // 2. Scan the save folder for prefabs containing LevelRoot component
             string folder = _cfg.levelSavePath.TrimEnd('/');
@@ -274,25 +274,26 @@ namespace BlockShooter.Editor
             // 3. Add newly created level prefabs that aren't in the list
             foreach (var lr in foundPrefabs)
             {
-                if (!_gameCfg.levelPrefabs.Contains(lr))
+                if (!_gameCfg.levelSequence.levelPrefabs.Contains(lr))
                 {
-                    _gameCfg.levelPrefabs.Add(lr);
+                    _gameCfg.levelSequence.levelPrefabs.Add(lr);
                     changed = true;
                 }
             }
 
             // 4. Remove level prefabs that no longer exist in the directory
-            for (int i = _gameCfg.levelPrefabs.Count - 1; i >= 0; i--)
+            for (int i = _gameCfg.levelSequence.levelPrefabs.Count - 1; i >= 0; i--)
             {
-                if (!foundPrefabs.Contains(_gameCfg.levelPrefabs[i]))
+                if (!foundPrefabs.Contains(_gameCfg.levelSequence.levelPrefabs[i]))
                 {
-                    _gameCfg.levelPrefabs.RemoveAt(i);
+                    _gameCfg.levelSequence.levelPrefabs.RemoveAt(i);
                     changed = true;
                 }
             }
 
             if (changed)
             {
+                EditorUtility.SetDirty(_gameCfg.levelSequence);
                 EditorUtility.SetDirty(_gameCfg);
                 AssetDatabase.SaveAssets();
             }
@@ -300,14 +301,14 @@ namespace BlockShooter.Editor
 
         private void InitReorderableList()
         {
-            if (_gameCfg == null)
+            if (_gameCfg == null || _gameCfg.levelSequence == null)
             {
                 _gameCfgSerialized = null;
                 _levelList = null;
                 return;
             }
 
-            _gameCfgSerialized = new SerializedObject(_gameCfg);
+            _gameCfgSerialized = new SerializedObject(_gameCfg.levelSequence);
             var prop = _gameCfgSerialized.FindProperty("levelPrefabs");
 
             _levelList = new UnityEditorInternal.ReorderableList(_gameCfgSerialized, prop, true, false, false, false);
@@ -1688,9 +1689,11 @@ namespace BlockShooter.Editor
             string lbl1 = t == GridCellType.Empty ? "+"
                         : t == GridCellType.Door   ? "DOOR"
                         : t == GridCellType.MysteryShooter ? "?"
+                        : t == GridCellType.FreezeShooter ? "FRZ"
                         : col.ToString().Substring(0, 3).ToUpper();
             string lbl2 = t == GridCellType.Empty ? ""
                         : t == GridCellType.Door   ? $"×{_doors[c,r]}"
+                        : t == GridCellType.FreezeShooter ? $"❄×{_freezeCount[c,r]}"
                         : $"×{_shots[c,r]}";
 
             Rect outer = GUILayoutUtility.GetRect(
@@ -1909,10 +1912,10 @@ namespace BlockShooter.Editor
             int c = _selC, r = _selR;
             Hdr($"CELL  ({c}, {r})");
 
-            bool isBlock = _type[c, r] == GridCellType.ShooterBlock || _type[c, r] == GridCellType.MysteryShooter;
+            bool isBlock = _type[c, r] == GridCellType.ShooterBlock || _type[c, r] == GridCellType.MysteryShooter || _type[c, r] == GridCellType.FreezeShooter;
             bool isDoor  = _type[c, r] == GridCellType.Door;
 
-            // ── Shooter Block / Mystery Shooter ───────────────────────────────
+            // ── Shooter Block / Mystery Shooter / Freeze Shooter ──────────────
             if (isBlock)
             {
                 // Color palette — always shown at top
@@ -1948,28 +1951,53 @@ namespace BlockShooter.Editor
                 int newVal = EditorGUILayout.IntField(displayVal);
                 _shots[c, r] = Mathf.Max(1, newVal);
 
+                GUILayout.Space(6);
+
+                // Freeze count slider if freeze shooter
+                if (_type[c, r] == GridCellType.FreezeShooter)
+                {
+                    GUILayout.Label("Freeze Box Count:", EditorStyles.miniLabel);
+                    _freezeCount[c, r] = EditorGUILayout.IntSlider(_freezeCount[c, r], 1, 30);
+                    GUILayout.Space(6);
+                }
+
                 GUILayout.Space(8);
 
                 // Converter Buttons
                 bool mysteryUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.mysteryShooterUnlockLevel;
-                if (mysteryUnlocked)
+                bool freezeUnlocked  = _gameCfg != null && _levelIndex >= _gameCfg.freezeShooterUnlockLevel;
+                if (_type[c, r] == GridCellType.ShooterBlock)
                 {
-                    if (_type[c, r] == GridCellType.ShooterBlock)
+                    if (mysteryUnlocked)
                     {
                         if (GUILayout.Button("→ Convert to Mystery", GUILayout.Height(20)))
                         { _type[c, r] = GridCellType.MysteryShooter; Repaint(); }
                     }
-                    else
+                    if (freezeUnlocked)
                     {
-                        if (GUILayout.Button("→ Convert to Standard", GUILayout.Height(20)))
-                        { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
+                        if (GUILayout.Button("→ Convert to Freeze", GUILayout.Height(20)))
+                        { _type[c, r] = GridCellType.FreezeShooter; Repaint(); }
                     }
                 }
-                else
+                else if (_type[c, r] == GridCellType.MysteryShooter)
                 {
-                    GUI.enabled = false;
-                    GUILayout.Button($"Mystery locked (Req. Lvl {_gameCfg?.mysteryShooterUnlockLevel ?? 4})", GUILayout.Height(20));
-                    GUI.enabled = true;
+                    if (GUILayout.Button("→ Convert to Standard", GUILayout.Height(20)))
+                    { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
+                    if (freezeUnlocked)
+                    {
+                        if (GUILayout.Button("→ Convert to Freeze", GUILayout.Height(20)))
+                        { _type[c, r] = GridCellType.FreezeShooter; Repaint(); }
+                    }
+                }
+                else if (_type[c, r] == GridCellType.FreezeShooter)
+                {
+                    if (GUILayout.Button("→ Convert to Standard", GUILayout.Height(20)))
+                    { _type[c, r] = GridCellType.ShooterBlock; Repaint(); }
+                    if (mysteryUnlocked)
+                    {
+                        if (GUILayout.Button("→ Convert to Mystery", GUILayout.Height(20)))
+                        { _type[c, r] = GridCellType.MysteryShooter; Repaint(); }
+                    }
                 }
 
                 GUILayout.Space(8);
@@ -2028,9 +2056,14 @@ namespace BlockShooter.Editor
 
                 GUILayout.Space(6);
                 EditorGUILayout.BeginHorizontal();
-                GUI.backgroundColor = new Color(.5f,.3f,.9f);
-                if (GUILayout.Button("→ Set as Door", GUILayout.Height(22)))
-                { _type[c, r] = GridCellType.Door; Repaint(); }
+
+                bool doorUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.doorUnlockLevel;
+                if (doorUnlocked)
+                {
+                    GUI.backgroundColor = new Color(.5f,.3f,.9f);
+                    if (GUILayout.Button("→ Set as Door", GUILayout.Height(22)))
+                    { _type[c, r] = GridCellType.Door; Repaint(); }
+                }
                 
                 bool mysteryUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.mysteryShooterUnlockLevel;
                 if (mysteryUnlocked)
@@ -2041,6 +2074,20 @@ namespace BlockShooter.Editor
                         _type[c, r] = GridCellType.MysteryShooter;
                         _color[c, r] = BlockColorType.Red;
                         _shots[c, r] = 100;
+                        Repaint();
+                    }
+                }
+
+                bool freezeUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.freezeShooterUnlockLevel;
+                if (freezeUnlocked)
+                {
+                    GUI.backgroundColor = new Color(0.1f, 0.8f, 0.6f);
+                    if (GUILayout.Button("→ Set as Freeze", GUILayout.Height(22)))
+                    {
+                        _type[c, r] = GridCellType.FreezeShooter;
+                        _color[c, r] = BlockColorType.Red;
+                        _shots[c, r] = 100;
+                        _freezeCount[c, r] = 3;
                         Repaint();
                     }
                 }
@@ -2126,7 +2173,7 @@ namespace BlockShooter.Editor
             _openZoneHalfT = lr.openZoneHalfT > 0f ? lr.openZoneHalfT : 0.08f;
 
             // Null arrays so InitGrid() creates a fully fresh grid (no cross-level bleed)
-            _type = null; _color = null; _shots = null; _doors = null;
+            _type = null; _color = null; _shots = null; _doors = null; _freezeCount = null;
             InitGrid();
             foreach (var cell in lr.cells)
             {
@@ -2136,6 +2183,7 @@ namespace BlockShooter.Editor
                 // -1 is the legacy "use default" sentinel → convert to explicit 100
                 _shots[cell.col, cell.row] = cell.shotCount <= 0 ? 100 : cell.shotCount;
                 _doors[cell.col, cell.row] = cell.doorCount;
+                _freezeCount[cell.col, cell.row] = cell.freezeCount <= 0 ? 3 : cell.freezeCount;
             }
 
             _groups.Clear();
@@ -2348,7 +2396,8 @@ namespace BlockShooter.Editor
                 lr.cells.Add(new LevelGridCell
                 {
                     col=c, row=r, type=_type[c,r], color=_color[c,r],
-                    shotCount=_shots[c,r], doorCount=_doors[c,r]
+                    shotCount=_shots[c,r], doorCount=_doors[c,r],
+                    freezeCount=_freezeCount[c,r]
                 });
 
             lr.groups.Clear();
@@ -2676,6 +2725,31 @@ namespace BlockShooter.Editor
                         }
                         break;
                     }
+                    case GridCellType.FreezeShooter:
+                    {
+                        var prefab = _cfg.shooterBlockPrefab;
+                        if (prefab != null)
+                        {
+                            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
+                            go.name = nm; go.transform.localPosition = pos;
+                            PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
+                            int sh = Mathf.Max(1, _shots[c,r]);
+                            var sb = go.GetComponent<ShooterBlock>();
+                            sb?.EditorSetup(_color[c,r], sh, c, r, isMystery: false);
+                            if (sb?.blockRenderer != null && _gameCfg != null)
+                            {
+                                var mat = _gameCfg.GetMaterial(_color[c,r]);
+                                if (mat != null) sb.blockRenderer.sharedMaterial = mat;
+                            }
+                            
+                            var f = go.GetComponent<FreezeBlockFeature>();
+                            if (f == null) f = go.AddComponent<FreezeBlockFeature>();
+                            f.isFrozen = true;
+                            f.freezeCount = _freezeCount[c, r];
+                            f.SyncVisualsEditor();
+                        }
+                        break;
+                    }
                     case GridCellType.Door:
                     {
                         var go = Go(sgGo.transform, nm); go.transform.localPosition = pos;
@@ -2863,16 +2937,18 @@ namespace BlockShooter.Editor
         {
             _gridCols = Mathf.Clamp(_gridCols, 1, MaxCols);
             _gridRows = Mathf.Clamp(_gridRows, 1, MaxRows);
-            var pt=_type; var pc=_color; var ps=_shots; var pd=_doors;
+            var pt=_type; var pc=_color; var ps=_shots; var pd=_doors; var pf=_freezeCount;
             _type  = new GridCellType  [_gridCols, _gridRows];
             _color = new BlockColorType[_gridCols, _gridRows];
             _shots = new int           [_gridCols, _gridRows];
             _doors = new int           [_gridCols, _gridRows];
+            _freezeCount = new int     [_gridCols, _gridRows];
             for (int c=0;c<_gridCols;c++) for (int r=0;r<_gridRows;r++)
             {
-                _shots[c,r]=100; _doors[c,r]=5;
+                _shots[c,r]=100; _doors[c,r]=5; _freezeCount[c,r]=3;
                 if (pt==null||c>=pt.GetLength(0)||r>=pt.GetLength(1)) continue;
                 _type[c,r]=pt[c,r]; _color[c,r]=pc[c,r]; _shots[c,r]=ps[c,r]; _doors[c,r]=pd[c,r];
+                if (pf!=null && c<pf.GetLength(0) && r<pf.GetLength(1)) _freezeCount[c,r]=pf[c,r];
             }
         }
 

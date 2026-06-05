@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace BlockShooter
 {
-    public enum GridCellType { Empty, ShooterBlock, Door, MysteryShooter }
+    public enum GridCellType { Empty, ShooterBlock, Door, MysteryShooter, FreezeShooter }
 
     [Serializable]
     public class LevelGridCell
@@ -14,6 +14,7 @@ namespace BlockShooter
         public BlockColorType color     = BlockColorType.Red;
         public int            shotCount = -1;
         public int            doorCount = 3;
+        public int            freezeCount = 3;
     }
 
     [Serializable]

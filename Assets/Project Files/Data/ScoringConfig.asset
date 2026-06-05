@@ -9,13 +9,8 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fde13544529fa5d46ae2f03929ac8a98, type: 3}
-  m_Name: BoosterData
+  m_Script: {fileID: 11500000, guid: 6bddf8c16d6f9ea40a8a0cb783b4d845, type: 3}
+  m_Name: ScoringConfig
   m_EditorClassIdentifier: 
-  boosterType: 0
-  boosterName: 
-  description: 
-  icon: {fileID: 0}
-  unlockLevel: 1
-  duration: 8
-  tintColor: {r: 1, g: 1, b: 1, a: 1}
+  scorePerBlock: 10
+  scoreComboMultiplier: 2

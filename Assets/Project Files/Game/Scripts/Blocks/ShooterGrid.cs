@@ -10,8 +10,6 @@ namespace BlockShooter
     /// Accessibility rule (per column):
     ///   The front-most block (lowest GridRow) that is still InGrid is accessible.
     ///   When it leaves (slotted or depleted), the next one in the column becomes accessible.
-    ///
-    /// FreePick booster: temporarily makes ALL InGrid blocks accessible.
     /// </summary>
     public class ShooterGrid : MonoBehaviour
     {
@@ -27,7 +25,6 @@ namespace BlockShooter
         private readonly List<ShooterBlock> _activeBlocks = new();
         private readonly Dictionary<int, List<ShooterBlock>> _columns = new();
 
-        private bool _freePickActive;
 
         private void Awake()
         {
@@ -86,13 +83,8 @@ namespace BlockShooter
             CheckAllDepleted();
         }
 
-        public void SetFreePickMode(bool active)
-        {
-            _freePickActive = active;
-            RefreshAllAccessibility();
-        }
 
-        private void RefreshAllAccessibility()
+        public void RefreshAllAccessibility()
         {
             var deck = GetComponentInChildren<ShooterDeckMeshBuilder>();
             if (deck == null && _levelRoot != null)
@@ -175,33 +167,8 @@ namespace BlockShooter
                 if (block.State == ShooterBlock.BlockState.InSlot ||
                     block.State == ShooterBlock.BlockState.MovingToSlot) continue;
 
-                if (_freePickActive)
-                {
-                    bool[,] freePickBlocked = new bool[cols, rows];
-                    if (_levelRoot != null)
-                    {
-                        foreach (var cell in _levelRoot.cells)
-                        {
-                            if (cell.type == GridCellType.Empty && cell.col >= 0 && cell.col < cols && cell.row >= 0 && cell.row < rows)
-                                freePickBlocked[cell.col, cell.row] = true;
-                        }
-                    }
-                    foreach (var door in doors)
-                    {
-                        int col = Mathf.RoundToInt((door.transform.position.x - origin.x) / cellSize);
-                        int row = Mathf.RoundToInt((door.transform.position.z - origin.z) / cellSize);
-                        if (col >= 0 && col < cols && row >= 0 && row < rows)
-                            freePickBlocked[col, row] = true;
-                    }
-
-                    bool pathExists = HasPathToFront(block.GridColumn, block.GridRow, freePickBlocked, cols, rows);
-                    block.SetAccessible(pathExists);
-                }
-                else
-                {
-                    bool pathExists = HasPathToFront(block.GridColumn, block.GridRow, isBlocked, cols, rows);
-                    block.SetAccessible(pathExists);
-                }
+                bool pathExists = HasPathToFront(block.GridColumn, block.GridRow, isBlocked, cols, rows);
+                block.SetAccessible(pathExists);
             }
         }
 

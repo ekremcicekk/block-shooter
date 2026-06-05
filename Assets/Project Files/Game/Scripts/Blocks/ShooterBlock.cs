@@ -16,7 +16,6 @@ namespace BlockShooter
     /// Accessibility:
     ///   Controlled by ShooterGrid. A block is accessible when no un-slotted,
     ///   non-depleted block exists in front of it in the same column.
-    ///   FreePick booster temporarily makes ALL blocks accessible.
     /// </summary>
     public class ShooterBlock : MonoBehaviour
     {
@@ -72,6 +71,7 @@ namespace BlockShooter
         public int  ShotCount            => _shotCount;
         public bool isMystery            { get => _isMystery; set => _isMystery = value; }
         public bool IsAccessible         => _isAccessible;
+        public bool IsFrozen             => TryGetComponent<FreezeBlockFeature>(out var f) && f.isFrozen;
 
         // Events
         public event Action<ShooterBlock> OnSlotted;
@@ -164,6 +164,19 @@ namespace BlockShooter
         {
             if (!GameManager.Instance.IsPlaying) return;
             if (State != BlockState.InGrid) return;
+
+            if (IsFrozen)
+            {
+                if (bodyAnimator != null)
+                {
+                    bodyAnimator.SetTrigger("ShooterShake");
+                }
+                else
+                {
+                    transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                }
+                return;
+            }
 
             // SuperShooter selection mode: pick a slotted block
             if (BoosterManager.Instance != null && BoosterManager.Instance.IsAwaitingSuperShooterTarget)
@@ -654,6 +667,7 @@ namespace BlockShooter
         public void SetAccessible(bool accessible)
         {
             if (_isMystery) accessible = false;
+            if (IsFrozen) accessible = false;
 
             bool changed = (_isAccessible != accessible);
             _isAccessible = accessible;

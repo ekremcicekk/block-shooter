@@ -1,111 +1,102 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace BlockShooter
 {
     [CreateAssetMenu(fileName = "GameConfig", menuName = "BlockShooter/GameConfig")]
     public class GameConfig : ScriptableObject
     {
-        [Header("Level Sequence")]
-        public System.Collections.Generic.List<LevelRoot> levelPrefabs = new System.Collections.Generic.List<LevelRoot>();
+        [Header("Modular Configuration Assets")]
+        [Tooltip("Configuration for level prefabs sequence")]
+        public LevelSequenceConfig levelSequence;
 
-        [Header("Block Settings")]
-        public float fireRate = 0.15f;
-        public float projectileSpeed = 12f;
-        public int mysteryShooterUnlockLevel = 4;
+        [Tooltip("Configuration for general gameplay settings")]
+        public GameplaySettingsConfig gameplaySettings;
 
-        [Header("Block Materials (Legacy - Migrated to Colors List)")]
-        public Material redMaterial;
-        public Material blueMaterial;
-        public Material greenMaterial;
-        public Material yellowMaterial;
-        public Material purpleMaterial;
-        public Material orangeMaterial;
+        [Tooltip("Configuration for block colors and materials registry")]
+        public ColorRegistryConfig colorRegistry;
 
-        [System.Serializable]
-        public class ColorDefinition
+        [Tooltip("Configuration for scoring metrics")]
+        public ScoringConfig scoring;
+
+        // ── Backward Compatible Pass-Through Properties & Methods ──────────────────
+
+        public List<LevelRoot> levelPrefabs
         {
-            public BlockColorType colorType;
-            public string displayName;
-            public Color editorColor;
-            public Material material;
+            get => levelSequence != null ? levelSequence.levelPrefabs : null;
+            set { if (levelSequence != null) levelSequence.levelPrefabs = value; }
         }
 
-        [Header("Registry of Colors & Materials")]
-        public System.Collections.Generic.List<ColorDefinition> colors = new System.Collections.Generic.List<ColorDefinition>();
-
-        [Header("Booster Unlock Levels (fallback when BoosterData SO is not assigned)")]
-        public int extraSlotUnlockLevel  = 1;
-        public int freePickUnlockLevel   = 3;
-        [UnityEngine.Serialization.FormerlySerializedAs("colorBlastUnlockLevel")]
-        public int superShooterUnlockLevel = 5;
-        public int moveShooterUnlockLevel = 2;
-
-        [Header("Scoring")]
-        public int scorePerBlock = 10;
-        public int scoreComboMultiplier = 2;
-
-        private void OnValidate()
+        public float fireRate
         {
-            // Auto-populate default colors if registry is completely empty (migration)
-            if (colors == null || colors.Count == 0)
-            {
-                colors = new System.Collections.Generic.List<ColorDefinition>
-                {
-                    new ColorDefinition { colorType = BlockColorType.Red,    displayName = "Red",    editorColor = new Color(0.9f, 0.2f, 0.2f),   material = redMaterial },
-                    new ColorDefinition { colorType = BlockColorType.Blue,   displayName = "Blue",   editorColor = new Color(0.2f, 0.5f, 0.9f),   material = blueMaterial },
-                    new ColorDefinition { colorType = BlockColorType.Green,  displayName = "Green",  editorColor = new Color(0.2f, 0.8f, 0.3f),   material = greenMaterial },
-                    new ColorDefinition { colorType = BlockColorType.Yellow, displayName = "Yellow", editorColor = new Color(1.0f, 0.85f, 0.1f),  material = yellowMaterial },
-                    new ColorDefinition { colorType = BlockColorType.Purple, displayName = "Purple", editorColor = new Color(0.6f, 0.2f, 0.9f),   material = purpleMaterial },
-                    new ColorDefinition { colorType = BlockColorType.Orange, displayName = "Orange", editorColor = new Color(1.0f, 0.55f, 0.1f),  material = orangeMaterial }
-                };
-            }
+            get => gameplaySettings != null ? gameplaySettings.fireRate : 0.15f;
+            set { if (gameplaySettings != null) gameplaySettings.fireRate = value; }
         }
+
+        public float projectileSpeed
+        {
+            get => gameplaySettings != null ? gameplaySettings.projectileSpeed : 12f;
+            set { if (gameplaySettings != null) gameplaySettings.projectileSpeed = value; }
+        }
+
+        public int mysteryShooterUnlockLevel
+        {
+            get => gameplaySettings != null ? gameplaySettings.mysteryShooterUnlockLevel : 4;
+            set { if (gameplaySettings != null) gameplaySettings.mysteryShooterUnlockLevel = value; }
+        }
+
+        public int freezeShooterUnlockLevel
+        {
+            get => gameplaySettings != null ? gameplaySettings.freezeShooterUnlockLevel : 3;
+            set { if (gameplaySettings != null) gameplaySettings.freezeShooterUnlockLevel = value; }
+        }
+
+        public int doorUnlockLevel
+        {
+            get => gameplaySettings != null ? gameplaySettings.doorUnlockLevel : 2;
+            set { if (gameplaySettings != null) gameplaySettings.doorUnlockLevel = value; }
+        }
+
+        public int extraSlotUnlockLevel
+        {
+            get => gameplaySettings != null ? gameplaySettings.extraSlotUnlockLevel : 1;
+            set { if (gameplaySettings != null) gameplaySettings.extraSlotUnlockLevel = value; }
+        }
+
+        public int superShooterUnlockLevel
+        {
+            get => gameplaySettings != null ? gameplaySettings.superShooterUnlockLevel : 5;
+            set { if (gameplaySettings != null) gameplaySettings.superShooterUnlockLevel = value; }
+        }
+
+        public int moveShooterUnlockLevel
+        {
+            get => gameplaySettings != null ? gameplaySettings.moveShooterUnlockLevel : 2;
+            set { if (gameplaySettings != null) gameplaySettings.moveShooterUnlockLevel = value; }
+        }
+
+        public int scorePerBlock
+        {
+            get => scoring != null ? scoring.scorePerBlock : 10;
+            set { if (scoring != null) scoring.scorePerBlock = value; }
+        }
+
+        public int scoreComboMultiplier
+        {
+            get => scoring != null ? scoring.scoreComboMultiplier : 2;
+            set { if (scoring != null) scoring.scoreComboMultiplier = value; }
+        }
+
+        public List<ColorRegistryConfig.ColorDefinition> colors => colorRegistry != null ? colorRegistry.colors : null;
 
         public Material GetMaterial(BlockColorType colorType)
         {
-            if (colors != null)
-            {
-                var def = colors.Find(x => x.colorType == colorType);
-                if (def != null && def.material != null)
-                    return def.material;
-            }
-
-            // Fallback for legacy configuration
-            return colorType switch
-            {
-                BlockColorType.Red    => redMaterial,
-                BlockColorType.Blue   => blueMaterial,
-                BlockColorType.Green  => greenMaterial,
-                BlockColorType.Yellow => yellowMaterial,
-                BlockColorType.Purple => purpleMaterial,
-                BlockColorType.Orange => orangeMaterial,
-                _ => null
-            };
+            return colorRegistry != null ? colorRegistry.GetMaterial(colorType) : null;
         }
 
-        // Fallback for code that still needs a Color
         public Color GetColor(BlockColorType colorType)
         {
-            if (colors != null)
-            {
-                var def = colors.Find(x => x.colorType == colorType);
-                if (def != null)
-                {
-                    return def.editorColor;
-                }
-            }
-
-            // Legacy fallback if not registered
-            return colorType switch
-            {
-                BlockColorType.Red    => new Color(0.9f, 0.2f, 0.2f),
-                BlockColorType.Blue   => new Color(0.2f, 0.5f, 0.9f),
-                BlockColorType.Green  => new Color(0.2f, 0.8f, 0.3f),
-                BlockColorType.Yellow => new Color(1f, 0.85f, 0.1f),
-                BlockColorType.Purple => new Color(0.6f, 0.2f, 0.9f),
-                BlockColorType.Orange => new Color(1f, 0.55f, 0.1f),
-                _ => Color.white
-            };
+            return colorRegistry != null ? colorRegistry.GetColor(colorType) : Color.white;
         }
     }
 }

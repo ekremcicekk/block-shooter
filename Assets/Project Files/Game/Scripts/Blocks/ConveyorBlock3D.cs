@@ -95,7 +95,22 @@ namespace BlockShooter
 
             ScoreManager.Instance?.AddBlockDestroyed();
 
-
+            // Decrement freeze counts of active frozen blocks in grid (any color)
+            if (ShooterGrid.Instance != null)
+            {
+                var activeBlocks = ShooterGrid.Instance.GetActiveBlocks();
+                for (int i = 0; i < activeBlocks.Count; i++)
+                {
+                    var sb = activeBlocks[i];
+                    if (sb != null && sb.TryGetComponent<FreezeBlockFeature>(out var f))
+                    {
+                        if (f.isFrozen)
+                        {
+                            f.DecrementCount();
+                        }
+                    }
+                }
+            }
 
             OnDestroyed?.Invoke(this);
 

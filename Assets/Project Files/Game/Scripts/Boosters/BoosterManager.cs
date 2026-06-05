@@ -8,20 +8,13 @@ namespace BlockShooter
     /// Manages the three boosters. No child objects needed — attach to [Managers].
     ///
     /// ExtraSlot  — adds one more firing slot for the rest of the level.
-    /// FreePick   — for `freePickData.duration` seconds, ALL grid blocks become selectable.
     /// SuperShooter — enters selection mode; player taps a slotted block;
     ///              that block floats, zooms camera, and fires at matching-color blocks.
+    /// MoveShooter — enters selection mode; player picks any block on the grid and sends it directly to an empty slot.
     /// </summary>
     public class BoosterManager : MonoBehaviour
     {
         public static BoosterManager Instance { get; private set; }
-
-        [Header("Booster Config (ScriptableObjects — optional)")]
-        public BoosterData extraSlotData;
-        public BoosterData freePickData;
-        [UnityEngine.Serialization.FormerlySerializedAs("colorBlastData")]
-        public BoosterData superShooterData;
-        public BoosterData moveShooterData;
 
         [Header("Initial unlock reward")]
         public int initialBoosterCount = 2;
@@ -30,8 +23,6 @@ namespace BlockShooter
         public bool IsAwaitingSuperShooterTarget { get; private set; }
         // MoveShooter awaits a tap on any grid block
         public bool IsAwaitingMoveShooterTarget { get; private set; }
-
-        private Coroutine _freePickCoroutine;
 
         // ── Unity ─────────────────────────────────────────────────────────────
 
@@ -47,12 +38,14 @@ namespace BlockShooter
 
         public bool IsBoosterUnlocked(BoosterType type)
         {
+            if (GameManager.Instance == null || GameManager.Instance.config == null) return true;
+            var config = GameManager.Instance.config;
+
             int unlockLevel = type switch
             {
-                BoosterType.ExtraSlot  => extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,
-                BoosterType.FreePick   => freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,
-                BoosterType.SuperShooter => superShooterData != null ? superShooterData.unlockLevel : GameManager.Instance.config.superShooterUnlockLevel,
-                BoosterType.MoveShooter => moveShooterData != null ? moveShooterData.unlockLevel : GameManager.Instance.config.moveShooterUnlockLevel,
+                BoosterType.ExtraSlot    => config.extraSlotUnlockLevel,
+                BoosterType.SuperShooter => config.superShooterUnlockLevel,
+                BoosterType.MoveShooter  => config.moveShooterUnlockLevel,
                 _ => 999
             };
             return SaveManager.CurrentLevel >= unlockLevel;
@@ -78,7 +71,6 @@ namespace BlockShooter
             switch (type)
             {
                 case BoosterType.ExtraSlot:  ActivateExtraSlot();  break;
-                case BoosterType.FreePick:   ActivateFreePick();   break;
                 case BoosterType.SuperShooter: ActivateSuperShooter(); break;
                 case BoosterType.MoveShooter: ActivateMoveShooter(); break;
             }
@@ -94,44 +86,6 @@ namespace BlockShooter
             Camera.main?.DOShakePosition(0.15f, 0.08f, 5, 90);
         }
 
-        // ── FreePick ──────────────────────────────────────────────────────────
-        // For a limited time, all grid blocks become selectable regardless of row.
-        // After the player picks a block (or time runs out), normal rules resume.
-
-        private void ActivateFreePick()
-        {
-            if (_freePickCoroutine != null)
-            {
-                StopCoroutine(_freePickCoroutine);
-                ShooterGrid.Instance?.SetFreePickMode(false);
-            }
-
-            float duration = freePickData != null ? freePickData.duration : 8f;
-            _freePickCoroutine = StartCoroutine(FreePickRoutine(duration));
-        }
-
-        private IEnumerator FreePickRoutine(float duration)
-        {
-            ShooterGrid.Instance?.SetFreePickMode(true);
-
-            // End early if the player picks a block (watch for a slotted event)
-            float elapsed = 0f;
-            int slotCountBefore = SlotSystem.Instance != null ? SlotSystem.Instance.GetSlottedBlocks().Count : 0;
-
-            while (elapsed < duration)
-            {
-                elapsed += Time.deltaTime;
-
-                // If a new block was slotted, the pick was made — end early
-                int slotCountNow = SlotSystem.Instance != null ? SlotSystem.Instance.GetSlottedBlocks().Count : 0;
-                if (slotCountNow > slotCountBefore) break;
-
-                yield return null;
-            }
-
-            ShooterGrid.Instance?.SetFreePickMode(false);
-            _freePickCoroutine = null;
-        }
 
         // ── SuperShooter ──────────────────────────────────────────────────────
         // Enters selection mode. Player must tap a slotted block.
@@ -154,7 +108,7 @@ namespace BlockShooter
 
         private IEnumerator WaitForSuperShooterTarget(System.Collections.Generic.List<ShooterBlock> candidates)
         {
-            float timeout = superShooterData != null ? superShooterData.duration : 8f;
+            float timeout = 8f;
             float elapsed = 0f;
 
             while (elapsed < timeout && IsAwaitingSuperShooterTarget)
@@ -245,7 +199,7 @@ namespace BlockShooter
 
         private IEnumerator WaitForMoveShooterTarget()
         {
-            float timeout = moveShooterData != null ? moveShooterData.duration : 8f;
+            float timeout = 8f;
             float elapsed = 0f;
 
             while (elapsed < timeout && IsAwaitingMoveShooterTarget)
@@ -301,11 +255,13 @@ namespace BlockShooter
 
         private void CheckUnlocks()
         {
+            if (GameManager.Instance == null || GameManager.Instance.config == null) return;
+            var config = GameManager.Instance.config;
+
             int level = SaveManager.CurrentLevel;
-            TryGiveInitial(BoosterType.ExtraSlot,  extraSlotData  != null ? extraSlotData.unlockLevel  : GameManager.Instance.config.extraSlotUnlockLevel,  level);
-            TryGiveInitial(BoosterType.FreePick,   freePickData   != null ? freePickData.unlockLevel   : GameManager.Instance.config.freePickUnlockLevel,   level);
-            TryGiveInitial(BoosterType.SuperShooter, superShooterData != null ? superShooterData.unlockLevel : GameManager.Instance.config.superShooterUnlockLevel, level);
-            TryGiveInitial(BoosterType.MoveShooter, moveShooterData != null ? moveShooterData.unlockLevel : GameManager.Instance.config.moveShooterUnlockLevel, level);
+            TryGiveInitial(BoosterType.ExtraSlot,    config.extraSlotUnlockLevel,  level);
+            TryGiveInitial(BoosterType.SuperShooter, config.superShooterUnlockLevel, level);
+            TryGiveInitial(BoosterType.MoveShooter,  config.moveShooterUnlockLevel, level);
         }
 
         private void TryGiveInitial(BoosterType type, int unlockLevel, int currentLevel)
@@ -325,7 +281,6 @@ namespace BlockShooter
         private void GiveAllBoosters()
         {
             SaveManager.AddBooster(BoosterType.ExtraSlot, 3);
-            SaveManager.AddBooster(BoosterType.FreePick, 3);
             SaveManager.AddBooster(BoosterType.SuperShooter, 3);
             SaveManager.AddBooster(BoosterType.MoveShooter, 3);
         }

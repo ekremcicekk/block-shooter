@@ -15,12 +15,10 @@ namespace BlockShooter
         public TextMeshProUGUI boosterNameText;
         public Button closeButton;
 
-        [Header("Booster Data")]
-        public BoosterData extraSlotData;
-        public BoosterData freePickData;
-        [UnityEngine.Serialization.FormerlySerializedAs("colorBlastData")]
-        public BoosterData superShooterData;
-        public BoosterData moveShooterData;
+        [Header("Booster Icons")]
+        public Sprite extraSlotIcon;
+        public Sprite superShooterIcon;
+        public Sprite moveShooterIcon;
 
         private void Awake()
         {
@@ -36,19 +34,39 @@ namespace BlockShooter
 
         public void ShowUnlock(BoosterType type)
         {
-            BoosterData data = type switch
+            string displayName = type switch
             {
-                BoosterType.ExtraSlot  => extraSlotData,
-                BoosterType.FreePick   => freePickData,
-                BoosterType.SuperShooter => superShooterData,
-                BoosterType.MoveShooter => moveShooterData,
+                BoosterType.ExtraSlot => "Extra Slot",
+                BoosterType.SuperShooter => "Super Shooter",
+                BoosterType.MoveShooter => "Move Shooter",
+                _ => type.ToString()
+            };
+
+            Sprite icon = type switch
+            {
+                BoosterType.ExtraSlot => extraSlotIcon,
+                BoosterType.SuperShooter => superShooterIcon,
+                BoosterType.MoveShooter => moveShooterIcon,
                 _ => null
             };
 
-            if (data == null) return;
+            if (boosterIcon != null)
+            {
+                if (icon != null)
+                {
+                    boosterIcon.gameObject.SetActive(true);
+                    boosterIcon.sprite = icon;
+                }
+                else
+                {
+                    boosterIcon.gameObject.SetActive(false);
+                }
+            }
 
-            if (boosterIcon != null && data.icon != null) boosterIcon.sprite = data.icon;
-            if (boosterNameText != null) boosterNameText.text = $"{data.boosterName} Unlocked!";
+            if (boosterNameText != null)
+            {
+                boosterNameText.text = $"{displayName} Unlocked!";
+            }
 
             panel?.SetActive(true);
             panel.transform.localScale = Vector3.zero;
