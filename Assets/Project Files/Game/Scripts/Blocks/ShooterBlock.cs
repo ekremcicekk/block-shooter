@@ -26,6 +26,7 @@ namespace BlockShooter
         public TextMeshPro  shotCountText;
         public ParticleSystem muzzleFlash;
         public ParticleSystem depletedParticle;
+        public ParticleSystem slotArrivalParticle; // played once when the block arrives at its slot
         public GameObject accessibleIndicator;   // optional highlight ring shown when selectable
         public Animator bodyAnimator;
 
@@ -247,6 +248,14 @@ namespace BlockShooter
         public void OnArrivedInSlot()
         {
             State = BlockState.InSlot;
+
+            // Play the slot arrival particle effect at the slot's ground position.
+            if (slotArrivalParticle != null)
+            {
+                slotArrivalParticle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                slotArrivalParticle.Play();
+            }
+
             if (bodyAnimator != null)
             {
                 bodyAnimator.SetTrigger("ShooterArrived");
