@@ -55,6 +55,10 @@ namespace BlockShooter
         private Coroutine _shootCoroutine;
         private int     _visibleShotsLeft;
         private int     _invisibleShotsLeft;
+        private float   _recoilX;
+        private Tween   _recoilTween;
+        private Tween   _scaleTween;
+        private Tween   _bodyScaleTween;
 
         private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
@@ -226,6 +230,16 @@ namespace BlockShooter
             if (bodyAnimator != null)
             {
                 bodyAnimator.SetTrigger("ShooterArrived");
+                
+                // Disable the animator after 0.5 seconds so the arrival animation can play,
+                // and then we can manually rotate bodyMesh without animator conflict.
+                DOVirtual.DelayedCall(0.5f, () =>
+                {
+                    if (State == BlockState.InSlot && !IsDepleted && !_isPerformingSuperShooter)
+                    {
+                        if (bodyAnimator != null) bodyAnimator.enabled = false;
+                    }
+                });
             }
             TryStartGroupRoutine();
         }
@@ -393,52 +407,96 @@ namespace BlockShooter
                         float targetX = targetRot.eulerAngles.x;
                         float targetY = targetRot.eulerAngles.y;
 
-                        if (isProjectileVisible)
-                        {
-                            bodyMesh.DOKill(false);
-                            float recoilX = targetX - 10f;
+                        // Immediately face target incorporating the current _recoilX offset
+                        bodyMesh.localRotation = Quaternion.Euler(targetX + _recoilX, targetY, 0f);
 
-                            Sequence recoilSeq = DOTween.Sequence();
-                            recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(recoilX, targetY, 0f), 0.05f).SetEase(Ease.OutQuad));
-                            recoilSeq.Append(bodyMesh.DOLocalRotate(new Vector3(targetX, targetY, 0f), 0.12f).SetEase(Ease.InQuad));
-                            recoilSeq.Play();
-                        }
-                        else
+                        // Trigger recoil tween if visible and not already playing
+                        if (isProjectileVisible && (_recoilTween == null || !_recoilTween.IsActive() || _recoilTween.IsComplete()))
                         {
-                            bodyMesh.localRotation = Quaternion.Euler(targetX, targetY, 0f);
+                            _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, -10f, 0.05f)
+                                .SetEase(Ease.OutQuad)
+                                .OnUpdate(() =>
+                                {
+                                    if (target != null && bodyMesh != null)
+                                    {
+                                        Vector3 tCenter = target.transform.position + Vector3.up * 0.3f;
+                                        Vector3 curLookDir = tCenter - bodyMesh.position;
+                                        if (curLookDir.sqrMagnitude > 0.001f)
+                                        {
+                                            Quaternion curTargetRot = Quaternion.LookRotation(curLookDir.normalized);
+                                            bodyMesh.localRotation = Quaternion.Euler(curTargetRot.eulerAngles.x + _recoilX, curTargetRot.eulerAngles.y, 0f);
+                                        }
+                                    }
+                                })
+                                .OnComplete(() =>
+                                {
+                                    _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, 0f, 0.12f)
+                                        .SetEase(Ease.InQuad)
+                                        .OnUpdate(() =>
+                                        {
+                                            if (target != null && bodyMesh != null)
+                                            {
+                                                Vector3 tCenter = target.transform.position + Vector3.up * 0.3f;
+                                                Vector3 curLookDir = tCenter - bodyMesh.position;
+                                                if (curLookDir.sqrMagnitude > 0.001f)
+                                                {
+                                                    Quaternion curTargetRot = Quaternion.LookRotation(curLookDir.normalized);
+                                                    bodyMesh.localRotation = Quaternion.Euler(curTargetRot.eulerAngles.x + _recoilX, curTargetRot.eulerAngles.y, 0f);
+                                                }
+                                            }
+                                        });
+                                });
                         }
                     }
                 }
                 else
                 {
                     // Original working code path for normal slot shooting
-                    Vector3 lookDir = target.transform.position - transform.position;
+                    Vector3 lookDir = target.transform.position - bodyMesh.position;
                     lookDir.y = 0f;
                     if (lookDir.sqrMagnitude > 0.001f)
                     {
-                        if (isProjectileVisible)
-                        {
-                            // Kill current tween WITHOUT forcing completion (prevents instant snap back to 0)
-                            transform.DOKill(false);
-                            
-                            // Extract target Y rotation
-                            float targetY = Quaternion.LookRotation(lookDir.normalized).eulerAngles.y;
+                        float targetY = Quaternion.LookRotation(lookDir.normalized).eulerAngles.y;
 
-                            // Get current local X rotation (safely wrapping it)
-                            float currentLocalX = transform.localEulerAngles.x;
-                            if (currentLocalX > 180f) currentLocalX -= 360f;
+                        // Immediately face target incorporating the current _recoilX offset
+                        bodyMesh.localRotation = Quaternion.Euler(_recoilX, targetY, 0f);
 
-                            // Start new recoil tween from the current local X rotation to -10, then to 0
-                            Sequence recoilSeq = DOTween.Sequence();
-                            recoilSeq.Append(transform.DOLocalRotate(new Vector3(-10f, targetY, 0f), 0.05f).SetEase(Ease.OutQuad));
-                            recoilSeq.Append(transform.DOLocalRotate(new Vector3(0f, targetY, 0f), 0.12f).SetEase(Ease.InQuad));
-                            recoilSeq.Play();
-                        }
-                        else
+                        // Trigger recoil tween if visible and not already playing
+                        if (isProjectileVisible && (_recoilTween == null || !_recoilTween.IsActive() || _recoilTween.IsComplete()))
                         {
-                            // Keep Y rotation pointing at target even if recoil tween is playing
-                            float targetY = Quaternion.LookRotation(lookDir.normalized).eulerAngles.y;
-                            transform.localRotation = Quaternion.Euler(transform.localRotation.eulerAngles.x, targetY, 0f);
+                            _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, -10f, 0.05f)
+                                .SetEase(Ease.OutQuad)
+                                .OnUpdate(() =>
+                                {
+                                    if (target != null && bodyMesh != null)
+                                    {
+                                        Vector3 curLookDir = target.transform.position - bodyMesh.position;
+                                        curLookDir.y = 0f;
+                                        if (curLookDir.sqrMagnitude > 0.001f)
+                                        {
+                                            float curTargetY = Quaternion.LookRotation(curLookDir.normalized).eulerAngles.y;
+                                            bodyMesh.localRotation = Quaternion.Euler(_recoilX, curTargetY, 0f);
+                                        }
+                                    }
+                                })
+                                .OnComplete(() =>
+                                {
+                                    _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, 0f, 0.12f)
+                                        .SetEase(Ease.InQuad)
+                                        .OnUpdate(() =>
+                                        {
+                                            if (target != null && bodyMesh != null)
+                                            {
+                                                Vector3 curLookDir = target.transform.position - bodyMesh.position;
+                                                curLookDir.y = 0f;
+                                                if (curLookDir.sqrMagnitude > 0.001f)
+                                                {
+                                                    float curTargetY = Quaternion.LookRotation(curLookDir.normalized).eulerAngles.y;
+                                                    bodyMesh.localRotation = Quaternion.Euler(_recoilX, curTargetY, 0f);
+                                                }
+                                            }
+                                        });
+                                });
                         }
                     }
                 }
@@ -458,17 +516,21 @@ namespace BlockShooter
             
             if (!_isPerformingSuperShooter)
             {
-                transform.DOKill(false);
-                transform.localScale = Vector3.one;
-                transform.DOPunchScale(Vector3.one * 0.08f, 0.1f, 1, 0.5f);
+                if (_scaleTween == null || !_scaleTween.IsActive() || _scaleTween.IsComplete())
+                {
+                    transform.localScale = Vector3.one;
+                    _scaleTween = transform.DOPunchScale(Vector3.one * 0.08f, 0.15f, 1, 0.5f);
+                }
             }
             else
             {
                 if (bodyMesh != null)
                 {
-                    bodyMesh.DOKill(false);
-                    bodyMesh.localScale = Vector3.one;
-                    bodyMesh.DOPunchScale(Vector3.one * 0.12f, 0.08f, 1, 0.5f);
+                    if (_bodyScaleTween == null || !_bodyScaleTween.IsActive() || _bodyScaleTween.IsComplete())
+                    {
+                        bodyMesh.localScale = Vector3.one;
+                        _bodyScaleTween = bodyMesh.DOPunchScale(Vector3.one * 0.12f, 0.12f, 1, 0.5f);
+                    }
                 }
             }
 
@@ -497,6 +559,15 @@ namespace BlockShooter
             // Reset root rotation and disable animator so manual rotations on bodyMesh work
             transform.DOKill(false);
             transform.localRotation = Quaternion.identity;
+            
+            if (_recoilTween != null) _recoilTween.Kill();
+            _recoilX = 0f;
+
+            if (_scaleTween != null) _scaleTween.Kill();
+            if (_bodyScaleTween != null) _bodyScaleTween.Kill();
+            transform.localScale = Vector3.one;
+            if (bodyMesh != null) bodyMesh.localScale = Vector3.one;
+
             if (bodyAnimator != null) bodyAnimator.enabled = false;
 
             State = BlockState.MovingToSlot; // Prevents normal update shoot cycles
@@ -683,6 +754,9 @@ namespace BlockShooter
         {
             DOTween.Kill(transform);
             if (bodyMesh != null) DOTween.Kill(bodyMesh);
+            if (_recoilTween != null) _recoilTween.Kill();
+            if (_scaleTween != null) _scaleTween.Kill();
+            if (_bodyScaleTween != null) _bodyScaleTween.Kill();
             StopShooting();
         }
     }
