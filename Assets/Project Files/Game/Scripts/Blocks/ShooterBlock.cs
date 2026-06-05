@@ -440,7 +440,7 @@ namespace BlockShooter
                         // Trigger recoil tween if visible and not already playing
                         if (isProjectileVisible && (_recoilTween == null || !_recoilTween.IsActive() || _recoilTween.IsComplete()))
                         {
-                            _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, -10f, 0.05f)
+                            _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, -10f, 0.03f)
                                 .SetEase(Ease.OutQuad)
                                 .OnUpdate(() =>
                                 {
@@ -457,7 +457,7 @@ namespace BlockShooter
                                 })
                                 .OnComplete(() =>
                                 {
-                                    _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, 0f, 0.12f)
+                                    _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, 0f, 0.07f)
                                         .SetEase(Ease.InQuad)
                                         .OnUpdate(() =>
                                         {
@@ -491,7 +491,7 @@ namespace BlockShooter
                         // Trigger recoil tween if visible and not already playing
                         if (isProjectileVisible && (_recoilTween == null || !_recoilTween.IsActive() || _recoilTween.IsComplete()))
                         {
-                            _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, -10f, 0.05f)
+                            _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, -10f, 0.03f)
                                 .SetEase(Ease.OutQuad)
                                 .OnUpdate(() =>
                                 {
@@ -508,7 +508,7 @@ namespace BlockShooter
                                 })
                                 .OnComplete(() =>
                                 {
-                                    _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, 0f, 0.12f)
+                                    _recoilTween = DOTween.To(() => _recoilX, x => _recoilX = x, 0f, 0.07f)
                                         .SetEase(Ease.InQuad)
                                         .OnUpdate(() =>
                                         {
@@ -546,7 +546,7 @@ namespace BlockShooter
                 if (_scaleTween == null || !_scaleTween.IsActive() || _scaleTween.IsComplete())
                 {
                     transform.localScale = Vector3.one;
-                    _scaleTween = transform.DOPunchScale(Vector3.one * 0.08f, 0.15f, 1, 0.5f);
+                    _scaleTween = transform.DOPunchScale(Vector3.one * 0.08f, 0.12f, 1, 0.5f);
                 }
             }
             else
@@ -556,7 +556,7 @@ namespace BlockShooter
                     if (_bodyScaleTween == null || !_bodyScaleTween.IsActive() || _bodyScaleTween.IsComplete())
                     {
                         bodyMesh.localScale = Vector3.one;
-                        _bodyScaleTween = bodyMesh.DOPunchScale(Vector3.one * 0.12f, 0.12f, 1, 0.5f);
+                        _bodyScaleTween = bodyMesh.DOPunchScale(Vector3.one * 0.12f, 0.1f, 1, 0.5f);
                     }
                 }
             }
