@@ -1012,6 +1012,14 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1241118017928138760, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 2746986543876188323, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 3348822413329542180, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
       propertyPath: m_Color.a
       value: 1
@@ -1020,9 +1028,17 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5035439127980034484, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 5234630638683635155, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
       propertyPath: m_Name
       value: UI_Canvas
+      objectReference: {fileID: 0}
+    - target: {fileID: 5234630638683635155, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5645570676102361930, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
       propertyPath: m_fontAsset
@@ -1036,6 +1052,10 @@ PrefabInstance:
       propertyPath: boosterType
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 6679252229879716825, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_TargetGraphic
+      value: 
+      objectReference: {fileID: 6203770898875092175}
     - target: {fileID: 6745478345501859296, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -1172,6 +1192,17 @@ PrefabInstance:
       addedObject: {fileID: 1322532113}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+--- !u!114 &6203770898875092175 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4564720375012835632, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+  m_PrefabInstance: {fileID: 6203770898875092174}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
