@@ -43,6 +43,9 @@ namespace BlockShooter
         private bool _isSpeedX2;
         private int _currentDisplayCoins;
         private Tween _coinTween;
+        private int _totalConveyorBlocks;
+        private float _currentDisplayProgress;
+        private Tween _progressTween;
 
         private void Awake()
         {
@@ -57,7 +60,7 @@ namespace BlockShooter
             Time.timeScale = 1f;
         }
 
-        private void Start()
+        private System.Collections.IEnumerator Start()
         {
             // Reset revive state
             HasRevivedThisLevel = false;
@@ -117,29 +120,103 @@ namespace BlockShooter
 
             // Initialize coins count
             UpdateCoinUI(animate: false);
+
+            // Wait for end of frame to ensure LevelManager has fully spawned the level
+            yield return new UnityEngine.WaitForEndOfFrame();
+
+            InitializeProgress();
         }
 
         private void OnEnable()
         {
             GameManager.OnLevelWin += HandleLevelWin;
             GameManager.OnLevelFail += ShowFailPanel;
+            ScoreManager.OnScoreChanged += HandleScoreChanged;
         }
 
         private void OnDisable()
         {
             GameManager.OnLevelWin -= HandleLevelWin;
             GameManager.OnLevelFail -= ShowFailPanel;
+            ScoreManager.OnScoreChanged -= HandleScoreChanged;
+        }
+
+        private void InitializeProgress()
+        {
+            var blocks = FindObjectsByType<ConveyorBlock3D>(FindObjectsSortMode.None);
+            int count = 0;
+            foreach (var b in blocks)
+            {
+                if (b != null && !b.IsDestroyed)
+                {
+                    count++;
+                }
+            }
+            _totalConveyorBlocks = Mathf.Max(1, count);
+            _currentDisplayProgress = 0f;
+            SetProgress(0f, animate: false);
+        }
+
+        private void HandleScoreChanged(int score)
+        {
+            int destroyedCount = ScoreManager.Instance != null ? ScoreManager.Instance.BlocksDestroyed : 0;
+            UpdateProgressDisplay(destroyedCount);
+        }
+
+        private void UpdateProgressDisplay(int destroyedCount)
+        {
+            if (_totalConveyorBlocks <= 0) return;
+
+            // Increment in groups of 50 blocks destroyed in total
+            int groupSize = 50;
+            int groupsDestroyed = destroyedCount / groupSize;
+            int totalGroups = _totalConveyorBlocks / groupSize;
+
+            float progress = 0f;
+            if (destroyedCount >= _totalConveyorBlocks)
+            {
+                progress = 1.0f; // 100% on actual completion
+            }
+            else if (totalGroups > 0)
+            {
+                progress = (float)groupsDestroyed / totalGroups;
+                progress = Mathf.Clamp(progress, 0f, 0.99f); // Clamp until actually completed
+            }
+            else
+            {
+                // If total blocks is less than 50, it remains at 0% until completed
+                progress = 0f;
+            }
+
+            SetProgress(progress, animate: true);
         }
 
         // ── HUD Panel Control ──────────────────────────────────────────────────
 
-        public void SetProgress(float value)
+        public void SetProgress(float value, bool animate = true)
         {
-            if (progressBarFill != null)
-                progressBarFill.fillAmount = value;
+            if (!animate)
+            {
+                _progressTween?.Kill();
+                _currentDisplayProgress = value;
+                if (progressBarFill != null)
+                    progressBarFill.fillAmount = value;
 
-            if (progressText != null)
-                progressText.text = $"{Mathf.RoundToInt(value * 100f)}%";
+                if (progressText != null)
+                    progressText.text = $"{Mathf.RoundToInt(value * 100f)}%";
+                return;
+            }
+
+            _progressTween?.Kill();
+            _progressTween = DOTween.To(() => _currentDisplayProgress, x =>
+            {
+                _currentDisplayProgress = x;
+                if (progressBarFill != null)
+                    progressBarFill.fillAmount = _currentDisplayProgress;
+
+                if (progressText != null)
+                    progressText.text = $"{Mathf.RoundToInt(_currentDisplayProgress * 100f)}%";
+            }, value, 0.6f).SetEase(Ease.OutQuad).SetUpdate(true);
         }
 
         public void UpdateCoinUI(bool animate = true)

@@ -6413,7 +6413,6 @@ GameObject:
   m_Component:
   - component: {fileID: 8717232165334447190}
   - component: {fileID: 9180957865336536772}
-  - component: {fileID: 7911755045578655364}
   m_Layer: 0
   m_Name: HUD_Panel
   m_TagString: Untagged
@@ -6454,18 +6453,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2474250991644775444}
   m_CullTransparentMesh: 1
---- !u!114 &7911755045578655364
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2474250991644775444}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d004b8fae3da0c24791cd675a6c03386, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &2702856599295994644
 GameObject:
   m_ObjectHideFlags: 0
