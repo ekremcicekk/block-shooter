@@ -862,10 +862,45 @@ namespace BlockShooter.Editor
             }
         }
 
+        private void DeselectIfSelected(GameObject target)
+        {
+            if (target == null) return;
+
+            // Check if active selection is the target or a child of target
+            if (Selection.activeGameObject != null && 
+                (Selection.activeGameObject == target || Selection.activeGameObject.transform.IsChildOf(target.transform)))
+            {
+                Selection.activeObject = null;
+            }
+
+            // Also check multiple selection in Selection.objects
+            if (Selection.objects != null && Selection.objects.Length > 0)
+            {
+                var newSelection = new List<UnityEngine.Object>();
+                bool changed = false;
+                foreach (var obj in Selection.objects)
+                {
+                    if (obj is GameObject go && (go == target || go.transform.IsChildOf(target.transform)))
+                    {
+                        changed = true;
+                    }
+                    else if (obj != null)
+                    {
+                        newSelection.Add(obj);
+                    }
+                }
+                if (changed)
+                {
+                    Selection.objects = newSelection.ToArray();
+                }
+            }
+        }
+
         private void DestroyPreview()
         {
             if (_previewGo != null)
             {
+                DeselectIfSelected(_previewGo);
                 DestroyImmediate(_previewGo);
                 _previewGo = null;
             }
@@ -879,6 +914,7 @@ namespace BlockShooter.Editor
                 {
                     if (root != null && (root.name == "[SplinePreview]" || root.name.Contains("[SplinePreview]")))
                     {
+                        DeselectIfSelected(root);
                         DestroyImmediate(root);
                     }
                 }
@@ -907,6 +943,7 @@ namespace BlockShooter.Editor
         {
             if (_levelPreviewGo != null)
             {
+                DeselectIfSelected(_levelPreviewGo);
                 DestroyImmediate(_levelPreviewGo);
                 _levelPreviewGo = null;
             }
@@ -921,6 +958,7 @@ namespace BlockShooter.Editor
                     if (root == null) continue;
                     if (root.name == "[LevelPreview]" || root.name.Contains("[LevelPreview]"))
                     {
+                        DeselectIfSelected(root);
                         DestroyImmediate(root);
                     }
                     else
@@ -928,6 +966,7 @@ namespace BlockShooter.Editor
                         var lrs = root.GetComponentsInChildren<LevelRoot>(true);
                         if (lrs.Length > 0 && !EditorUtility.IsPersistent(root))
                         {
+                            DeselectIfSelected(root);
                             DestroyImmediate(root);
                         }
                     }
@@ -2966,7 +3005,10 @@ namespace BlockShooter.Editor
 
             // Remove existing LevelRoot instances from scene
             foreach (var lr in FindObjectsByType<LevelRoot>(FindObjectsSortMode.None))
+            {
+                DeselectIfSelected(lr.gameObject);
                 DestroyImmediate(lr.gameObject);
+            }
 
             // Assign prefab to LevelManager if present
             var lm = FindFirstObjectByType<LevelManager>();

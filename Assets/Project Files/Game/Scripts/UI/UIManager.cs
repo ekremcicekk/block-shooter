@@ -39,6 +39,7 @@ namespace BlockShooter
 
         // Runtime states
         public bool HasRevivedThisLevel { get; private set; }
+        public static float SpeedMultiplier { get; private set; } = 1f;
         private bool _isSpeedX2;
         private int _currentDisplayCoins;
         private Tween _coinTween;
@@ -63,6 +64,7 @@ namespace BlockShooter
 
             // Ensure speed is reset to x1 at level start
             _isSpeedX2 = false;
+            SpeedMultiplier = 1f;
             if (ConveyorController.Instance != null)
             {
                 ConveyorController.Instance.SetSpeedMultiplier(1f);
@@ -161,10 +163,11 @@ namespace BlockShooter
         private void ToggleSpeed()
         {
             _isSpeedX2 = !_isSpeedX2;
+            SpeedMultiplier = _isSpeedX2 ? 2f : 1f;
 
             if (ConveyorController.Instance != null)
             {
-                ConveyorController.Instance.SetSpeedMultiplier(_isSpeedX2 ? 2f : 1f);
+                ConveyorController.Instance.SetSpeedMultiplier(SpeedMultiplier);
             }
 
             // Subtle mechanical punch on the parent button

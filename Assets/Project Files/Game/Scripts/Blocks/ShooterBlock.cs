@@ -351,7 +351,7 @@ namespace BlockShooter
                     if (block == null || block.IsDestroyed || block.IsTargeted) continue;
 
                     if (firedAny)
-                        yield return new WaitForSeconds(laneDelay);
+                        yield return new WaitForSeconds(laneDelay / UIManager.SpeedMultiplier);
 
                     firedAny = true;
                     FireAt(block);
@@ -542,7 +542,7 @@ namespace BlockShooter
             targetCenter = target.transform.position + Vector3.up * 0.3f;
             Vector3 dir = (targetCenter - spawnPos).normalized;
 
-            float pSpeed = GameManager.Instance.config.projectileSpeed;
+            float pSpeed = GameManager.Instance.config.projectileSpeed * UIManager.SpeedMultiplier;
             if (_isPerformingSuperShooter) pSpeed *= 1.8f;
 
             Projectile proj = ProjectilePool.Instance.Get(spawnPos);
@@ -648,7 +648,7 @@ namespace BlockShooter
                     if (target == null || target.IsDestroyed) continue;
 
                     FireAt(target);
-                    yield return new WaitForSeconds(0.02f);
+                    yield return new WaitForSeconds(0.02f / UIManager.SpeedMultiplier);
                 }
 
                 // Brief delay to let final projectiles hit their targets
