@@ -44,7 +44,6 @@ namespace BlockShooter
         [SerializeField] private int   _shotCount = 100;
         [SerializeField] private int   _gridColumn;
         [SerializeField] private int   _gridRow;
-        private bool  _isRainbowMode;
 
         public enum BlockState { InGrid, MovingToSlot, InSlot, Depleted }
         public BlockState State { get; private set; } = BlockState.InGrid;
@@ -271,6 +270,11 @@ namespace BlockShooter
                 });
             }
             TryStartGroupRoutine();
+
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.CheckFailCondition();
+            }
         }
 
         // ── Shooting (only active while InSlot) ───────────────────────────────
@@ -300,9 +304,7 @@ namespace BlockShooter
             if (FireRange.Instance == null) return null;
 
             // Find the most urgent block in range that matches our color requirements
-            var targetBlock = _isRainbowMode
-                ? FireRange.Instance.GetFirstTarget()
-                : FireRange.Instance.GetFirstTarget(_colorType);
+            var targetBlock = FireRange.Instance.GetFirstTarget(_colorType);
 
             if (targetBlock != null && !targetBlock.IsDestroyed)
             {
@@ -446,7 +448,7 @@ namespace BlockShooter
             target.SetTargeted(true);
 
             Vector3 targetCenter = target.transform.position + Vector3.up * 0.3f;
-            BlockColorType projColor = _isRainbowMode ? target.ColorType : _colorType;
+            BlockColorType projColor = _colorType;
 
             // Determine if this shot should be visible based on the organic burst visibility pattern
             bool isProjectileVisible = true;
@@ -617,9 +619,7 @@ namespace BlockShooter
         // kept for external callers (e.g. SuperShooter)
         public void FireProjectile()
         {
-            var target = _isRainbowMode
-                ? FireRange.Instance?.GetFirstTarget()
-                : FireRange.Instance?.GetFirstTarget(_colorType);
+            var target = FireRange.Instance?.GetFirstTarget(_colorType);
             if (target != null) FireAt(target);
         }
 
@@ -673,7 +673,7 @@ namespace BlockShooter
 
             // 3. Shoot at matching conveyor blocks sequentially up to _shotCount
             var targets = ConveyorController.Instance != null 
-                ? ConveyorController.Instance.GetOrderedBlocks(_colorType, anyColor: _isRainbowMode)
+                ? ConveyorController.Instance.GetOrderedBlocks(_colorType)
                 : new System.Collections.Generic.List<ConveyorBlock3D>();
 
             targets.RemoveAll(t => t == null || t.IsDestroyed || t.IsTargeted);
@@ -763,23 +763,6 @@ namespace BlockShooter
                 // Fallback to standard tween if no animator is present
                 transform.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack)
                     .OnComplete(() => gameObject.SetActive(false));
-            }
-        }
-
-        // ── Rainbow mode ──────────────────────────────────────────────────────
-
-        public void SetRainbowMode(bool active)
-        {
-            _isRainbowMode = active;
-            if (!active)
-            {
-                ApplyColor();
-            }
-            else if (blockRenderer != null)
-            {
-                var mpb = new MaterialPropertyBlock();
-                mpb.SetColor(ColorProp, Color.white);
-                blockRenderer.SetPropertyBlock(mpb);
             }
         }
 

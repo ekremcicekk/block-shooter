@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace BlockShooter
@@ -55,6 +56,81 @@ namespace BlockShooter
             if (State != GameState.Playing) return;
             SetState(GameState.Fail);
             OnLevelFail?.Invoke();
+        }
+
+        /// <summary>
+        /// Checks if there are any active conveyor blocks left in the scene.
+        /// If none, the level is won.
+        /// </summary>
+        public void CheckWinCondition()
+        {
+            if (State != GameState.Playing) return;
+
+            var blocks = FindObjectsByType<ConveyorBlock3D>(FindObjectsSortMode.None);
+            foreach (var b in blocks)
+            {
+                if (b != null && !b.IsDestroyed)
+                {
+                    return; // At least one block is still alive
+                }
+            }
+
+            // All blocks are destroyed - Win!
+            TriggerWin();
+        }
+
+        /// <summary>
+        /// Checks if all slots are occupied and none of the slotted shooter blocks
+        /// can target any remaining blocks on the conveyor (deadlock).
+        /// </summary>
+        public void CheckFailCondition()
+        {
+            if (State != GameState.Playing) return;
+
+            if (SlotSystem.Instance == null) return;
+
+            // 1. Slots must be completely full
+            if (SlotSystem.Instance.HasEmptySlot) return;
+
+            var slottedBlocks = SlotSystem.Instance.GetSlottedBlocks();
+            if (slottedBlocks.Count == 0) return;
+
+            // 2. Find all live blocks on the conveyor
+            var conveyorBlocks = FindObjectsByType<ConveyorBlock3D>(FindObjectsSortMode.None);
+            bool hasConveyorBlocks = false;
+            var availableColors = new HashSet<BlockColorType>();
+
+            foreach (var cb in conveyorBlocks)
+            {
+                if (cb != null && !cb.IsDestroyed)
+                {
+                    hasConveyorBlocks = true;
+                    availableColors.Add(cb.ColorType);
+                }
+            }
+
+            // If there are no conveyor blocks left, it's a win, not a fail.
+            if (!hasConveyorBlocks) return;
+
+            // 3. Check if ANY slotted block can target ANY available color
+            bool canShootAny = false;
+            foreach (var sb in slottedBlocks)
+            {
+                if (sb == null || sb.IsDepleted) continue;
+
+                // A normal block can shoot if its color exists on the conveyor
+                if (availableColors.Contains(sb.ColorType))
+                {
+                    canShootAny = true;
+                    break;
+                }
+            }
+
+            // If none of the slotted blocks can shoot any block on the conveyor, it is a deadlock -> Fail!
+            if (!canShootAny)
+            {
+                TriggerFail();
+            }
         }
 
         public bool IsPlaying => State == GameState.Playing;

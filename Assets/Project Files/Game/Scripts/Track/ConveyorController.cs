@@ -224,13 +224,13 @@ namespace BlockShooter
             speed = _baseSpeed * multiplier;
         }
 
-        public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType, bool anyColor = false)
+        public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType)
         {
             var result = new List<ConveyorBlock3D>();
             foreach (var entry in _groups)
             {
                 if (entry.Group == null || entry.Group.IsEmpty) continue;
-                if (!anyColor && entry.Group.colorType != colorType) continue;
+                if (entry.Group.colorType != colorType) continue;
 
                 for (int row = 0; row < entry.Group.RowCount; row++)
                     for (int lane = 0; lane < entry.Group.LaneCount; lane++)

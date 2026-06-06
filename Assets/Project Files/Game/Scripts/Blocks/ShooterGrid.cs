@@ -292,11 +292,6 @@ namespace BlockShooter
             return false;
         }
 
-        public void SetRainbowMode(bool active)
-        {
-            foreach (var b in _activeBlocks) b.SetRainbowMode(active);
-        }
-
         public void RefillAllShots(int amount)
         {
             foreach (var b in _activeBlocks) b.RefillShots(amount);
