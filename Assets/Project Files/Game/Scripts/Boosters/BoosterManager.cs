@@ -272,7 +272,6 @@ namespace BlockShooter
                 SaveManager.AddBooster(type, initialBoosterCount);
                 PlayerPrefs.SetInt(key, 1);
                 PlayerPrefs.Save();
-                BoosterUnlockUI.Instance?.ShowUnlock(type);
             }
         }
 

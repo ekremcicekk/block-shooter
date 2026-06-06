@@ -83,20 +83,38 @@ namespace BlockShooter
 
         public int extraSlotUnlockLevel
         {
-            get => gameplaySettings != null ? gameplaySettings.extraSlotUnlockLevel : 1;
-            set { if (gameplaySettings != null) gameplaySettings.extraSlotUnlockLevel = value; }
+            get => gameplaySettings != null && gameplaySettings.extraSlotSettings != null ? gameplaySettings.extraSlotSettings.unlockLevel : 1;
+            set { if (gameplaySettings != null && gameplaySettings.extraSlotSettings != null) gameplaySettings.extraSlotSettings.unlockLevel = value; }
         }
 
         public int superShooterUnlockLevel
         {
-            get => gameplaySettings != null ? gameplaySettings.superShooterUnlockLevel : 5;
-            set { if (gameplaySettings != null) gameplaySettings.superShooterUnlockLevel = value; }
+            get => gameplaySettings != null && gameplaySettings.superShooterSettings != null ? gameplaySettings.superShooterSettings.unlockLevel : 5;
+            set { if (gameplaySettings != null && gameplaySettings.superShooterSettings != null) gameplaySettings.superShooterSettings.unlockLevel = value; }
         }
 
         public int moveShooterUnlockLevel
         {
-            get => gameplaySettings != null ? gameplaySettings.moveShooterUnlockLevel : 2;
-            set { if (gameplaySettings != null) gameplaySettings.moveShooterUnlockLevel = value; }
+            get => gameplaySettings != null && gameplaySettings.moveShooterSettings != null ? gameplaySettings.moveShooterSettings.unlockLevel : 2;
+            set { if (gameplaySettings != null && gameplaySettings.moveShooterSettings != null) gameplaySettings.moveShooterSettings.unlockLevel = value; }
+        }
+
+        public int extraSlotBuyCost
+        {
+            get => gameplaySettings != null && gameplaySettings.extraSlotSettings != null ? gameplaySettings.extraSlotSettings.buyCost : 150;
+            set { if (gameplaySettings != null && gameplaySettings.extraSlotSettings != null) gameplaySettings.extraSlotSettings.buyCost = value; }
+        }
+
+        public int superShooterBuyCost
+        {
+            get => gameplaySettings != null && gameplaySettings.superShooterSettings != null ? gameplaySettings.superShooterSettings.buyCost : 250;
+            set { if (gameplaySettings != null && gameplaySettings.superShooterSettings != null) gameplaySettings.superShooterSettings.buyCost = value; }
+        }
+
+        public int moveShooterBuyCost
+        {
+            get => gameplaySettings != null && gameplaySettings.moveShooterSettings != null ? gameplaySettings.moveShooterSettings.buyCost : 200;
+            set { if (gameplaySettings != null && gameplaySettings.moveShooterSettings != null) gameplaySettings.moveShooterSettings.buyCost = value; }
         }
 
         public int scorePerBlock

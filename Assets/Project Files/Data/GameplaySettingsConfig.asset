@@ -21,6 +21,12 @@ MonoBehaviour:
   mysteryShooterUnlockLevel: 1
   freezeShooterUnlockLevel: 1
   doorUnlockLevel: 1
-  extraSlotUnlockLevel: 1
-  superShooterUnlockLevel: 1
-  moveShooterUnlockLevel: 1
+  extraSlotSettings:
+    unlockLevel: 1
+    buyCost: 900
+  superShooterSettings:
+    unlockLevel: 1
+    buyCost: 900
+  moveShooterSettings:
+    unlockLevel: 1
+    buyCost: 900

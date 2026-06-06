@@ -34,8 +34,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 7.8}
-  m_SizeDelta: {x: 88.0033, y: 92.7763}
+  m_AnchoredPosition: {x: 0, y: 11.124398}
+  m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7382392226573121310
 CanvasRenderer:
@@ -787,7 +787,7 @@ GameObject:
   - component: {fileID: 5910403262440473455}
   - component: {fileID: 1301437408690381839}
   - component: {fileID: 8637503110213271231}
-  - component: {fileID: 6441342408553802933}
+  - component: {fileID: 1593641893000599732}
   m_Layer: 0
   m_Name: Booster_Slot
   m_TagString: Untagged
@@ -901,7 +901,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
---- !u!114 &6441342408553802933
+--- !u!114 &1593641893000599732
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -910,15 +910,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 868082204532337712}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5fd787a186eb31845bd730d7734d9a5a, type: 3}
+  m_Script: {fileID: 11500000, guid: 10870ab4f342772459e63f803afeffd5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   boosterType: 0
-  button: {fileID: 8637503110213271231}
-  iconImage: {fileID: 0}
-  countText: {fileID: 0}
-  lockOverlay: {fileID: 0}
-  unlockBadge: {fileID: 0}
+  mainButton: {fileID: 8637503110213271231}
+  lockGroup: {fileID: 8323870563663513394}
+  lockLvlText: {fileID: 5615149149442565037}
+  activeGroup: {fileID: 6037254922798703788}
+  deactiveGroup: {fileID: 7117638789826943291}
+  countGroup: {fileID: 1283751924003535701}
+  countText: {fileID: 7958018851076106337}
+  plusBuyGroup: {fileID: 2525264627323119987}
+  buyPanel: {fileID: 0}
+  buyWithCoinsButton: {fileID: 0}
+  buyPriceText: {fileID: 0}
 --- !u!1 &871744779617280535
 GameObject:
   m_ObjectHideFlags: 0
@@ -1867,8 +1873,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 4.9}
-  m_SizeDelta: {x: 88.778, y: 93.593}
+  m_AnchoredPosition: {x: 7.2, y: 0}
+  m_SizeDelta: {x: 132.0095, y: 139.1693}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &5789393185491180238
 CanvasRenderer:
@@ -1898,9 +1904,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 1d90232fe66ec8046ad5cfffef17d77a, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 1e6be4bb572b02e46a0c2e61592f2939, type: 3}
   m_Type: 0
-  m_PreserveAspect: 0
+  m_PreserveAspect: 1
   m_FillCenter: 1
   m_FillMethod: 4
   m_FillAmount: 1
@@ -8465,6 +8471,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7487039278337527325}
   - component: {fileID: 4622305332184814176}
+  - component: {fileID: 260890428815490243}
   m_Layer: 0
   m_Name: BoosterArea
   m_TagString: Untagged
@@ -8500,6 +8507,21 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3358100788719120617}
   m_CullTransparentMesh: 1
+--- !u!114 &260890428815490243
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3358100788719120617}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e2da32b9faa8f44c9cb5efab29db276, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  extraSlotSlot: {fileID: 1593641893000599732}
+  moveShooterSlot: {fileID: 5108011906399919992}
+  superShooterSlot: {fileID: 940621300774901243}
 --- !u!1 &3436667066093691222
 GameObject:
   m_ObjectHideFlags: 0
@@ -8860,8 +8882,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 7.8}
-  m_SizeDelta: {x: 88.0033, y: 92.7763}
+  m_AnchoredPosition: {x: 0, y: 11.124398}
+  m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1306991504146367417
 CanvasRenderer:
@@ -10003,10 +10025,10 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8717232165334447190}
+  - {fileID: 7487039278337527325}
   - {fileID: 286308235893455488}
   - {fileID: 5107200544694957828}
   - {fileID: 5332165026152768864}
-  - {fileID: 7487039278337527325}
   - {fileID: 5569467160271330277}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -10294,8 +10316,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 4.9}
-  m_SizeDelta: {x: 88.778, y: 93.593}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 92.0507, y: 97.0432}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4379330346426949716
 CanvasRenderer:
@@ -10325,7 +10347,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 1d90232fe66ec8046ad5cfffef17d77a, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 223f2f0e86b3f7d4c9f998f22a8d85b6, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -11954,7 +11976,7 @@ GameObject:
   - component: {fileID: 3532068047712063008}
   - component: {fileID: 141676940131962374}
   - component: {fileID: 4292329611987837398}
-  - component: {fileID: 7931842970642595026}
+  - component: {fileID: 5108011906399919992}
   m_Layer: 0
   m_Name: Booster_MoveShooter
   m_TagString: Untagged
@@ -12068,7 +12090,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
---- !u!114 &7931842970642595026
+--- !u!114 &5108011906399919992
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -12077,15 +12099,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 7135747189563357428}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5fd787a186eb31845bd730d7734d9a5a, type: 3}
+  m_Script: {fileID: 11500000, guid: 10870ab4f342772459e63f803afeffd5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  boosterType: 0
-  button: {fileID: 4292329611987837398}
-  iconImage: {fileID: 0}
-  countText: {fileID: 0}
-  lockOverlay: {fileID: 0}
-  unlockBadge: {fileID: 0}
+  boosterType: 2
+  mainButton: {fileID: 4292329611987837398}
+  lockGroup: {fileID: 1113418311182733565}
+  lockLvlText: {fileID: 2218731722193645694}
+  activeGroup: {fileID: 553177533634149243}
+  deactiveGroup: {fileID: 3023579187393898218}
+  countGroup: {fileID: 1832962265772159297}
+  countText: {fileID: 1343984261926741886}
+  plusBuyGroup: {fileID: 4799071290090543864}
+  buyPanel: {fileID: 0}
+  buyWithCoinsButton: {fileID: 0}
+  buyPriceText: {fileID: 0}
 --- !u!1 &7159624187870850124
 GameObject:
   m_ObjectHideFlags: 0
@@ -22988,8 +23016,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 7.8}
-  m_SizeDelta: {x: 88.0033, y: 92.7763}
+  m_AnchoredPosition: {x: 0, y: 11.124398}
+  m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8729827116587091235
 CanvasRenderer:
@@ -23106,7 +23134,7 @@ GameObject:
   - component: {fileID: 1493173018447362184}
   - component: {fileID: 5631074826100257277}
   - component: {fileID: 7725020694711187570}
-  - component: {fileID: 8381078282387129190}
+  - component: {fileID: 940621300774901243}
   m_Layer: 0
   m_Name: Booster_SuperShooter
   m_TagString: Untagged
@@ -23220,7 +23248,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
---- !u!114 &8381078282387129190
+--- !u!114 &940621300774901243
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -23229,15 +23257,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 8616781708590610051}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5fd787a186eb31845bd730d7734d9a5a, type: 3}
+  m_Script: {fileID: 11500000, guid: 10870ab4f342772459e63f803afeffd5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  boosterType: 0
-  button: {fileID: 7725020694711187570}
-  iconImage: {fileID: 0}
-  countText: {fileID: 0}
-  lockOverlay: {fileID: 0}
-  unlockBadge: {fileID: 0}
+  boosterType: 1
+  mainButton: {fileID: 7725020694711187570}
+  lockGroup: {fileID: 8971493748270189430}
+  lockLvlText: {fileID: 1551961266167916188}
+  activeGroup: {fileID: 5611368476643830407}
+  deactiveGroup: {fileID: 5685348387162620166}
+  countGroup: {fileID: 7159624187870850124}
+  countText: {fileID: 8099030471368303789}
+  plusBuyGroup: {fileID: 917696018396102941}
+  buyPanel: {fileID: 0}
+  buyWithCoinsButton: {fileID: 0}
+  buyPriceText: {fileID: 0}
 --- !u!1 &8971493748270189430
 GameObject:
   m_ObjectHideFlags: 0

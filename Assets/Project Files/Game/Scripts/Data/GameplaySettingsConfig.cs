@@ -2,6 +2,13 @@ using UnityEngine;
 
 namespace BlockShooter
 {
+    [System.Serializable]
+    public class BoosterSettings
+    {
+        public int unlockLevel;
+        public int buyCost;
+    }
+
     [CreateAssetMenu(fileName = "GameplaySettingsConfig", menuName = "BlockShooter/Configs/Gameplay Settings Config")]
     public class GameplaySettingsConfig : ScriptableObject
     {
@@ -20,9 +27,9 @@ namespace BlockShooter
         public int freezeShooterUnlockLevel = 3;
         public int doorUnlockLevel = 2;
 
-        [Header("Booster Unlock Levels")]
-        public int extraSlotUnlockLevel = 1;
-        public int superShooterUnlockLevel = 5;
-        public int moveShooterUnlockLevel = 2;
+        [Header("Booster Settings")]
+        public BoosterSettings extraSlotSettings = new BoosterSettings { unlockLevel = 1, buyCost = 150 };
+        public BoosterSettings superShooterSettings = new BoosterSettings { unlockLevel = 5, buyCost = 250 };
+        public BoosterSettings moveShooterSettings = new BoosterSettings { unlockLevel = 2, buyCost = 200 };
     }
 }
