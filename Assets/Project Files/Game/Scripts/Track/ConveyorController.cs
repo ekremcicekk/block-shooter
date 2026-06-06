@@ -30,6 +30,7 @@ namespace BlockShooter
 
         private SplineContainer _splineContainer;
         private float _splineWorldLength;
+        private float _baseSpeed = 1.5f;
         private bool  _isFrozen;
 
         private readonly List<GroupEntry> _groups = new();
@@ -68,7 +69,17 @@ namespace BlockShooter
         public void Initialize(float speedMultiplier = 1f)
         {
             if (_splineContainer == null) _splineContainer = GetComponent<SplineContainer>();
-            speed *= speedMultiplier;
+            
+            if (GameManager.Instance != null && GameManager.Instance.config != null)
+            {
+                _baseSpeed = GameManager.Instance.config.conveyorSpeed;
+            }
+            else
+            {
+                _baseSpeed = speed; // fallback to serialized
+            }
+
+            speed = _baseSpeed * speedMultiplier;
             _splineWorldLength = SplineUtility.CalculateLength(
                 _splineContainer.Spline, transform.localToWorldMatrix);
 
@@ -206,6 +217,11 @@ namespace BlockShooter
                 if (entry.Group == null || entry.Group.IsEmpty) continue;
                 entry.Group.DestroyBlocksInBounds(bounds);
             }
+        }
+
+        public void SetSpeedMultiplier(float multiplier)
+        {
+            speed = _baseSpeed * multiplier;
         }
 
         public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType, bool anyColor = false)

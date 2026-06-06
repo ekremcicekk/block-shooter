@@ -18,7 +18,15 @@ namespace BlockShooter
 
         public static int Coins
         {
-            get => PlayerPrefs.GetInt(KEY_COINS, 0);
+            get
+            {
+                int defaultVal = 100;
+                if (GameManager.Instance != null && GameManager.Instance.config != null)
+                {
+                    defaultVal = GameManager.Instance.config.startGameCoins;
+                }
+                return PlayerPrefs.GetInt(KEY_COINS, defaultVal);
+            }
             set { PlayerPrefs.SetInt(KEY_COINS, value); PlayerPrefs.Save(); }
         }
 

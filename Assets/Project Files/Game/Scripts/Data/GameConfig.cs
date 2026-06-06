@@ -39,6 +39,30 @@ namespace BlockShooter
             set { if (gameplaySettings != null) gameplaySettings.projectileSpeed = value; }
         }
 
+        public float conveyorSpeed
+        {
+            get => gameplaySettings != null ? gameplaySettings.conveyorSpeed : 1.5f;
+            set { if (gameplaySettings != null) gameplaySettings.conveyorSpeed = value; }
+        }
+
+        public int startGameCoins
+        {
+            get => gameplaySettings != null ? gameplaySettings.startGameCoins : 100;
+            set { if (gameplaySettings != null) gameplaySettings.startGameCoins = value; }
+        }
+
+        public int playOnCost
+        {
+            get => gameplaySettings != null ? gameplaySettings.playOnCost : 100;
+            set { if (gameplaySettings != null) gameplaySettings.playOnCost = value; }
+        }
+
+        public int winRewardCoins
+        {
+            get => gameplaySettings != null ? gameplaySettings.winRewardCoins : 50;
+            set { if (gameplaySettings != null) gameplaySettings.winRewardCoins = value; }
+        }
+
         public int mysteryShooterUnlockLevel
         {
             get => gameplaySettings != null ? gameplaySettings.mysteryShooterUnlockLevel : 4;

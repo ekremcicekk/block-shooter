@@ -8,6 +8,12 @@ namespace BlockShooter
         [Header("Block Settings")]
         public float fireRate = 0.15f;
         public float projectileSpeed = 12f;
+        public float conveyorSpeed = 1.5f;
+
+        [Header("Economy Settings")]
+        public int startGameCoins = 100;
+        public int playOnCost = 100;
+        public int winRewardCoins = 50;
 
         [Header("Feature Unlock Levels")]
         public int mysteryShooterUnlockLevel = 4;

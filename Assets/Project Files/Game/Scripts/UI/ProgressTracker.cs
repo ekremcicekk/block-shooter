@@ -33,7 +33,7 @@ namespace BlockShooter
         private void UpdateHUD()
         {
             float progress = _totalBlocks > 0 ? (float)_destroyedBlocks / _totalBlocks : 0f;
-            HUDController.Instance?.SetProgress(progress);
+            UIManager.Instance?.SetProgress(progress);
         }
     }
 }

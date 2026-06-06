@@ -39,6 +39,13 @@ namespace BlockShooter
         {
             if (State != GameState.Playing) return;
             SetState(GameState.Win);
+            
+            // Award level win coins
+            if (config != null)
+            {
+                SaveManager.Coins += config.winRewardCoins;
+            }
+            
             SaveManager.CurrentLevel++;
             OnLevelWin?.Invoke();
         }

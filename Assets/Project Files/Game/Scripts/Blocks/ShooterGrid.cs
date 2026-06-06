@@ -308,7 +308,26 @@ namespace BlockShooter
         {
             bool anyLeft = _activeBlocks.Count > 0;
             if (!anyLeft && (SlotSystem.Instance == null || SlotSystem.Instance.GetSlottedBlocks().Count == 0))
-                GameManager.Instance?.TriggerFail();
+            {
+                bool eligibleForRevive = SlotSystem.Instance != null && 
+                                         SlotSystem.Instance.MaxSlots <= SlotSystem.Instance.InitialSlotsCount && 
+                                         UIManager.Instance != null && 
+                                         !UIManager.Instance.HasRevivedThisLevel;
+
+                if (eligibleForRevive)
+                {
+                    // Freeze conveyor while revival popup is shown
+                    if (ConveyorController.Instance != null)
+                    {
+                        ConveyorController.Instance.IsFrozen = true;
+                    }
+                    UIManager.Instance.ShowKeepPlayingPanel();
+                }
+                else
+                {
+                    GameManager.Instance?.TriggerFail();
+                }
+            }
         }
     }
 }

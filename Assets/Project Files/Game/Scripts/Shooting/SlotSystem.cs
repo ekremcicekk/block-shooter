@@ -34,6 +34,7 @@ namespace BlockShooter
         private Vector3 _extraSlotDir = Vector3.right;
 
         public int  MaxSlots     => _maxSlots;
+        public int  InitialSlotsCount { get; private set; }
         public bool HasEmptySlot => EmptySlotIndex() >= 0;
 
         // ── Unity ─────────────────────────────────────────────────────────────
@@ -117,6 +118,7 @@ namespace BlockShooter
             }
 
             _maxSlots = _slotPositions.Count;
+            InitialSlotsCount = _maxSlots;
         }
 
         // ── Public API ────────────────────────────────────────────────────────
