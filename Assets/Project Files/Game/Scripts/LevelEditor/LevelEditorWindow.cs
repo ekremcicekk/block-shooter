@@ -620,64 +620,6 @@ namespace BlockShooter.Editor
         {
             Hdr("TRACK SPLINE");
 
-            // Preset buttons
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Preset:", GUILayout.Width(46));
-            string[] presetNames = { "Oval", "Wide", "Rectangle", "Zigzag", "S-Curve", "Butterfly" };
-            for (int i = 0; i < presetNames.Length; i++)
-            {
-                GUI.backgroundColor = _splinePreset == i ? new Color(.4f,.7f,1f) : new Color(.3f,.3f,.33f);
-                if (GUILayout.Button(presetNames[i], GUILayout.Height(22)))
-                { _splinePreset = i; ApplyPreset(); }
-            }
-            GUI.backgroundColor = Color.white;
-            EditorGUILayout.EndHorizontal();
-
-            // Symmetry & Utility tools
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("↔ Make Symmetric (Left to Right)", EditorStyles.miniButton, GUILayout.Height(20)))
-            {
-                MakeSplineSymmetric();
-            }
-            if (GUILayout.Button("⇄ Flip Horizontally", EditorStyles.miniButton, GUILayout.Height(20)))
-            {
-                FlipSplineHorizontally();
-            }
-            EditorGUILayout.EndHorizontal();
-
-            // Snapping controls
-            EditorGUILayout.BeginHorizontal();
-            _snapToGrid = EditorGUILayout.ToggleLeft("Snap to Grid", _snapToGrid, GUILayout.Width(100));
-            if (_snapToGrid)
-            {
-                GUILayout.Label("Size:", GUILayout.Width(35));
-                _snapSize = EditorGUILayout.FloatField(_snapSize, GUILayout.Width(45));
-                _snapSize = Mathf.Max(0.05f, _snapSize);
-            }
-            EditorGUILayout.EndHorizontal();
-
-            // Restore button — only visible after an accidental preset click
-            if (_presetBackupKnots != null && _presetBackupKnots.Count >= 3)
-            {
-                GUI.backgroundColor = new Color(1f, .75f, .2f);
-                if (GUILayout.Button("↩  Restore Previous Spline", EditorStyles.miniButton, GUILayout.Height(20)))
-                {
-                    _knots        = new List<Vector3>(_presetBackupKnots);
-                    _tangentsIn   = new List<Vector3>(_presetBackupTanIn);
-                    _tangentsOut  = new List<Vector3>(_presetBackupTanOut);
-                    _tangentModes = new List<TangentMode>(_presetBackupModes);
-                    _presetBackupKnots = null;
-                    EnsureTangentLists();
-                    SyncPreviewSpline();
-                    SceneView.RepaintAll();
-                    Repaint();
-                    _isDirty = true;
-                }
-                GUI.backgroundColor = Color.white;
-            }
-
-            GUILayout.Space(4);
-
             bool editingMain = _editingSpline && _editingBranchIndex < 0;
             if (!editingMain)
             {
@@ -694,6 +636,7 @@ namespace BlockShooter.Editor
                 EditorGUILayout.HelpBox(
                     "● Drag knots in the Scene View\n" +
                     "● Shift+Click = add knot\n" +
+                    "● Ctrl+Click = select multiple knots\n" +
                     "● Delete = remove selected knot (min 3)",
                     MessageType.None);
 
@@ -741,6 +684,8 @@ namespace BlockShooter.Editor
         private void StartSplineEdit()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            _selC = -1;
+            _selR = -1;
 
             // Point references to active target
             if (_editingBranchIndex >= 0)
@@ -1446,83 +1391,92 @@ namespace BlockShooter.Editor
             switch (_splinePreset)
             {
                 case 0: // Oval (Perfect Ellipse)
-                    _knots.Add(new Vector3(0f, 0f, fz));
-                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(0f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.5f));
-
-                    for (int i = 0; i < 4; i++)
                     {
-                        _tangentsIn.Add(Vector3.zero);
-                        _tangentsOut.Add(Vector3.zero);
-                        _tangentModes.Add(TangentMode.AutoSmooth);
+                        float b = d * 0.5f;
+                        float k = 0.5522847f; // Bezier curve constant for circle/ellipse
+                        
+                        _knots.Add(new Vector3(0f, 0f, fz));
+                        _knots.Add(new Vector3(+hw, 0f, fz + b));
+                        _knots.Add(new Vector3(0f, 0f, fz + d));
+                        _knots.Add(new Vector3(-hw, 0f, fz + b));
+
+                        // Knot 0 (Bottom Center)
+                        _tangentsIn.Add(new Vector3(-hw * k, 0f, 0f));
+                        _tangentsOut.Add(new Vector3(hw * k, 0f, 0f));
+                        _tangentModes.Add(TangentMode.Mirrored);
+
+                        // Knot 1 (Right Side)
+                        _tangentsIn.Add(new Vector3(0f, 0f, -b * k));
+                        _tangentsOut.Add(new Vector3(0f, 0f, b * k));
+                        _tangentModes.Add(TangentMode.Mirrored);
+
+                        // Knot 2 (Top Center)
+                        _tangentsIn.Add(new Vector3(hw * k, 0f, 0f));
+                        _tangentsOut.Add(new Vector3(-hw * k, 0f, 0f));
+                        _tangentModes.Add(TangentMode.Mirrored);
+
+                        // Knot 3 (Left Side)
+                        _tangentsIn.Add(new Vector3(0f, 0f, b * k));
+                        _tangentsOut.Add(new Vector3(0f, 0f, -b * k));
+                        _tangentModes.Add(TangentMode.Mirrored);
                     }
                     break;
 
-                case 1: // Wide (Capsule / Stadium Shape)
-                    _knots.Add(new Vector3(0f, 0f, fz));
-                    _knots.Add(new Vector3(+hw * 0.6f, 0f, fz));
-                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(+hw * 0.6f, 0f, fz + d));
-                    _knots.Add(new Vector3(0f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw * 0.6f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(-hw * 0.6f, 0f, fz));
-
-                    for (int i = 0; i < 8; i++)
+                case 1: // Wide Capsule / Stadium (Straight parallel sides + perfect circular caps)
                     {
-                        _tangentsIn.Add(Vector3.zero);
-                        _tangentsOut.Add(Vector3.zero);
-                        _tangentModes.Add(TangentMode.AutoSmooth);
+                        float r = Mathf.Min(hw, d * 0.5f);
+                        float k = 0.5522847f;
+                        float straightHeight = d - 2 * r;
+
+                        _knots.Add(new Vector3(0f, 0f, fz)); // 0: Bottom Center
+                        _knots.Add(new Vector3(+hw, 0f, fz + r)); // 1: Bottom Right Cap End / Straight Start
+                        _knots.Add(new Vector3(+hw, 0f, fz + d - r)); // 2: Straight End / Top Right Cap Start
+                        _knots.Add(new Vector3(0f, 0f, fz + d)); // 3: Top Center
+                        _knots.Add(new Vector3(-hw, 0f, fz + d - r)); // 4: Top Left Cap End / Straight Start
+                        _knots.Add(new Vector3(-hw, 0f, fz + r)); // 5: Straight End / Bottom Left Cap Start
+
+                        // Knot 0 (Bottom Center)
+                        _tangentsIn.Add(new Vector3(-hw * k, 0f, 0f));
+                        _tangentsOut.Add(new Vector3(hw * k, 0f, 0f));
+                        _tangentModes.Add(TangentMode.Mirrored);
+
+                        // Knot 1 (Bottom Right)
+                        _tangentsIn.Add(new Vector3(0f, 0f, -r * k));
+                        _tangentsOut.Add(new Vector3(0f, 0f, straightHeight * 0.33f)); // Points straight up
+                        _tangentModes.Add(TangentMode.Broken);
+
+                        // Knot 2 (Top Right)
+                        _tangentsIn.Add(new Vector3(0f, 0f, -straightHeight * 0.33f)); // Points straight down
+                        _tangentsOut.Add(new Vector3(0f, 0f, r * k));
+                        _tangentModes.Add(TangentMode.Broken);
+
+                        // Knot 3 (Top Center)
+                        _tangentsIn.Add(new Vector3(hw * k, 0f, 0f));
+                        _tangentsOut.Add(new Vector3(-hw * k, 0f, 0f));
+                        _tangentModes.Add(TangentMode.Mirrored);
+
+                        // Knot 4 (Top Left)
+                        _tangentsIn.Add(new Vector3(0f, 0f, r * k));
+                        _tangentsOut.Add(new Vector3(0f, 0f, -straightHeight * 0.33f)); // Points straight down
+                        _tangentModes.Add(TangentMode.Broken);
+
+                        // Knot 5 (Bottom Left)
+                        _tangentsIn.Add(new Vector3(0f, 0f, straightHeight * 0.33f)); // Points straight up
+                        _tangentsOut.Add(new Vector3(0f, 0f, -r * k));
+                        _tangentModes.Add(TangentMode.Broken);
                     }
                     break;
 
-                case 2: // Rectangle
-                    _knots.Add(new Vector3(0f, 0f, fz));
-                    _knots.Add(new Vector3(+hw, 0f, fz));
-                    _knots.Add(new Vector3(+hw, 0f, fz + d));
-                    _knots.Add(new Vector3(0f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw, 0f, fz));
-
-                    for (int i = 0; i < 6; i++)
-                    {
-                        _tangentsIn.Add(Vector3.zero);
-                        _tangentsOut.Add(Vector3.zero);
-                        _tangentModes.Add(TangentMode.Linear);
-                    }
-                    break;
-
-                case 3: // Zigzag / Wave
+                case 2: // Wavy Loop (Capsule loop with elegant waves on parallel sides)
                     _knots.Add(new Vector3(0f, 0f, fz));
                     _knots.Add(new Vector3(+hw * 0.8f, 0f, fz + d * 0.2f));
-                    _knots.Add(new Vector3(+hw * 0.4f, 0f, fz + d * 0.4f));
-                    _knots.Add(new Vector3(+hw * 0.9f, 0f, fz + d * 0.6f));
-                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.8f));
+                    _knots.Add(new Vector3(+hw * 1.2f, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(+hw * 0.8f, 0f, fz + d * 0.8f));
                     _knots.Add(new Vector3(0f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.8f));
-                    _knots.Add(new Vector3(-hw * 0.9f, 0f, fz + d * 0.6f));
-                    _knots.Add(new Vector3(-hw * 0.4f, 0f, fz + d * 0.4f));
+                    _knots.Add(new Vector3(-hw * 0.8f, 0f, fz + d * 0.8f));
+                    _knots.Add(new Vector3(-hw * 1.2f, 0f, fz + d * 0.5f));
                     _knots.Add(new Vector3(-hw * 0.8f, 0f, fz + d * 0.2f));
 
-                    for (int i = 0; i < 10; i++)
-                    {
-                        _tangentsIn.Add(Vector3.zero);
-                        _tangentsOut.Add(Vector3.zero);
-                        _tangentModes.Add(TangentMode.AutoSmooth);
-                    }
-                    break;
-
-                case 4: // S-Curve
-                    _knots.Add(new Vector3(0f, 0f, fz));
-                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.25f));
-                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.75f));
-                    _knots.Add(new Vector3(0f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.75f));
-                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.25f));
-
                     for (int i = 0; i < 8; i++)
                     {
                         _tangentsIn.Add(Vector3.zero);
@@ -1531,17 +1485,15 @@ namespace BlockShooter.Editor
                     }
                     break;
 
-                case 5: // Butterfly / Heart
+                case 3: // Heart Loop
                     _knots.Add(new Vector3(0f, 0f, fz));
-                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.25f));
-                    _knots.Add(new Vector3(+hw * 0.3f, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.75f));
-                    _knots.Add(new Vector3(0f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.75f));
-                    _knots.Add(new Vector3(-hw * 0.3f, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.25f));
+                    _knots.Add(new Vector3(+hw * 0.9f, 0f, fz + d * 0.35f));
+                    _knots.Add(new Vector3(+hw * 0.7f, 0f, fz + d * 0.85f));
+                    _knots.Add(new Vector3(0f, 0f, fz + d * 0.65f));
+                    _knots.Add(new Vector3(-hw * 0.7f, 0f, fz + d * 0.85f));
+                    _knots.Add(new Vector3(-hw * 0.9f, 0f, fz + d * 0.35f));
 
-                    for (int i = 0; i < 8; i++)
+                    for (int i = 0; i < 6; i++)
                     {
                         _tangentsIn.Add(Vector3.zero);
                         _tangentsOut.Add(Vector3.zero);
@@ -2253,14 +2205,72 @@ namespace BlockShooter.Editor
         // ═════════════════════════════════════════════════════════════════════
         //  RIGHT PANEL (inspector)
         // ═════════════════════════════════════════════════════════════════════
+        private void DrawRightSplineTools()
+        {
+            Hdr("SPLINE PRESETS");
+            string[] presetNames = { "Oval", "Wide Capsule", "Wavy Loop", "Heart Loop" };
+            int newPreset = EditorGUILayout.Popup("Shape Preset", _splinePreset, presetNames);
+            if (newPreset != _splinePreset)
+            {
+                _splinePreset = newPreset;
+                ApplyPreset();
+            }
+
+            if (_presetBackupKnots != null && _presetBackupKnots.Count >= 3)
+            {
+                GUILayout.Space(4);
+                GUI.backgroundColor = new Color(1f, .75f, .2f);
+                if (GUILayout.Button("↩  Restore Previous Spline", GUILayout.Height(24)))
+                {
+                    _knots        = new List<Vector3>(_presetBackupKnots);
+                    _tangentsIn   = new List<Vector3>(_presetBackupTanIn);
+                    _tangentsOut  = new List<Vector3>(_presetBackupTanOut);
+                    _tangentModes = new List<TangentMode>(_presetBackupModes);
+                    _presetBackupKnots = null;
+                    EnsureTangentLists();
+                    SyncPreviewSpline();
+                    SceneView.RepaintAll();
+                    Repaint();
+                    _isDirty = true;
+                }
+                GUI.backgroundColor = Color.white;
+            }
+
+            GUILayout.Space(6);
+            Hdr("SYMMETRY TOOLS");
+            if (GUILayout.Button("↔ Make Symmetric (L to R)", GUILayout.Height(24)))
+            {
+                MakeSplineSymmetric();
+            }
+            GUILayout.Space(4);
+            if (GUILayout.Button("⇄ Flip Horizontally", GUILayout.Height(24)))
+            {
+                FlipSplineHorizontally();
+            }
+
+            GUILayout.Space(6);
+            Hdr("GRID SNAPPING");
+            _snapToGrid = EditorGUILayout.Toggle("Snap to Grid", _snapToGrid);
+            if (_snapToGrid)
+            {
+                _snapSize = EditorGUILayout.FloatField("Snap Size", _snapSize);
+                _snapSize = Mathf.Max(0.05f, _snapSize);
+            }
+        }
+
         private void DrawRight()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(RightW), GUILayout.ExpandHeight(true));
 
-            // Knot inspector (when in spline edit mode and a knot is selected)
-            if (_editingSpline && _selKnot >= 0 && _selKnot < _knots.Count)
+            // Spline Editor Tools & Knot Inspector (when in spline edit mode)
+            if (_editingSpline)
             {
-                DrawKnotInspector();
+                DrawRightSplineTools();
+                if (_selKnot >= 0 && _selKnot < _knots.Count)
+                {
+                    GUILayout.Space(12);
+                    DrawKnotInspector();
+                }
                 EditorGUILayout.EndVertical();
                 return;
             }
@@ -2277,7 +2287,7 @@ namespace BlockShooter.Editor
             // Nothing selected
             GUILayout.Space(20);
             EditorGUILayout.HelpBox(
-                "Click a grid cell or\na spline knot to inspect.", MessageType.None);
+                "Click a grid cell to inspect.\nOr click 'Edit Spline' to manage track spline.", MessageType.None);
             EditorGUILayout.EndVertical();
         }
 
@@ -2404,30 +2414,24 @@ namespace BlockShooter.Editor
             // ── Shooter Block / Mystery Shooter / Freeze Shooter ──────────────
             if (isBlock)
             {
-                // Color palette — always shown at top
+                // Color palette — always shown at top, listed vertically
                 GUILayout.Label("Color:", EditorStyles.miniLabel);
                 var pal = GetActiveColors();
-                for (int i = 0; i < pal.Length; i += 2)
+                foreach (var entry in pal)
                 {
-                    EditorGUILayout.BeginHorizontal();
-                    for (int j = i; j < Mathf.Min(i + 2, pal.Length); j++)
+                    bool isSel = _color[c, r] == entry.t;
+                    GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .4f);
+                    var st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
+                    if (isSel) st.normal.textColor = Color.white;
+                    if (GUILayout.Button(entry.n, st, GUILayout.Height(24)))
                     {
-                        var entry = pal[j];
-                        bool isSel = _color[c, r] == entry.t;
-                        GUI.backgroundColor = isSel ? entry.c : Color.Lerp(entry.c, Color.black, .4f);
-                        var st = new GUIStyle(GUI.skin.button) { fontStyle = isSel ? FontStyle.Bold : FontStyle.Normal };
-                        if (isSel) st.normal.textColor = Color.white;
-                        if (GUILayout.Button(entry.n, st, GUILayout.Height(28)))
-                        {
-                            _color[c, r] = entry.t;
-                            if (_type[c, r] == GridCellType.Empty)
-                                _type[c, r] = GridCellType.ShooterBlock;
-                            _isDirty = true;
-                            Repaint();
-                        }
-                        GUI.backgroundColor = Color.white;
+                        _color[c, r] = entry.t;
+                        if (_type[c, r] == GridCellType.Empty)
+                            _type[c, r] = GridCellType.ShooterBlock;
+                        _isDirty = true;
+                        Repaint();
                     }
-                    EditorGUILayout.EndHorizontal();
+                    GUI.backgroundColor = Color.white;
                 }
 
                 GUILayout.Space(6);
@@ -2450,39 +2454,39 @@ namespace BlockShooter.Editor
 
                 GUILayout.Space(8);
 
-                // Converter Buttons
+                // Converter Buttons (vertical)
                 bool mysteryUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.mysteryShooterUnlockLevel;
                 bool freezeUnlocked  = _gameCfg != null && _levelIndex >= _gameCfg.freezeShooterUnlockLevel;
                 if (_type[c, r] == GridCellType.ShooterBlock)
                 {
                     if (mysteryUnlocked)
                     {
-                        if (GUILayout.Button("→ Convert to Mystery", GUILayout.Height(20)))
+                        if (GUILayout.Button("Convert to Mystery", GUILayout.Height(24)))
                         { _type[c, r] = GridCellType.MysteryShooter; _isDirty = true; Repaint(); }
                     }
                     if (freezeUnlocked)
                     {
-                        if (GUILayout.Button("→ Convert to Freeze", GUILayout.Height(20)))
+                        if (GUILayout.Button("Convert to Freeze", GUILayout.Height(24)))
                         { _type[c, r] = GridCellType.FreezeShooter; _isDirty = true; Repaint(); }
                     }
                 }
                 else if (_type[c, r] == GridCellType.MysteryShooter)
                 {
-                    if (GUILayout.Button("→ Convert to Standard", GUILayout.Height(20)))
+                    if (GUILayout.Button("Convert to Standard", GUILayout.Height(24)))
                     { _type[c, r] = GridCellType.ShooterBlock; _isDirty = true; Repaint(); }
                     if (freezeUnlocked)
                     {
-                        if (GUILayout.Button("→ Convert to Freeze", GUILayout.Height(20)))
+                        if (GUILayout.Button("Convert to Freeze", GUILayout.Height(24)))
                         { _type[c, r] = GridCellType.FreezeShooter; _isDirty = true; Repaint(); }
                     }
                 }
                 else if (_type[c, r] == GridCellType.FreezeShooter)
                 {
-                    if (GUILayout.Button("→ Convert to Standard", GUILayout.Height(20)))
+                    if (GUILayout.Button("Convert to Standard", GUILayout.Height(24)))
                     { _type[c, r] = GridCellType.ShooterBlock; _isDirty = true; Repaint(); }
                     if (mysteryUnlocked)
                     {
-                        if (GUILayout.Button("→ Convert to Mystery", GUILayout.Height(20)))
+                        if (GUILayout.Button("Convert to Mystery", GUILayout.Height(24)))
                         { _type[c, r] = GridCellType.MysteryShooter; _isDirty = true; Repaint(); }
                     }
                 }
@@ -2490,12 +2494,10 @@ namespace BlockShooter.Editor
                 GUILayout.Space(8);
 
                 // Bottom row — compact action buttons
-                EditorGUILayout.BeginHorizontal();
                 GUI.backgroundColor = new Color(.5f,.18f,.18f);
-                if (GUILayout.Button("Clear", GUILayout.Height(20)))
+                if (GUILayout.Button("Clear Cell", GUILayout.Height(24)))
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; _isDirty = true; Repaint(); }
                 GUI.backgroundColor = Color.white;
-                EditorGUILayout.EndHorizontal();
             }
 
             // ── Door ──────────────────────────────────────────────────────────
@@ -2506,15 +2508,16 @@ namespace BlockShooter.Editor
 
                 GUILayout.Space(8);
 
-                EditorGUILayout.BeginHorizontal();
                 GUI.backgroundColor = new Color(.35f,.55f,1f);
-                if (GUILayout.Button("→ Shooter Block", GUILayout.Height(20)))
+                if (GUILayout.Button("Set as Shooter Block", GUILayout.Height(24)))
                 { _type[c, r] = GridCellType.ShooterBlock; _isDirty = true; Repaint(); }
+                
+                GUILayout.Space(4);
+
                 GUI.backgroundColor = new Color(.5f,.18f,.18f);
-                if (GUILayout.Button("Clear", GUILayout.Height(20)))
+                if (GUILayout.Button("Clear Cell", GUILayout.Height(24)))
                 { _type[c, r] = GridCellType.Empty; _selC = -1; _selR = -1; _isDirty = true; Repaint(); }
                 GUI.backgroundColor = Color.white;
-                EditorGUILayout.EndHorizontal();
             }
 
             // ── Empty ─────────────────────────────────────────────────────────
@@ -2523,33 +2526,27 @@ namespace BlockShooter.Editor
                 // Color palette — clicking a color auto-promotes to ShooterBlock
                 GUILayout.Label("Color:", EditorStyles.miniLabel);
                 var pal = GetActiveColors();
-                for (int i = 0; i < pal.Length; i += 2)
+                foreach (var entry in pal)
                 {
-                    EditorGUILayout.BeginHorizontal();
-                    for (int j = i; j < Mathf.Min(i + 2, pal.Length); j++)
+                    GUI.backgroundColor = Color.Lerp(entry.c, Color.black, .4f);
+                    if (GUILayout.Button(entry.n, GUILayout.Height(24)))
                     {
-                        var entry = pal[j];
-                        GUI.backgroundColor = Color.Lerp(entry.c, Color.black, .4f);
-                        if (GUILayout.Button(entry.n, GUILayout.Height(28)))
-                        {
-                            _color[c, r] = entry.t;
-                            _type[c, r]  = GridCellType.ShooterBlock;
-                            _isDirty = true;
-                            Repaint();
-                        }
-                        GUI.backgroundColor = Color.white;
+                        _color[c, r] = entry.t;
+                        _type[c, r]  = GridCellType.ShooterBlock;
+                        _isDirty = true;
+                        Repaint();
                     }
-                    EditorGUILayout.EndHorizontal();
+                    GUI.backgroundColor = Color.white;
                 }
 
-                GUILayout.Space(6);
-                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(8);
+                GUILayout.Label("Actions:", EditorStyles.miniLabel);
 
                 bool doorUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.doorUnlockLevel;
                 if (doorUnlocked)
                 {
                     GUI.backgroundColor = new Color(.5f,.3f,.9f);
-                    if (GUILayout.Button("→ Set as Door", GUILayout.Height(22)))
+                    if (GUILayout.Button("Set as Door", GUILayout.Height(24)))
                     { _type[c, r] = GridCellType.Door; _isDirty = true; Repaint(); }
                 }
                 
@@ -2557,7 +2554,7 @@ namespace BlockShooter.Editor
                 if (mysteryUnlocked)
                 {
                     GUI.backgroundColor = new Color(0.2f, 0.7f, 0.9f);
-                    if (GUILayout.Button("→ Set as Mystery", GUILayout.Height(22)))
+                    if (GUILayout.Button("Set as Mystery", GUILayout.Height(24)))
                     {
                         _type[c, r] = GridCellType.MysteryShooter;
                         _color[c, r] = BlockColorType.Red;
@@ -2571,7 +2568,7 @@ namespace BlockShooter.Editor
                 if (freezeUnlocked)
                 {
                     GUI.backgroundColor = new Color(0.1f, 0.8f, 0.6f);
-                    if (GUILayout.Button("→ Set as Freeze", GUILayout.Height(22)))
+                    if (GUILayout.Button("Set as Freeze", GUILayout.Height(24)))
                     {
                         _type[c, r] = GridCellType.FreezeShooter;
                         _color[c, r] = BlockColorType.Red;
@@ -2582,7 +2579,6 @@ namespace BlockShooter.Editor
                     }
                 }
                 GUI.backgroundColor = Color.white;
-                EditorGUILayout.EndHorizontal();
             }
 
             if (EditorGUI.EndChangeCheck())
