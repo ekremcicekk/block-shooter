@@ -40,6 +40,21 @@ namespace BlockShooter
         {
             if (State != GameState.Playing) return;
             SetState(GameState.Win);
+
+            // Trigger LevelWin on active level root animator if present
+            if (LevelManager.Instance != null && LevelManager.Instance.CurrentLevelRoot != null)
+            {
+                var animator = LevelManager.Instance.CurrentLevelRoot.GetComponent<Animator>();
+                if (animator == null)
+                {
+                    animator = LevelManager.Instance.CurrentLevelRoot.GetComponentInChildren<Animator>();
+                }
+
+                if (animator != null)
+                {
+                    animator.SetTrigger("LevelWin");
+                }
+            }
             
             // Award level win coins
             if (config != null)

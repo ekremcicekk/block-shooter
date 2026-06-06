@@ -22,7 +22,6 @@ namespace BlockShooter
         public GameObject groundPrefab;
 
         [Header("Conveyor Defaults")]
-        public float conveyorSpeed    = 1.5f;
         public int   laneCount        = 5;
         public float laneSpacing      = 0.22f;
         public float rowSpacing       = 0.22f;

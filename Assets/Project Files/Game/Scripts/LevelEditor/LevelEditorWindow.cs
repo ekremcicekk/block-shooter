@@ -2541,7 +2541,7 @@ namespace BlockShooter.Editor
             float trackRailHeight = _cfg.railHeight;
             WriteKnotsToContainer(sc, trackRailHeight, 0f);
             var cc = trackGo.AddComponent<ConveyorController>();
-            cc.speed = _cfg.conveyorSpeed;
+            cc.speed = 1.5f; // Default fallback speed
             lr.conveyorController = cc;
 
             // Track mesh — ConveyorTrackMeshBuilder (RequireComponent auto-adds MeshFilter + MeshRenderer)

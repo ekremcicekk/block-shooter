@@ -121,13 +121,13 @@ namespace BlockShooter
 
         private void OnEnable()
         {
-            GameManager.OnLevelWin += ShowWinPanel;
+            GameManager.OnLevelWin += HandleLevelWin;
             GameManager.OnLevelFail += ShowFailPanel;
         }
 
         private void OnDisable()
         {
-            GameManager.OnLevelWin -= ShowWinPanel;
+            GameManager.OnLevelWin -= HandleLevelWin;
             GameManager.OnLevelFail -= ShowFailPanel;
         }
 
@@ -240,6 +240,17 @@ namespace BlockShooter
             winPanel.SetActive(true);
             winPanel.transform.localScale = Vector3.zero;
             winPanel.transform.DOScale(Vector3.one, 0.4f).SetEase(Ease.OutBack).SetUpdate(true);
+        }
+
+        private void HandleLevelWin()
+        {
+            StartCoroutine(ShowWinPanelDelayed(1.0f));
+        }
+
+        private System.Collections.IEnumerator ShowWinPanelDelayed(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            ShowWinPanel();
         }
 
         private void OnNextLevel()
