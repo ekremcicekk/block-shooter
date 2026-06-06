@@ -72,6 +72,7 @@ namespace BlockShooter
         public bool isMystery            { get => _isMystery; set => _isMystery = value; }
         public bool IsAccessible         => _isAccessible;
         public bool IsFrozen             => TryGetComponent<FreezeBlockFeature>(out var f) && f.isFrozen;
+        public bool IsShooting           => _isShooting;
 
         // Events
         public event Action<ShooterBlock> OnSlotted;

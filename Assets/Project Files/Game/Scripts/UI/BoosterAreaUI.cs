@@ -134,9 +134,20 @@ namespace BlockShooter
                 BoosterType.ExtraSlot => true,
                 BoosterType.MoveShooter => SlotSystem.Instance != null && SlotSystem.Instance.HasEmptySlot &&
                                            ShooterGrid.Instance != null && ShooterGrid.Instance.HasLockedBlocks(),
-                BoosterType.SuperShooter => SlotSystem.Instance != null && SlotSystem.Instance.GetSlottedBlocks().Count > 0,
+                BoosterType.SuperShooter => SlotSystem.Instance != null && HasNonShootingSlottedBlock(),
                 _ => false
             };
+        }
+
+        private bool HasNonShootingSlottedBlock()
+        {
+            if (SlotSystem.Instance == null) return false;
+            foreach (var b in SlotSystem.Instance.GetSlottedBlocks())
+            {
+                if (b != null && !b.IsShooting)
+                    return true;
+            }
+            return false;
         }
 
         private void OnBoosterMainClicked(BoosterSlotUI slot)

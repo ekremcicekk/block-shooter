@@ -66,6 +66,27 @@ namespace BlockShooter
                 return true;
             }
 
+            // Usability validation before consuming booster
+            if (type == BoosterType.SuperShooter)
+            {
+                if (SlotSystem.Instance == null) return false;
+                bool hasNonShootingBlock = false;
+                foreach (var b in SlotSystem.Instance.GetSlottedBlocks())
+                {
+                    if (b != null && !b.IsShooting)
+                    {
+                        hasNonShootingBlock = true;
+                        break;
+                    }
+                }
+                if (!hasNonShootingBlock) return false;
+            }
+            else if (type == BoosterType.MoveShooter)
+            {
+                if (SlotSystem.Instance == null || !SlotSystem.Instance.HasEmptySlot) return false;
+                if (ShooterGrid.Instance == null || !ShooterGrid.Instance.HasLockedBlocks()) return false;
+            }
+
             if (!SaveManager.UseBooster(type)) return false;
 
             switch (type)
@@ -95,15 +116,26 @@ namespace BlockShooter
         {
             if (SlotSystem.Instance == null) return;
             var slotted = SlotSystem.Instance.GetSlottedBlocks();
-            if (slotted.Count == 0) return;
+            
+            // Filter candidates: only slotted blocks that are NOT currently shooting
+            var candidates = new System.Collections.Generic.List<ShooterBlock>();
+            foreach (var b in slotted)
+            {
+                if (b != null && !b.IsShooting)
+                {
+                    candidates.Add(b);
+                }
+            }
+
+            if (candidates.Count == 0) return;
 
             IsAwaitingSuperShooterTarget = true;
 
-            // Highlight slotted blocks so player knows to tap one
-            foreach (var b in slotted)
+            // Highlight ONLY the eligible candidate blocks (non-shooting) so player knows to tap one
+            foreach (var b in candidates)
                 b.transform.DOPunchScale(Vector3.one * 0.2f, 0.4f, 4, 0.5f);
 
-            StartCoroutine(WaitForSuperShooterTarget(slotted));
+            StartCoroutine(WaitForSuperShooterTarget(candidates));
         }
 
         private IEnumerator WaitForSuperShooterTarget(System.Collections.Generic.List<ShooterBlock> candidates)

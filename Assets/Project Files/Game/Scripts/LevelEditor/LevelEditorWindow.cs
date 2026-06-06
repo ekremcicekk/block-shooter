@@ -29,6 +29,12 @@ namespace BlockShooter.Editor
         private UnityEditorInternal.ReorderableList _levelList;
         private SerializedObject _gameCfgSerialized;
 
+        private SerializedObject _windowSerialized;
+        private UnityEditorInternal.ReorderableList _groupsList;
+        private Dictionary<BranchPathData, UnityEditorInternal.ReorderableList> _branchGroupsLists = new();
+        private int _groupIndexToRemoveDeferred = -1;
+        private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
+
         // ── Level list ────────────────────────────────────────────────────────
         private List<string> _paths  = new();
         private List<string> _labels = new();
@@ -45,7 +51,7 @@ namespace BlockShooter.Editor
         private BlockColorType[,] _color;
         private int[,]            _shots, _doors, _freezeCount;
 
-        private List<LevelConveyorGroup> _groups = new();
+        [SerializeField] private List<LevelConveyorGroup> _groups = new();
         [SerializeField] private List<BranchPathData> _branches = new();
         [SerializeField] private float _openZoneHalfT = 0.08f;
 
@@ -145,6 +151,17 @@ namespace BlockShooter.Editor
             return pal[newIndex].t;
         }
 
+        private BlockColorType DrawColorPopup(Rect rect, BlockColorType selected)
+        {
+            var pal = GetActiveColors();
+            string[] names = pal.Select(x => x.n).ToArray();
+            int index = System.Array.FindIndex(pal, x => x.t == selected);
+            if (index < 0) index = 0;
+
+            int newIndex = EditorGUI.Popup(rect, index, names);
+            return pal[newIndex].t;
+        }
+
         // ── Menu ──────────────────────────────────────────────────────────────
         [MenuItem("BlockShooter/Level Editor", false, 10)]
         public static void Open()
@@ -161,6 +178,9 @@ namespace BlockShooter.Editor
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             LoadCfg();
             RefreshList();
+
+            _branchGroupsLists.Clear();
+            _windowSerialized = new SerializedObject(this);
 
             if (_activeIdx >= _paths.Count)
                 _activeIdx = _paths.Count - 1;
@@ -191,6 +211,9 @@ namespace BlockShooter.Editor
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             DestroyPreview();
             DestroyLevelPreview();
+            _branchGroupsLists.Clear();
+            _windowSerialized = null;
+            _groupsList = null;
         }
 
         private void OnPlayModeStateChanged(PlayModeStateChange state)
@@ -411,6 +434,14 @@ namespace BlockShooter.Editor
         {
             if (_cfg == null) { DrawNoCfg(); return; }
             if (_gameCfgSerialized != null) _gameCfgSerialized.Update();
+            
+            if (_windowSerialized == null)
+            {
+                _windowSerialized = new SerializedObject(this);
+            }
+            _windowSerialized.Update();
+            SetupGroupsList();
+
             DrawToolbar();
 
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -419,6 +450,8 @@ namespace BlockShooter.Editor
                 EditorGUILayout.HelpBox("Level Editor is disabled during Play Mode.", MessageType.Info);
                 return;
             }
+
+            EditorGUI.BeginChangeCheck();
 
             EditorGUILayout.BeginHorizontal();
             DrawLeft();
@@ -430,6 +463,17 @@ namespace BlockShooter.Editor
                 DrawRight();
             }
             EditorGUILayout.EndHorizontal();
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                _isDirty = true;
+            }
+
+            if (_windowSerialized.ApplyModifiedProperties())
+            {
+                _isDirty = true;
+                Repaint();
+            }
         }
 
         private void DrawNoCfg()
@@ -1799,6 +1843,166 @@ namespace BlockShooter.Editor
         // ═════════════════════════════════════════════════════════════════════
         //  GROUPS SECTION
         // ═════════════════════════════════════════════════════════════════════
+        private void SetupGroupsList()
+        {
+            if (_groupsList != null && _groupsList.serializedProperty.serializedObject == _windowSerialized)
+                return;
+
+            var prop = _windowSerialized.FindProperty("_groups");
+            _groupsList = new UnityEditorInternal.ReorderableList(_windowSerialized, prop, true, false, false, false);
+            _groupsList.headerHeight = 0f;
+            _groupsList.footerHeight = 0f;
+            _groupsList.elementHeight = 22f;
+
+            _groupsList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+            {
+                if (index < 0 || index >= prop.arraySize) return;
+
+                var element = prop.GetArrayElementAtIndex(index);
+                var colorProp = element.FindPropertyRelative("color");
+                var rowCountProp = element.FindPropertyRelative("rowCount");
+                var laneProp = element.FindPropertyRelative("laneCount");
+
+                if (laneProp.intValue != 5)
+                {
+                    laneProp.intValue = 5;
+                }
+
+                float currentX = rect.x;
+
+                // Color Box Indicator
+                Rect colorBoxRect = new Rect(currentX, rect.y + 2, 16, rect.height - 4);
+                BlockColorType colorVal = (BlockColorType)colorProp.enumValueIndex;
+                Color prevColor = GUI.backgroundColor;
+                GUI.backgroundColor = PC(colorVal);
+                GUI.Box(colorBoxRect, "");
+                GUI.backgroundColor = prevColor;
+
+                currentX += 20;
+
+                // Color Dropdown
+                Rect colorPopupRect = new Rect(currentX, rect.y + 2, 80, rect.height - 4);
+                BlockColorType newColor = DrawColorPopup(colorPopupRect, colorVal);
+                if (newColor != colorVal)
+                {
+                    colorProp.enumValueIndex = (int)newColor;
+                }
+
+                currentX += 85;
+
+                // Rows Label
+                Rect rowsLabelRect = new Rect(currentX, rect.y + 2, 40, rect.height - 4);
+                GUI.Label(rowsLabelRect, "Rows");
+
+                currentX += 40;
+
+                // Rows Field
+                Rect rowsFieldRect = new Rect(currentX, rect.y + 2, 50, rect.height - 4);
+                int oldRows = rowCountProp.intValue;
+                int newRows = EditorGUI.IntField(rowsFieldRect, oldRows);
+                if (newRows != oldRows)
+                {
+                    rowCountProp.intValue = newRows;
+                }
+
+                currentX += 55;
+
+                // Lanes Label
+                Rect lanesLabelRect = new Rect(currentX, rect.y + 2, 60, rect.height - 4);
+                GUI.Label(lanesLabelRect, "Lanes: 5", EditorStyles.miniLabel);
+
+                // Delete Button
+                float delWidth = 20;
+                Rect delRect = new Rect(rect.x + rect.width - delWidth, rect.y + 2, delWidth, rect.height - 4);
+                if (GUI.Button(delRect, "✕"))
+                {
+                    _groupIndexToRemoveDeferred = index;
+                }
+            };
+        }
+
+        private UnityEditorInternal.ReorderableList GetBranchGroupsList(BranchPathData branch, SerializedProperty prop)
+        {
+            if (!_branchGroupsLists.TryGetValue(branch, out var list) || list.serializedProperty.serializedObject != _windowSerialized)
+            {
+                list = new UnityEditorInternal.ReorderableList(_windowSerialized, prop, true, false, false, false);
+                list.headerHeight = 0f;
+                list.footerHeight = 0f;
+                list.elementHeight = 22f;
+
+                list.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+                {
+                    if (index < 0 || index >= prop.arraySize) return;
+
+                    var element = prop.GetArrayElementAtIndex(index);
+                    var colorProp = element.FindPropertyRelative("color");
+                    var rowCountProp = element.FindPropertyRelative("rowCount");
+                    var laneProp = element.FindPropertyRelative("laneCount");
+
+                    if (laneProp.intValue != 5)
+                    {
+                        laneProp.intValue = 5;
+                    }
+
+                    float currentX = rect.x;
+
+                    // Color Box Indicator
+                    Rect colorBoxRect = new Rect(currentX, rect.y + 2, 16, rect.height - 4);
+                    BlockColorType colorVal = (BlockColorType)colorProp.enumValueIndex;
+                    Color prevColor = GUI.backgroundColor;
+                    GUI.backgroundColor = PC(colorVal);
+                    GUI.Box(colorBoxRect, "");
+                    GUI.backgroundColor = prevColor;
+
+                    currentX += 20;
+
+                    // Color Dropdown
+                    Rect colorPopupRect = new Rect(currentX, rect.y + 2, 80, rect.height - 4);
+                    BlockColorType newColor = DrawColorPopup(colorPopupRect, colorVal);
+                    if (newColor != colorVal)
+                    {
+                        colorProp.enumValueIndex = (int)newColor;
+                    }
+
+                    currentX += 85;
+
+                    // Rows Label
+                    Rect rowsLabelRect = new Rect(currentX, rect.y + 2, 40, rect.height - 4);
+                    GUI.Label(rowsLabelRect, "Rows");
+
+                    currentX += 40;
+
+                    // Rows Field
+                    Rect rowsFieldRect = new Rect(currentX, rect.y + 2, 50, rect.height - 4);
+                    int oldRows = rowCountProp.intValue;
+                    int newRows = EditorGUI.IntField(rowsFieldRect, oldRows);
+                    if (newRows != oldRows)
+                    {
+                        rowCountProp.intValue = newRows;
+                    }
+
+                    currentX += 55;
+
+                    // Lanes Label
+                    Rect lanesLabelRect = new Rect(currentX, rect.y + 2, 60, rect.height - 4);
+                    GUI.Label(lanesLabelRect, "Lanes: 5", EditorStyles.miniLabel);
+
+                    // Delete Button
+                    float delWidth = 20;
+                    Rect delRect = new Rect(rect.x + rect.width - delWidth, rect.y + 2, delWidth, rect.height - 4);
+                    if (GUI.Button(delRect, "✕"))
+                    {
+                        _branchGroupIndexToRemoveDeferred = (branch, index);
+                    }
+                };
+
+                _branchGroupsLists[branch] = list;
+            }
+
+            list.serializedProperty = prop;
+            return list;
+        }
+
         private void DrawGroupsSection()
         {
             Hdr("CONVEYOR GROUPS");
@@ -1824,34 +2028,35 @@ namespace BlockShooter.Editor
             GUILayout.Space(4);
 
             EditorGUI.BeginChangeCheck();
-            for (int i = _groups.Count - 1; i >= 0; i--)
+
+            if (_groupsList != null)
             {
-                var g = _groups[i];
-                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
-                Color prev = GUI.backgroundColor;
-                GUI.backgroundColor = PC(g.color);
-                GUILayout.Box("", GUILayout.Width(20), GUILayout.Height(20));
-                GUI.backgroundColor = prev;
-                g.color     = DrawColorPopup(g.color, GUILayout.Width(72));
-                GUILayout.Label("Rows",  GUILayout.Width(32)); g.rowCount  = EditorGUILayout.IntField(g.rowCount,  GUILayout.Width(36));
-                g.laneCount = 5;
-                GUILayout.Label("Lanes: 5", EditorStyles.miniLabel, GUILayout.Width(50));
-                if (GUILayout.Button("✕", GUILayout.Width(20), GUILayout.Height(20)))
-                {
-                    _groups.RemoveAt(i);
-                    _isDirty = true;
-                }
-                EditorGUILayout.EndHorizontal();
+                _groupsList.DoLayoutList();
             }
+
             if (GUILayout.Button("+ Group", GUILayout.Height(22)))
             {
+                _windowSerialized.ApplyModifiedProperties();
                 _groups.Add(new LevelConveyorGroup
-                    { color = BlockColorType.Red,
-                      rowCount  = _cfg?.rowsPerGroup ?? 20,
-                      laneCount = 5 });
+                {
+                    color = BlockColorType.Red,
+                    rowCount  = _cfg?.rowsPerGroup ?? 20,
+                    laneCount = 5
+                });
+                _windowSerialized.Update();
                 _isDirty = true;
             }
             GUILayout.Space(8);
+
+            // Execute deferred removal outside of list drawing loop
+            if (_groupIndexToRemoveDeferred >= 0)
+            {
+                _windowSerialized.ApplyModifiedProperties();
+                _groups.RemoveAt(_groupIndexToRemoveDeferred);
+                _groupIndexToRemoveDeferred = -1;
+                _windowSerialized.Update();
+                _isDirty = true;
+            }
 
             Hdr("OPEN ZONE");
             _openZoneHalfT = EditorGUILayout.Slider("Gap Half-T", _openZoneHalfT, 0.005f, 0.25f);
@@ -2250,6 +2455,8 @@ namespace BlockShooter.Editor
 
             StopSplineEdit(save: false);
             DestroyLevelPreview();
+            _branchGroupsLists.Clear();
+            _windowSerialized = new SerializedObject(this);
 
             _levelIndex   = idx + 1;
             _levelName    = $"Level {_levelIndex}";
@@ -3093,7 +3300,9 @@ namespace BlockShooter.Editor
                 GUI.backgroundColor = new Color(.9f, .3f, .3f);
                 if (GUILayout.Button("✕ Remove Branch", GUILayout.Width(110)))
                 {
+                    _windowSerialized.ApplyModifiedProperties();
                     _branches.RemoveAt(i);
+                    _windowSerialized.Update();
                     _isDirty = true;
                     EditorGUILayout.EndHorizontal();
                     EditorGUILayout.EndVertical();
@@ -3155,42 +3364,26 @@ namespace BlockShooter.Editor
 
                 GUILayout.Space(4);
                 GUILayout.Label("Branch Groups:", EditorStyles.boldLabel);
-                // Draw group list for branch
-                for (int gIdx = b.groups.Count - 1; gIdx >= 0; gIdx--)
-                {
-                    var g = b.groups[gIdx];
-                    EditorGUILayout.BeginHorizontal();
-                    Color prev = GUI.backgroundColor;
-                    GUI.backgroundColor = PC(g.color);
-                    GUILayout.Box("", GUILayout.Width(16), GUILayout.Height(16));
-                    GUI.backgroundColor = prev;
-                    g.color = DrawColorPopup(g.color, GUILayout.Width(72));
-                    GUILayout.Label("Rows", GUILayout.Width(32)); g.rowCount = EditorGUILayout.IntField(g.rowCount, GUILayout.Width(36));
-                    g.laneCount = 5; // Hardcoded to 5
-                    GUILayout.Label("Lanes: 5", EditorStyles.miniLabel, GUILayout.Width(50));
-                    
-                    // Disable group remove button if editing any spline
-                    EditorGUI.BeginDisabledGroup(_editingSpline);
-                    if (GUILayout.Button("✕", GUILayout.Width(18), GUILayout.Height(18)))
-                    {
-                        b.groups.RemoveAt(gIdx);
-                        _isDirty = true;
-                    }
-                    EditorGUI.EndDisabledGroup();
-                    
-                    EditorGUILayout.EndHorizontal();
-                }
-                
+
+                SerializedProperty branchesProp = _windowSerialized.FindProperty("_branches");
+                SerializedProperty branchProp = branchesProp.GetArrayElementAtIndex(i);
+                SerializedProperty branchGroupsProp = branchProp.FindPropertyRelative("groups");
+
+                var branchGroupsList = GetBranchGroupsList(b, branchGroupsProp);
+                branchGroupsList.DoLayoutList();
+
                 // Disable Add Group button if editing any spline
                 EditorGUI.BeginDisabledGroup(_editingSpline);
                 if (GUILayout.Button("+ Add Group to Branch", EditorStyles.miniButton, GUILayout.Height(18)))
                 {
+                    _windowSerialized.ApplyModifiedProperties();
                     b.groups.Add(new LevelConveyorGroup
                     {
                         color = BlockColorType.Red,
                         rowCount = 10,
                         laneCount = 5
                     });
+                    _windowSerialized.Update();
                     _isDirty = true;
                 }
                 EditorGUI.EndDisabledGroup();
@@ -3201,10 +3394,21 @@ namespace BlockShooter.Editor
                 GUILayout.Space(6);
             }
 
+            // Execute deferred branch group removal outside of the list drawing loop
+            if (_branchGroupIndexToRemoveDeferred.branch != null)
+            {
+                _windowSerialized.ApplyModifiedProperties();
+                _branchGroupIndexToRemoveDeferred.branch.groups.RemoveAt(_branchGroupIndexToRemoveDeferred.index);
+                _branchGroupIndexToRemoveDeferred = (null, -1);
+                _windowSerialized.Update();
+                _isDirty = true;
+            }
+
             EditorGUI.BeginDisabledGroup(_editingSpline);
             GUI.backgroundColor = new Color(.45f, .85f, .5f);
             if (GUILayout.Button("+ Add Branch Path", GUILayout.Height(26)))
             {
+                _windowSerialized.ApplyModifiedProperties();
                 var newBranch = new BranchPathData
                 {
                     branchName = $"Branch_{_branches.Count}",
@@ -3221,6 +3425,7 @@ namespace BlockShooter.Editor
                     splineTangentModes = new List<int> { (int)TangentMode.AutoSmooth, (int)TangentMode.AutoSmooth, (int)TangentMode.AutoSmooth }
                 };
                 _branches.Add(newBranch);
+                _windowSerialized.Update();
                 _isDirty = true;
             }
             GUI.backgroundColor = Color.white;
