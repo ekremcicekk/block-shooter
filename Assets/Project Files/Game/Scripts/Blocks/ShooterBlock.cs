@@ -326,16 +326,24 @@ namespace BlockShooter
         // for natural re-entry rather than being chased across the track.
         private IEnumerator ShootGroupRoutine(BlockGroup group)
         {
-            const float laneDelay  = 0.04f;
+            float laneDelay = GameManager.Instance != null && GameManager.Instance.config != null 
+                ? GameManager.Instance.config.fireRate 
+                : 0.15f;
             const float rowTimeout = 15f;
 
             int startRow = FindStartRow(group);
 
             for (int row = startRow; row < group.RowCount && !IsDepleted; row++)
             {
+                // If there are no live blocks left in this row, skip it immediately to prevent freezing
+                if (!RowHasLiveBlocks(group, row)) continue;
+
+                // If the row has already passed/exited the fire range, skip it
+                if (RowIsPastFireRange(group, row)) continue;
+
                 // Wait until at least one live block from this row is in FireRange.
                 float waited = 0f;
-                while (!RowHasBlockInRange(group, row) && waited < rowTimeout && !IsDepleted)
+                while (!RowHasBlockInRange(group, row) && RowHasLiveBlocks(group, row) && !RowIsPastFireRange(group, row) && waited < rowTimeout && !IsDepleted)
                 {
                     yield return null;
                     waited += Time.deltaTime;
@@ -378,6 +386,37 @@ namespace BlockShooter
                     return true;
             }
             return false;
+        }
+
+        private bool RowHasLiveBlocks(BlockGroup group, int row)
+        {
+            for (int lane = 0; lane < group.LaneCount; lane++)
+            {
+                var b = group.GetBlock(row, lane);
+                if (b != null && !b.IsDestroyed)
+                    return true;
+            }
+            return false;
+        }
+
+        private bool RowIsPastFireRange(BlockGroup group, int row)
+        {
+            if (FireRange.Instance == null) return false;
+
+            bool hasLiveBlocks = false;
+            for (int lane = 0; lane < group.LaneCount; lane++)
+            {
+                var b = group.GetBlock(row, lane);
+                if (b != null && !b.IsDestroyed)
+                {
+                    hasLiveBlocks = true;
+                    // If any live block in the row has NOT entered yet or is still inside the range,
+                    // the row is NOT past the fire range yet.
+                    if (!b.HasEnteredFireRange || FireRange.Instance.ContainsBlock(b))
+                        return false;
+                }
+            }
+            return hasLiveBlocks;
         }
 
         // Returns the smallest RowIndex of this group's blocks that are currently in FireRange.
