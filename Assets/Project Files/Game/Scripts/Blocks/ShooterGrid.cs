@@ -301,6 +301,13 @@ namespace BlockShooter
 
         private void CheckAllDepleted()
         {
+            if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
+
+            // If there are projectiles still in flight, defer this check.
+            // When the last projectile lands (ReturnToPool), NotifyAllProjectilesLanded will be called,
+            // which will re-trigger this check — resolving the race condition.
+            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return;
+
             bool anyLeft = _activeBlocks.Count > 0;
             if (!anyLeft && (SlotSystem.Instance == null || SlotSystem.Instance.GetSlottedBlocks().Count == 0))
             {
@@ -323,6 +330,17 @@ namespace BlockShooter
                     GameManager.Instance?.TriggerFail();
                 }
             }
+        }
+
+        /// <summary>
+        /// Called by ProjectilePool when all in-flight projectiles have landed.
+        /// This is the deferred re-check for the depletion state, resolving the race condition
+        /// where Deplete() fires before the last projectile reaches its target.
+        /// </summary>
+        public void NotifyAllProjectilesLanded()
+        {
+            if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
+            CheckAllDepleted();
         }
     }
 }

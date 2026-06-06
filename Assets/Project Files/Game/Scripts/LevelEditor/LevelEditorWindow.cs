@@ -2227,8 +2227,6 @@ namespace BlockShooter.Editor
 
             var stub = new GameObject(name);
             var lr   = stub.AddComponent<LevelRoot>();
-            lr.levelIndex = _levelIndex;
-            lr.levelName  = _levelName;
             lr.gridCols   = _gridCols;   // write dims so LoadLevel can restore them correctly
             lr.gridRows   = _gridRows;
             PrefabUtility.SaveAsPrefabAsset(stub, path);
@@ -2253,10 +2251,10 @@ namespace BlockShooter.Editor
             StopSplineEdit(save: false);
             DestroyLevelPreview();
 
-            _levelIndex   = lr.levelIndex;
-            _levelName    = lr.levelName;
-            _goalType     = lr.goalType;
-            _goalAmount   = lr.goalAmount;
+            _levelIndex   = idx + 1;
+            _levelName    = $"Level {_levelIndex}";
+            _goalType     = LevelGoalType.ClearAllBlocks;
+            _goalAmount   = 0;
             // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
             _gridCols     = lr.gridCols  > 0 ? Mathf.Clamp(lr.gridCols,  1, MaxCols) : 4;
             _gridRows     = lr.gridRows  > 0 ? Mathf.Clamp(lr.gridRows,  1, MaxRows) : 2;
@@ -2402,19 +2400,7 @@ namespace BlockShooter.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            // Update the copy's LevelRoot data
-            var go = AssetDatabase.LoadAssetAtPath<GameObject>(destPath);
-            if (go != null)
-            {
-                var lr = go.GetComponent<LevelRoot>();
-                if (lr != null)
-                {
-                    lr.levelIndex = newIndex;
-                    lr.levelName  = $"Level {newIndex}";
-                    EditorUtility.SetDirty(go);
-                    PrefabUtility.SavePrefabAsset(go);
-                }
-            }
+
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -2446,6 +2432,19 @@ namespace BlockShooter.Editor
             EnsureDir(dir);
 
             var root = new GameObject(name);
+            
+            // Add Animator and set Levels animator controller
+            var animator = root.AddComponent<Animator>();
+            var controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Project Files/Game/Animations/Levels.controller");
+            if (controller != null)
+            {
+                animator.runtimeAnimatorController = controller;
+            }
+            else
+            {
+                Debug.LogWarning("[LevelEditor] Levels.controller not found at 'Assets/Project Files/Game/Animations/Levels.controller'");
+            }
+
             var lr   = root.AddComponent<LevelRoot>();
             WriteDesignData(lr);
             BuildHierarchy(root.transform, lr);
@@ -2474,10 +2473,6 @@ namespace BlockShooter.Editor
 
         private void WriteDesignData(LevelRoot lr)
         {
-            lr.levelIndex   = _levelIndex;
-            lr.levelName    = _levelName;
-            lr.goalType     = _goalType;
-            lr.goalAmount   = _goalAmount;
             lr.gridCols     = _gridCols;
             lr.gridRows     = _gridRows;
             lr.splineWidth  = _splineWidth;

@@ -48,12 +48,6 @@ namespace BlockShooter
         public SlotSystem         slotSystem;
         public FireRange          fireRange;
 
-        [Header("Level Info")]
-        public int           levelIndex = 1;
-        public string        levelName  = "Level 1";
-        public LevelGoalType goalType   = LevelGoalType.ClearAllBlocks;
-        public int           goalAmount = 0;
-
         // ── Design data (written by Level Editor) ─────────────────────────────
         [HideInInspector] public int   gridCols     = 4;
         [HideInInspector] public int   gridRows     = 2;
