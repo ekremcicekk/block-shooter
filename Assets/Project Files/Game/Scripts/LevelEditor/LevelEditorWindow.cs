@@ -34,6 +34,9 @@ namespace BlockShooter.Editor
         private Dictionary<BranchPathData, UnityEditorInternal.ReorderableList> _branchGroupsLists = new();
         private int _groupIndexToRemoveDeferred = -1;
         private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
+        private List<int> _selectedKnots = new();
+        [SerializeField] private bool _snapToGrid = false;
+        [SerializeField] private float _snapSize = 0.5f;
 
         // ── Level list ────────────────────────────────────────────────────────
         private List<string> _paths  = new();
@@ -180,6 +183,7 @@ namespace BlockShooter.Editor
             RefreshList();
 
             _branchGroupsLists.Clear();
+            _selectedKnots.Clear();
             _windowSerialized = new SerializedObject(this);
 
             if (_activeIdx >= _paths.Count)
@@ -212,6 +216,7 @@ namespace BlockShooter.Editor
             DestroyPreview();
             DestroyLevelPreview();
             _branchGroupsLists.Clear();
+            _selectedKnots.Clear();
             _windowSerialized = null;
             _groupsList = null;
         }
@@ -618,7 +623,7 @@ namespace BlockShooter.Editor
             // Preset buttons
             EditorGUILayout.BeginHorizontal();
             GUILayout.Label("Preset:", GUILayout.Width(46));
-            string[] presetNames = { "Oval", "Wide", "Rectangle" };
+            string[] presetNames = { "Oval", "Wide", "Rectangle", "Zigzag", "S-Curve", "Butterfly" };
             for (int i = 0; i < presetNames.Length; i++)
             {
                 GUI.backgroundColor = _splinePreset == i ? new Color(.4f,.7f,1f) : new Color(.3f,.3f,.33f);
@@ -626,6 +631,29 @@ namespace BlockShooter.Editor
                 { _splinePreset = i; ApplyPreset(); }
             }
             GUI.backgroundColor = Color.white;
+            EditorGUILayout.EndHorizontal();
+
+            // Symmetry & Utility tools
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("↔ Make Symmetric (Left to Right)", EditorStyles.miniButton, GUILayout.Height(20)))
+            {
+                MakeSplineSymmetric();
+            }
+            if (GUILayout.Button("⇄ Flip Horizontally", EditorStyles.miniButton, GUILayout.Height(20)))
+            {
+                FlipSplineHorizontally();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // Snapping controls
+            EditorGUILayout.BeginHorizontal();
+            _snapToGrid = EditorGUILayout.ToggleLeft("Snap to Grid", _snapToGrid, GUILayout.Width(100));
+            if (_snapToGrid)
+            {
+                GUILayout.Label("Size:", GUILayout.Width(35));
+                _snapSize = EditorGUILayout.FloatField(_snapSize, GUILayout.Width(45));
+                _snapSize = Mathf.Max(0.05f, _snapSize);
+            }
             EditorGUILayout.EndHorizontal();
 
             // Restore button — only visible after an accidental preset click
@@ -1183,6 +1211,8 @@ namespace BlockShooter.Editor
                     int insertAt = FindInsertIndex(hitPos);
                     InsertKnot(insertAt, hitPos);
                     _selKnot = insertAt;
+                    _selectedKnots.Clear();
+                    _selectedKnots.Add(insertAt);
                     SyncPreviewSpline();
                     e.Use(); Repaint(); return;
                 }
@@ -1195,6 +1225,7 @@ namespace BlockShooter.Editor
                 {
                     Undo.RegisterCompleteObjectUndo(this, "Delete Spline Knot");
                     RemoveKnot(_selKnot);
+                    _selectedKnots.Remove(_selKnot);
                     _selKnot = Mathf.Min(_selKnot, _knots.Count - 1);
                     SyncPreviewSpline();
                     e.Use(); Repaint(); return;
@@ -1207,7 +1238,7 @@ namespace BlockShooter.Editor
             for (int i = 0; i < _knots.Count; i++)
             {
                 bool isAnchor = (i == 0);
-                bool isSel    = (_selKnot == i);
+                bool isSel    = (_selectedKnots.Contains(i) || _selKnot == i);
                 float sz = HandleUtility.GetHandleSize(_knots[i]) * (isSel ? .18f : .13f);
 
                 Handles.color = isAnchor ? new Color(1f, .4f, .4f, .95f)
@@ -1220,6 +1251,18 @@ namespace BlockShooter.Editor
                     Vector2 screenPt = HandleUtility.WorldToGUIPoint(_knots[i]);
                     if (Vector2.Distance(screenPt, e.mousePosition) < 20f)
                     {
+                        if (e.control || e.command)
+                        {
+                            if (_selectedKnots.Contains(i))
+                                _selectedKnots.Remove(i);
+                            else
+                                _selectedKnots.Add(i);
+                        }
+                        else
+                        {
+                            _selectedKnots.Clear();
+                            _selectedKnots.Add(i);
+                        }
                         _selKnot = i;
                         Repaint();
                         // Don't e.Use() — let FreeMoveHandle also respond for dragging
@@ -1241,8 +1284,48 @@ namespace BlockShooter.Editor
                         {
                             np = SnapToMainSpline(np, i == _knots.Count - 1);
                         }
-                        _knots[i] = np;
-                        _selKnot  = i;
+
+                        // Apply grid snapping
+                        if (_snapToGrid)
+                        {
+                            np.x = Mathf.Round(np.x / _snapSize) * _snapSize;
+                            if (!isAnchor || _editingBranchIndex >= 0)
+                            {
+                                np.z = Mathf.Round(np.z / _snapSize) * _snapSize;
+                            }
+                        }
+
+                        Vector3 delta = np - _knots[i];
+
+                        if (_selectedKnots.Contains(i))
+                        {
+                            // Move all selected knots by delta
+                            for (int idx = 0; idx < _knots.Count; idx++)
+                            {
+                                if (!_selectedKnots.Contains(idx)) continue;
+
+                                Vector3 targetPos = _knots[idx] + delta;
+                                targetPos.y = 0f;
+                                bool isTargetAnchor = (idx == 0);
+                                if (isTargetAnchor && _editingBranchIndex < 0) targetPos.z = FIRE_Z;
+
+                                if (_snapToGrid)
+                                {
+                                    targetPos.x = Mathf.Round(targetPos.x / _snapSize) * _snapSize;
+                                    if (!isTargetAnchor || _editingBranchIndex >= 0)
+                                    {
+                                        targetPos.z = Mathf.Round(targetPos.z / _snapSize) * _snapSize;
+                                    }
+                                }
+                                _knots[idx] = targetPos;
+                            }
+                        }
+                        else
+                        {
+                            _knots[i] = np;
+                        }
+
+                        _selKnot = i;
                         SyncPreviewSpline();
                         Repaint();
                     }
@@ -1354,6 +1437,7 @@ namespace BlockShooter.Editor
             float fz = FIRE_Z;
             float d  = _splineDepth;
 
+            _selectedKnots.Clear();
             _knots.Clear();
             _tangentsIn.Clear();
             _tangentsOut.Clear();
@@ -1406,6 +1490,62 @@ namespace BlockShooter.Editor
                         _tangentsIn.Add(Vector3.zero);
                         _tangentsOut.Add(Vector3.zero);
                         _tangentModes.Add(TangentMode.Linear);
+                    }
+                    break;
+
+                case 3: // Zigzag / Wave
+                    _knots.Add(new Vector3(0f, 0f, fz));
+                    _knots.Add(new Vector3(+hw * 0.8f, 0f, fz + d * 0.2f));
+                    _knots.Add(new Vector3(+hw * 0.4f, 0f, fz + d * 0.4f));
+                    _knots.Add(new Vector3(+hw * 0.9f, 0f, fz + d * 0.6f));
+                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.8f));
+                    _knots.Add(new Vector3(0f, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.8f));
+                    _knots.Add(new Vector3(-hw * 0.9f, 0f, fz + d * 0.6f));
+                    _knots.Add(new Vector3(-hw * 0.4f, 0f, fz + d * 0.4f));
+                    _knots.Add(new Vector3(-hw * 0.8f, 0f, fz + d * 0.2f));
+
+                    for (int i = 0; i < 10; i++)
+                    {
+                        _tangentsIn.Add(Vector3.zero);
+                        _tangentsOut.Add(Vector3.zero);
+                        _tangentModes.Add(TangentMode.AutoSmooth);
+                    }
+                    break;
+
+                case 4: // S-Curve
+                    _knots.Add(new Vector3(0f, 0f, fz));
+                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.25f));
+                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.75f));
+                    _knots.Add(new Vector3(0f, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.75f));
+                    _knots.Add(new Vector3(+hw * 0.5f, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(-hw * 0.5f, 0f, fz + d * 0.25f));
+
+                    for (int i = 0; i < 8; i++)
+                    {
+                        _tangentsIn.Add(Vector3.zero);
+                        _tangentsOut.Add(Vector3.zero);
+                        _tangentModes.Add(TangentMode.AutoSmooth);
+                    }
+                    break;
+
+                case 5: // Butterfly / Heart
+                    _knots.Add(new Vector3(0f, 0f, fz));
+                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.25f));
+                    _knots.Add(new Vector3(+hw * 0.3f, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(+hw, 0f, fz + d * 0.75f));
+                    _knots.Add(new Vector3(0f, 0f, fz + d));
+                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.75f));
+                    _knots.Add(new Vector3(-hw * 0.3f, 0f, fz + d * 0.5f));
+                    _knots.Add(new Vector3(-hw, 0f, fz + d * 0.25f));
+
+                    for (int i = 0; i < 8; i++)
+                    {
+                        _tangentsIn.Add(Vector3.zero);
+                        _tangentsOut.Add(Vector3.zero);
+                        _tangentModes.Add(TangentMode.AutoSmooth);
                     }
                     break;
             }
@@ -1553,6 +1693,49 @@ namespace BlockShooter.Editor
             if (_tangentsIn.Count > _knots.Count)   _tangentsIn.RemoveRange(_knots.Count, _tangentsIn.Count - _knots.Count);
             if (_tangentsOut.Count > _knots.Count)  _tangentsOut.RemoveRange(_knots.Count, _tangentsOut.Count - _knots.Count);
             if (_tangentModes.Count > _knots.Count) _tangentModes.RemoveRange(_knots.Count, _tangentModes.Count - _knots.Count);
+        }
+
+        private void MakeSplineSymmetric()
+        {
+            if (_knots.Count < 3) return;
+            Undo.RegisterCompleteObjectUndo(this, "Make Spline Symmetric");
+            EnsureTangentLists();
+
+            int N = _knots.Count;
+            for (int i = 0; i <= N / 2; i++)
+            {
+                int opp = N - 1 - i;
+                if (opp == i) continue;
+
+                _knots[opp] = new Vector3(-_knots[i].x, 0f, _knots[i].z);
+                _tangentsIn[opp] = new Vector3(-_tangentsOut[i].x, 0f, _tangentsOut[i].z);
+                _tangentsOut[opp] = new Vector3(-_tangentsIn[i].x, 0f, _tangentsIn[i].z);
+                _tangentModes[opp] = _tangentModes[i];
+            }
+
+            SyncPreviewSpline();
+            SceneView.RepaintAll();
+            Repaint();
+            _isDirty = true;
+        }
+
+        private void FlipSplineHorizontally()
+        {
+            if (_knots.Count == 0) return;
+            Undo.RegisterCompleteObjectUndo(this, "Flip Spline Horizontally");
+            EnsureTangentLists();
+
+            for (int i = 0; i < _knots.Count; i++)
+            {
+                _knots[i] = new Vector3(-_knots[i].x, 0f, _knots[i].z);
+                _tangentsIn[i] = new Vector3(-_tangentsIn[i].x, 0f, _tangentsIn[i].z);
+                _tangentsOut[i] = new Vector3(-_tangentsOut[i].x, 0f, _tangentsOut[i].z);
+            }
+
+            SyncPreviewSpline();
+            SceneView.RepaintAll();
+            Repaint();
+            _isDirty = true;
         }
 
         private void WriteKnotsToContainer(SplineContainer sc, List<Vector3> knots, List<Vector3> tangentsIn, List<Vector3> tangentsOut, List<int> tangentModes, float yOffset = 0f, float zOffset = 0f)
@@ -2176,6 +2359,22 @@ namespace BlockShooter.Editor
 
             GUILayout.Space(8);
 
+            if (GUILayout.Button("Subdivide (Insert Knot After)", GUILayout.Height(24)))
+            {
+                Undo.RegisterCompleteObjectUndo(this, "Insert Spline Knot");
+                int next = (i + 1) % _knots.Count;
+                Vector3 newKnotPos = (_knots[i] + _knots[next]) * 0.5f;
+                InsertKnot(i + 1, newKnotPos);
+                _selKnot = i + 1;
+                _selectedKnots.Clear();
+                _selectedKnots.Add(i + 1);
+                SyncPreviewSpline();
+                SceneView.RepaintAll();
+                Repaint();
+            }
+
+            GUILayout.Space(4);
+
             if (!anch && _knots.Count > 3)
             {
                 GUI.backgroundColor = new Color(1f,.4f,.4f);
@@ -2456,6 +2655,7 @@ namespace BlockShooter.Editor
             StopSplineEdit(save: false);
             DestroyLevelPreview();
             _branchGroupsLists.Clear();
+            _selectedKnots.Clear();
             _windowSerialized = new SerializedObject(this);
 
             _levelIndex   = idx + 1;
