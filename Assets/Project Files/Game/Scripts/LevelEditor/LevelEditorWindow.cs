@@ -14,8 +14,8 @@ namespace BlockShooter.Editor
     {
         // ── Layout ────────────────────────────────────────────────────────────
         private const float ListW    = 180f;
-        private const float RightW   = 210f;
-        private const float CellSize = 62f;
+        private const float RightW   = 250f;
+        private const float CellSize = 48f;
         private const float CellGap  = 4f;
         private const int   MaxCols  = 7;
         private const int   MaxRows  = 6;
@@ -108,6 +108,13 @@ namespace BlockShooter.Editor
 
         // ── Change tracking ───────────────────────────────────────────────────
         [SerializeField] private bool _isDirty = false;
+
+        // ── Foldout states ────────────────────────────────────────────────────
+        private bool _foldSpline  = true;
+        private bool _foldGrid    = true;
+        private bool _foldGroups  = true;
+        private bool _foldBranch  = false;
+        private bool _foldAdvancedSpline = false;
 
         // ── Color palette ─────────────────────────────────────────────────────
         private Color PC(BlockColorType t)
@@ -291,7 +298,7 @@ namespace BlockShooter.Editor
             _gameCfg.levelSequence.levelPrefabs.RemoveAll(x => x == null);
 
             // 2. Scan the save folder for prefabs containing LevelRoot component
-            string folder = _cfg.levelSavePath.TrimEnd('/');
+            string folder = _cfg.levelSavePath.TrimEnd('/').Replace('\\', '/');
             var foundPrefabs = new List<LevelRoot>();
             foreach (var gid in AssetDatabase.FindAssets("t:Prefab", new[] { folder }))
             {
@@ -438,6 +445,24 @@ namespace BlockShooter.Editor
         private void OnGUI()
         {
             if (_cfg == null) { DrawNoCfg(); return; }
+
+            // ── Ctrl+S shortcut ───────────────────────────────────────────────
+            Event e = Event.current;
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.S
+                && e.control && !e.alt && !e.shift)
+            {
+                if (_isDirty && _activeIdx >= 0)
+                {
+                    SavePrefab();
+                    e.Use();
+                }
+            }
+
+            // ── Update window title with dirty indicator ──────────────────────
+            string desiredTitle = _isDirty ? "Level Editor ●" : "Level Editor";
+            if (titleContent.text != desiredTitle)
+                titleContent.text = desiredTitle;
+
             if (_gameCfgSerialized != null) _gameCfgSerialized.Update();
             
             if (_windowSerialized == null)
@@ -532,28 +557,6 @@ namespace BlockShooter.Editor
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndScrollView();
 
-            if (_activeIdx >= 0)
-            {
-                GUILayout.Space(6);
-                Hdr("SETTINGS");
-                EditorGUI.BeginChangeCheck();
-                int newIndex = EditorGUILayout.IntField("Index", _levelIndex);
-                string newName = EditorGUILayout.TextField("Name", _levelName);
-                LevelGoalType newGoalType = (LevelGoalType)EditorGUILayout.EnumPopup("Goal", _goalType);
-                int newGoalAmount = _goalAmount;
-                if (newGoalType != LevelGoalType.ClearAllBlocks)
-                    newGoalAmount = EditorGUILayout.IntField("Amount", _goalAmount);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    Undo.RecordObject(this, "Modify Level Settings");
-                    _levelIndex = newIndex;
-                    _levelName = newName;
-                    _goalType = newGoalType;
-                    _goalAmount = newGoalAmount;
-                    _isDirty = true;
-                }
-            }
-
             EditorGUILayout.EndVertical();
             EditorGUI.EndDisabledGroup();
         }
@@ -575,19 +578,34 @@ namespace BlockShooter.Editor
             // Reserve space for toolbar (~21px) and footer buttons (~52px)
             const float toolbarH = 21f;
             const float footerH  = 52f;
-            float scrollH = Mathf.Max(80f, position.height - toolbarH - footerH);
+            float scrollH = Mathf.Max(80f, position.height - toolbarH - footerH - 10f);
 
             _midScroll = EditorGUILayout.BeginScrollView(_midScroll,
                 GUILayout.ExpandWidth(true), GUILayout.Height(scrollH));
 
-            DrawSplineSection();
-            
+            // ── Foldout: Track Spline ────────────────────────────────────────
+            _foldSpline = EditorGUILayout.Foldout(_foldSpline, "▸  TRACK SPLINE", true, EditorStyles.foldoutHeader);
+            if (_foldSpline) DrawSplineSection();
+
+            GUILayout.Space(2);
+
+            // ── Foldout: Shooter Grid ────────────────────────────────────────
             EditorGUI.BeginDisabledGroup(_editingSpline);
-            DrawGridSection();
-            DrawGroupsSection();
+            _foldGrid = EditorGUILayout.Foldout(_foldGrid, "▸  SHOOTER GRID", true, EditorStyles.foldoutHeader);
+            if (_foldGrid) DrawGridSection();
+
+            GUILayout.Space(2);
+
+            // ── Foldout: Conveyor Groups ─────────────────────────────────────
+            _foldGroups = EditorGUILayout.Foldout(_foldGroups, "▸  CONVEYOR GROUPS", true, EditorStyles.foldoutHeader);
+            if (_foldGroups) DrawGroupsSection();
             EditorGUI.EndDisabledGroup();
 
-            DrawBranchesSection();
+            GUILayout.Space(2);
+
+            // ── Foldout: Branch Conveyors ────────────────────────────────────
+            _foldBranch = EditorGUILayout.Foldout(_foldBranch, "▸  BRANCH CONVEYORS", true, EditorStyles.foldoutHeader);
+            if (_foldBranch) DrawBranchesSection();
 
             EditorGUILayout.EndScrollView();
 
@@ -599,7 +617,7 @@ namespace BlockShooter.Editor
             // Save prefab button is disabled when there are no changes to save
             EditorGUI.BeginDisabledGroup(!_isDirty);
             GUI.backgroundColor = new Color(.3f,.85f,.45f);
-            if (GUILayout.Button("  ✓  SAVE PREFAB  ", GUILayout.Height(34)))
+            if (GUILayout.Button("  ✓  SAVE PREFAB  (Ctrl+S)  ", GUILayout.Height(34)))
                 SavePrefab();
             EditorGUI.EndDisabledGroup();
 
@@ -618,8 +636,6 @@ namespace BlockShooter.Editor
         // ═════════════════════════════════════════════════════════════════════
         private void DrawSplineSection()
         {
-            Hdr("TRACK SPLINE");
-
             bool editingMain = _editingSpline && _editingBranchIndex < 0;
             if (!editingMain)
             {
@@ -655,27 +671,34 @@ namespace BlockShooter.Editor
 
             GUILayout.Space(4);
 
-            // Copy spline
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Copy from:", GUILayout.Width(62));
-            if (_labels.Count > 0)
+            // Advanced options foldout (Copy Spline + Safe Area)
+            _foldAdvancedSpline = EditorGUILayout.Foldout(_foldAdvancedSpline, "Advanced", true);
+            if (_foldAdvancedSpline)
             {
-                string[] copyOptions = _labels.ToArray();
-                _copyIdx = Mathf.Clamp(_copyIdx, 0, copyOptions.Length - 1);
-                _copyIdx = EditorGUILayout.Popup(_copyIdx, copyOptions);
-                if (GUILayout.Button("Copy", GUILayout.Width(50), GUILayout.Height(18)))
-                    CopySplineFrom(_paths[_copyIdx]);
-            }
-            else
-            {
-                EditorGUILayout.LabelField("(no saved levels)", EditorStyles.miniLabel);
-            }
-            EditorGUILayout.EndHorizontal();
+                EditorGUI.indentLevel++;
 
-            // Safe-area toggle
-            EditorGUILayout.BeginHorizontal();
-            _showSafeArea = EditorGUILayout.ToggleLeft("Show Safe Area Guide", _showSafeArea, GUILayout.Width(160));
-            EditorGUILayout.EndHorizontal();
+                // Copy spline
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Copy from:", GUILayout.Width(62));
+                if (_labels.Count > 0)
+                {
+                    string[] copyOptions = _labels.ToArray();
+                    _copyIdx = Mathf.Clamp(_copyIdx, 0, copyOptions.Length - 1);
+                    _copyIdx = EditorGUILayout.Popup(_copyIdx, copyOptions);
+                    if (GUILayout.Button("Copy", GUILayout.Width(50), GUILayout.Height(18)))
+                        CopySplineFrom(_paths[_copyIdx]);
+                }
+                else
+                {
+                    EditorGUILayout.LabelField("(no saved levels)", EditorStyles.miniLabel);
+                }
+                EditorGUILayout.EndHorizontal();
+
+                // Safe-area toggle
+                _showSafeArea = EditorGUILayout.ToggleLeft("Show Safe Area Guide", _showSafeArea, GUILayout.Width(180));
+
+                EditorGUI.indentLevel--;
+            }
 
             GUILayout.Space(6);
         }
@@ -1884,7 +1907,6 @@ namespace BlockShooter.Editor
         // ═════════════════════════════════════════════════════════════════════
         private void DrawGridSection()
         {
-            Hdr("SHOOTER GRID");
             EditorGUILayout.BeginHorizontal();
             GUILayout.Label("Cols", GUILayout.Width(42));
             EditorGUI.BeginChangeCheck();
@@ -1914,8 +1936,52 @@ namespace BlockShooter.Editor
             }
 
             GUILayout.Space(3);
-            EditorGUILayout.LabelField("  Click = select   |   Assign type & color in right panel",
+            EditorGUILayout.LabelField("  Left-click = select  |  Right-click = quick menu  |  Inspector in right panel",
                 EditorStyles.miniLabel);
+
+            // ── Bulk operations ────────────────────────────────────────────────
+            GUILayout.Space(2);
+            EditorGUILayout.BeginHorizontal();
+            GUI.backgroundColor = new Color(.5f,.18f,.18f);
+            if (GUILayout.Button("Clear All Cells", GUILayout.Height(20)))
+            {
+                if (EditorUtility.DisplayDialog("Clear All Cells",
+                    "Are you sure you want to clear every cell in the grid?", "Clear", "Cancel"))
+                {
+                    Undo.RecordObject(this, "Clear All Grid Cells");
+                    for (int c = 0; c < _gridCols; c++)
+                        for (int r = 0; r < _gridRows; r++)
+                            _type[c, r] = GridCellType.Empty;
+                    _selC = -1; _selR = -1;
+                    _isDirty = true; Repaint();
+                }
+            }
+            GUI.backgroundColor = Color.white;
+
+            if (GUILayout.Button("Fill All ▼", GUILayout.Height(20)))
+            {
+                var menu = new GenericMenu();
+                var pal = GetActiveColors();
+                foreach (var entry in pal)
+                {
+                    var colorType = entry.t;
+                    menu.AddItem(new GUIContent(entry.n), false, () =>
+                    {
+                        Undo.RecordObject(this, "Fill All Cells");
+                        for (int c = 0; c < _gridCols; c++)
+                            for (int r = 0; r < _gridRows; r++)
+                            {
+                                _type[c, r] = GridCellType.ShooterBlock;
+                                _color[c, r] = colorType;
+                                if (_shots[c, r] <= 0) _shots[c, r] = 100;
+                            }
+                        _isDirty = true; Repaint();
+                    });
+                }
+                menu.ShowAsContext();
+            }
+            EditorGUILayout.EndHorizontal();
+
             GUILayout.Space(6);
         }
 
@@ -1934,13 +2000,13 @@ namespace BlockShooter.Editor
 
             // Labels
             string lbl1 = t == GridCellType.Empty ? "+"
-                        : t == GridCellType.Door   ? "DOOR"
-                        : t == GridCellType.MysteryShooter ? "?"
-                        : t == GridCellType.FreezeShooter ? "FRZ"
+                        : t == GridCellType.Door   ? "🚪"
+                        : t == GridCellType.MysteryShooter ? "❓"
+                        : t == GridCellType.FreezeShooter ? "❄"
                         : col.ToString().Substring(0, 3).ToUpper();
             string lbl2 = t == GridCellType.Empty ? ""
                         : t == GridCellType.Door   ? $"×{_doors[c,r]}"
-                        : t == GridCellType.FreezeShooter ? $"❄×{_freezeCount[c,r]}"
+                        : t == GridCellType.FreezeShooter ? $"×{_freezeCount[c,r]}"
                         : $"×{_shots[c,r]}";
 
             Rect outer = GUILayoutUtility.GetRect(
@@ -1966,13 +2032,112 @@ namespace BlockShooter.Editor
                 EditorGUI.LabelField(new Rect(cell.x, cell.y+cell.height*.5f, cell.width, cell.height*.5f-4), lbl2, st);
             }
 
-            // Click = select only (no auto-promote)
+            // Click handling
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
-                _selC = c; _selR = r; _selKnot = -1;
-                e.Use(); Repaint();
+                if (e.button == 0) // Left-click = select
+                {
+                    _selC = c; _selR = r; _selKnot = -1;
+                    e.Use(); Repaint();
+                }
+                else if (e.button == 1) // Right-click = context menu
+                {
+                    _selC = c; _selR = r; _selKnot = -1;
+                    ShowCellContextMenu(c, r);
+                    e.Use(); Repaint();
+                }
             }
+        }
+
+        // ── Right-click context menu for grid cells ──────────────────────────
+        private void ShowCellContextMenu(int c, int r)
+        {
+            var menu = new GenericMenu();
+            var pal = GetActiveColors();
+
+            // Color sub-menu
+            foreach (var entry in pal)
+            {
+                var colorType = entry.t;
+                bool isActive = _type[c, r] != GridCellType.Empty && _color[c, r] == colorType;
+                menu.AddItem(new GUIContent($"Set Color/{entry.n}"), isActive, () =>
+                {
+                    Undo.RecordObject(this, "Set Cell Color");
+                    _color[c, r] = colorType;
+                    if (_type[c, r] == GridCellType.Empty)
+                    {
+                        _type[c, r] = GridCellType.ShooterBlock;
+                        _shots[c, r] = 100;
+                    }
+                    _isDirty = true; Repaint();
+                });
+            }
+
+            menu.AddSeparator("");
+
+            // Type options
+            bool doorUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.doorUnlockLevel;
+            bool mysteryUnlocked = _gameCfg != null && _levelIndex >= _gameCfg.mysteryShooterUnlockLevel;
+            bool freezeUnlocked  = _gameCfg != null && _levelIndex >= _gameCfg.freezeShooterUnlockLevel;
+
+            menu.AddItem(new GUIContent("Set Type/Shooter Block"),
+                _type[c, r] == GridCellType.ShooterBlock, () =>
+            {
+                Undo.RecordObject(this, "Set Cell Type");
+                _type[c, r] = GridCellType.ShooterBlock;
+                if (_shots[c, r] <= 0) _shots[c, r] = 100;
+                _isDirty = true; Repaint();
+            });
+
+            if (doorUnlocked)
+            {
+                menu.AddItem(new GUIContent("Set Type/Door"),
+                    _type[c, r] == GridCellType.Door, () =>
+                {
+                    Undo.RecordObject(this, "Set Cell Type");
+                    _type[c, r] = GridCellType.Door;
+                    if (_doors[c, r] <= 0) _doors[c, r] = 3;
+                    _isDirty = true; Repaint();
+                });
+            }
+
+            if (mysteryUnlocked)
+            {
+                menu.AddItem(new GUIContent("Set Type/Mystery Shooter"),
+                    _type[c, r] == GridCellType.MysteryShooter, () =>
+                {
+                    Undo.RecordObject(this, "Set Cell Type");
+                    _type[c, r] = GridCellType.MysteryShooter;
+                    if (_shots[c, r] <= 0) _shots[c, r] = 100;
+                    _isDirty = true; Repaint();
+                });
+            }
+
+            if (freezeUnlocked)
+            {
+                menu.AddItem(new GUIContent("Set Type/Freeze Shooter"),
+                    _type[c, r] == GridCellType.FreezeShooter, () =>
+                {
+                    Undo.RecordObject(this, "Set Cell Type");
+                    _type[c, r] = GridCellType.FreezeShooter;
+                    if (_shots[c, r] <= 0) _shots[c, r] = 100;
+                    if (_freezeCount[c, r] <= 0) _freezeCount[c, r] = 50;
+                    _isDirty = true; Repaint();
+                });
+            }
+
+            menu.AddSeparator("");
+
+            menu.AddItem(new GUIContent("Clear Cell"), false, () =>
+            {
+                Undo.RecordObject(this, "Clear Cell");
+                _type[c, r] = GridCellType.Empty;
+                _selC = -1; _selR = -1;
+                _isDirty = true; Repaint();
+            });
+
+            menu.ShowAsContext();
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -2140,8 +2305,6 @@ namespace BlockShooter.Editor
 
         private void DrawGroupsSection()
         {
-            Hdr("CONVEYOR GROUPS");
-
             // Calculate capacity
             float mainLen = GetMainSplineLength();
             float rowSpacing = _cfg != null ? _cfg.rowSpacing : 0.18f;
@@ -2620,7 +2783,7 @@ namespace BlockShooter.Editor
 
             // Create a minimal placeholder prefab so it appears in the list immediately.
             // "Save Prefab" will later rebuild it with the full hierarchy.
-            string dir  = _cfg.levelSavePath.TrimEnd('/');
+            string dir  = _cfg.levelSavePath.TrimEnd('/').Replace('\\', '/');
             string name = $"Level_{_levelIndex:000}";
             string path = dir + "/" + name + ".prefab";
             EnsureDir(dir);
@@ -2635,7 +2798,7 @@ namespace BlockShooter.Editor
             AssetDatabase.Refresh();
             RefreshList();
 
-            _activeIdx = _paths.IndexOf(path);
+            _activeIdx = _paths.IndexOf(path.Replace('\\', '/'));
             if (_levelList != null) _levelList.index = _activeIdx;
             _isDirty = false;
             Repaint();
@@ -2788,8 +2951,8 @@ namespace BlockShooter.Editor
             int newIndex = maxIdx + 1;
             string newName = $"Level_{newIndex:000}";
 
-            string srcPath  = _paths[idx];
-            string dir      = _cfg.levelSavePath.TrimEnd('/');
+            string srcPath  = _paths[idx].Replace('\\', '/');
+            string dir      = _cfg.levelSavePath.TrimEnd('/').Replace('\\', '/');
             string destPath = dir + "/" + newName + ".prefab";
             EnsureDir(dir);
 
@@ -2802,15 +2965,10 @@ namespace BlockShooter.Editor
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-
-
-
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
             RefreshList();
 
             // Select the new level
-            _activeIdx = _paths.IndexOf(destPath);
+            _activeIdx = _paths.IndexOf(destPath.Replace('\\', '/'));
             if (_levelList != null) _levelList.index = _activeIdx;
             if (_activeIdx >= 0) LoadLevel(_activeIdx);
             Repaint();
@@ -2829,7 +2987,7 @@ namespace BlockShooter.Editor
                 return;
             }
 
-            string dir  = _cfg.levelSavePath.TrimEnd('/');
+            string dir  = _cfg.levelSavePath.TrimEnd('/').Replace('\\', '/');
             string name = $"Level_{_levelIndex:000}";
             string path = dir + "/" + name + ".prefab";
             EnsureDir(dir);
@@ -2865,7 +3023,7 @@ namespace BlockShooter.Editor
 
             if (ok)
             {
-                _activeIdx = _paths.IndexOf(path);
+                _activeIdx = _paths.IndexOf(path.Replace('\\', '/'));
                 if (_levelList != null) _levelList.index = _activeIdx;
                 _isDirty = false;
                 Debug.Log($"[LevelEditor] Saved: {path}");
@@ -3389,7 +3547,7 @@ namespace BlockShooter.Editor
         {
             SavePrefab();
 
-            string dir  = _cfg.levelSavePath.TrimEnd('/');
+            string dir  = _cfg.levelSavePath.TrimEnd('/').Replace('\\', '/');
             string path = dir + $"/Level_{_levelIndex:000}.prefab";
             var prefab  = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) return;
@@ -3473,8 +3631,6 @@ namespace BlockShooter.Editor
 
         private void DrawBranchesSection()
         {
-            Hdr("BRANCH CONVEYORS");
-
             EditorGUI.BeginChangeCheck();
 
             for (int i = _branches.Count - 1; i >= 0; i--)
