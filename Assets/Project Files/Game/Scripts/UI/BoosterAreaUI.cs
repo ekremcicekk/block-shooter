@@ -20,6 +20,8 @@ namespace BlockShooter
 
         [Tooltip("The BoosterSlotUI component for the Super Shooter booster")]
         public BoosterSlotUI superShooterSlot;
+        
+        private bool _wasAnyBuyPanelActive;
 
         private void Awake()
         {
@@ -63,7 +65,19 @@ namespace BlockShooter
 
         private void Update()
         {
-            if (GameManager.Instance != null && GameManager.Instance.IsPlaying)
+            bool isAnyActive = IsAnyBuyPanelActive();
+            if (isAnyActive && !_wasAnyBuyPanelActive)
+            {
+                _wasAnyBuyPanelActive = true;
+                PauseGame(GetActiveBuyPanel());
+            }
+            else if (!isAnyActive && _wasAnyBuyPanelActive)
+            {
+                _wasAnyBuyPanelActive = false;
+                ResumeGame();
+            }
+
+            if (GameManager.Instance != null && (GameManager.Instance.IsPlaying || isAnyActive))
             {
                 RefreshUI();
             }
@@ -131,7 +145,7 @@ namespace BlockShooter
 
             return type switch
             {
-                BoosterType.ExtraSlot => true,
+                BoosterType.ExtraSlot => SlotSystem.Instance != null && SlotSystem.Instance.MaxSlots < 5,
                 BoosterType.MoveShooter => SlotSystem.Instance != null && SlotSystem.Instance.HasEmptySlot &&
                                            ShooterGrid.Instance != null && ShooterGrid.Instance.HasLockedBlocks(),
                 BoosterType.SuperShooter => SlotSystem.Instance != null && HasNonShootingSlottedBlock(),
@@ -208,6 +222,42 @@ namespace BlockShooter
                     UIManager.Instance.coinText.transform.DOPunchPosition(Vector3.right * 10f, 0.25f, 5, 0.5f).SetUpdate(true);
                 }
             }
+        }
+
+        private bool IsAnyBuyPanelActive()
+        {
+            if (extraSlotSlot != null && extraSlotSlot.buyPanel != null && extraSlotSlot.buyPanel.activeSelf) return true;
+            if (moveShooterSlot != null && moveShooterSlot.buyPanel != null && moveShooterSlot.buyPanel.activeSelf) return true;
+            if (superShooterSlot != null && superShooterSlot.buyPanel != null && superShooterSlot.buyPanel.activeSelf) return true;
+            return false;
+        }
+
+        private GameObject GetActiveBuyPanel()
+        {
+            if (extraSlotSlot != null && extraSlotSlot.buyPanel != null && extraSlotSlot.buyPanel.activeSelf) return extraSlotSlot.buyPanel;
+            if (moveShooterSlot != null && moveShooterSlot.buyPanel != null && moveShooterSlot.buyPanel.activeSelf) return moveShooterSlot.buyPanel;
+            if (superShooterSlot != null && superShooterSlot.buyPanel != null && superShooterSlot.buyPanel.activeSelf) return superShooterSlot.buyPanel;
+            return null;
+        }
+
+        private void PauseGame(GameObject activePanel)
+        {
+            if (activePanel != null)
+            {
+                var anims = activePanel.GetComponentsInChildren<Animator>(true);
+                foreach (var anim in anims)
+                {
+                    anim.updateMode = AnimatorUpdateMode.UnscaledTime;
+                }
+            }
+            Time.timeScale = 0f;
+            GameManager.Instance?.SetState(GameState.Paused);
+        }
+
+        private void ResumeGame()
+        {
+            Time.timeScale = 1f;
+            GameManager.Instance?.SetState(GameState.Playing);
         }
     }
 }

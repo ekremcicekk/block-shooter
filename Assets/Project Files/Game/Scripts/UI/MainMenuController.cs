@@ -57,8 +57,8 @@ namespace BlockShooter
             settingsPanel.SetActive(active);
             if (active)
             {
-                settingsPanel.transform.localScale = Vector3.zero;
-                settingsPanel.transform.DOScale(Vector3.one, 0.3f).SetEase(Ease.OutBack);
+                settingsPanel.transform.DOKill();
+                settingsPanel.transform.localScale = Vector3.one;
             }
         }
     }

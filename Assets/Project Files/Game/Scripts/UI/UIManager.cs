@@ -17,7 +17,7 @@ namespace BlockShooter
         public TextMeshProUGUI coinText;
         public Button settingsBtn;
         public GameObject settingsPanel;
-        public Button resumeButton;
+        public Button settingsCloseButton;
         public Button speedBtn;
         public GameObject speedX1Group;
         public GameObject speedX2Group;
@@ -81,7 +81,7 @@ namespace BlockShooter
 
             // Set dynamic button listeners in code
             settingsBtn?.onClick.AddListener(OpenSettings);
-            resumeButton?.onClick.AddListener(CloseSettings);
+            settingsCloseButton?.onClick.AddListener(CloseSettings);
             speedBtn?.onClick.AddListener(ToggleSpeed);
 
             winNextButton?.onClick.AddListener(OnNextLevel);
@@ -283,11 +283,17 @@ namespace BlockShooter
         private void OpenSettings()
         {
             if (settingsPanel == null) return;
+            settingsPanel.transform.DOKill();
             settingsPanel.SetActive(true);
-            settingsPanel.transform.localScale = Vector3.zero;
-            settingsPanel.transform.DOScale(Vector3.one, 0.3f).SetEase(Ease.OutBack).SetUpdate(true);
+            settingsPanel.transform.localScale = Vector3.one;
 
-            // Pause the gameplay time
+            // Make sure all animators in the settings panel run on unscaled time so they aren't paused by Time.timeScale = 0
+            var anims = settingsPanel.GetComponentsInChildren<Animator>(true);
+            foreach (var anim in anims)
+            {
+                anim.updateMode = AnimatorUpdateMode.UnscaledTime;
+            }
+
             Time.timeScale = 0f;
             GameManager.Instance?.SetState(GameState.Paused);
         }
@@ -299,7 +305,6 @@ namespace BlockShooter
                 .OnComplete(() =>
                 {
                     settingsPanel.SetActive(false);
-                    // Resume the gameplay time
                     Time.timeScale = 1f;
                     GameManager.Instance?.SetState(GameState.Playing);
                 });

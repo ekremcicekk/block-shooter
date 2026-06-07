@@ -160,6 +160,8 @@ namespace BlockShooter
         /// <summary>ExtraSlot booster — appends one more slot and dynamically re-centers all slots with a smooth animation.</summary>
         public void AddExtraSlot()
         {
+            if (_maxSlots >= 5) return;
+
             int count = _slotTransforms.Count + 1;
             float tw = (count - 1) * _slotSpacing;
 

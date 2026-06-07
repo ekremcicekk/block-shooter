@@ -67,7 +67,11 @@ namespace BlockShooter
             }
 
             // Usability validation before consuming booster
-            if (type == BoosterType.SuperShooter)
+            if (type == BoosterType.ExtraSlot)
+            {
+                if (SlotSystem.Instance == null || SlotSystem.Instance.MaxSlots >= 5) return false;
+            }
+            else if (type == BoosterType.SuperShooter)
             {
                 if (SlotSystem.Instance == null) return false;
                 bool hasNonShootingBlock = false;

@@ -13454,6 +13454,7 @@ MonoBehaviour:
   settingsBtn: {fileID: 7133850536305320041}
   settingsPanel: {fileID: 5097354896200929063}
   resumeButton: {fileID: 0}
+  settingsCloseButton: {fileID: 5990560606337737315}
   speedBtn: {fileID: 6679252229879716825}
   speedX1Group: {fileID: 3093335918395979444}
   speedX2Group: {fileID: 5272226912438724172}
