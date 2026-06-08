@@ -750,6 +750,10 @@ namespace BlockShooter
             ShooterGrid.Instance?.OnBlockDepleted(this);
             OnDepleted?.Invoke(this);
 
+            // Play particle immediately the moment shot count becomes 0!
+            Vector3 particlePosition = transform.position + new Vector3(0f, 1f, -0.5f);
+            ParticlePoolManager.Instance?.Play("depleted", particlePosition);
+
             if (bodyMesh != null)
             {
                 // Kill any active tweens on bodyMesh to avoid conflicts
@@ -768,11 +772,6 @@ namespace BlockShooter
 
         private void ExecuteDepleteSequence()
         {
-            // 2. Play particle effect at relative offset (y:1, z:-0.5) with a delay matching the animation's impact frame.
-            // Using PlayDelayed ensures the coroutine runs on the persistent manager and survives block deactivation.
-            Vector3 particlePosition = transform.position + new Vector3(0f, 1f, -0.5f);
-            ParticlePoolManager.Instance?.PlayDelayed("depleted", particlePosition, 0.2f);
-
             // 3. Play animator or fallback tween
             if (bodyAnimator != null)
             {
