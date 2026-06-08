@@ -172,6 +172,13 @@ namespace BlockShooter
             int count = SaveManager.GetBoosterCount(type);
             if (count > 0)
             {
+                // Check if the booster is usable in the current gameplay state
+                if (!IsBoosterUsable(type))
+                {
+                    ShowUsabilityWarning(type);
+                    return;
+                }
+
                 // Activate/use booster directly
                 bool success = BoosterManager.Instance != null && BoosterManager.Instance.ActivateBooster(type);
                 if (success)
@@ -183,6 +190,57 @@ namespace BlockShooter
             {
                 // Open buy panel
                 slot.buyPanel?.SetActive(true);
+            }
+        }
+
+        private void ShowUsabilityWarning(BoosterType type)
+        {
+            if (WarningManager.Instance == null) return;
+
+            string message = "";
+            switch (type)
+            {
+                case BoosterType.ExtraSlot:
+                    if (SlotSystem.Instance != null && SlotSystem.Instance.MaxSlots >= 5)
+                    {
+                        message = "Deck slots are already full!";
+                    }
+                    else
+                    {
+                        message = "Cannot use Extra Slot booster now!";
+                    }
+                    break;
+
+                case BoosterType.MoveShooter:
+                    if (SlotSystem.Instance != null && !SlotSystem.Instance.HasEmptySlot)
+                    {
+                        message = "No empty slot available!";
+                    }
+                    else if (ShooterGrid.Instance != null && !ShooterGrid.Instance.HasLockedBlocks())
+                    {
+                        message = "No moveable shooter available!";
+                    }
+                    else
+                    {
+                        message = "Cannot use Move Booster now!";
+                    }
+                    break;
+
+                case BoosterType.SuperShooter:
+                    if (!HasNonShootingSlottedBlock())
+                    {
+                        message = "No shooters in the deck to upgrade!";
+                    }
+                    else
+                    {
+                        message = "Cannot use Super Booster now!";
+                    }
+                    break;
+            }
+
+            if (!string.IsNullOrEmpty(message))
+            {
+                WarningManager.Instance.ShowWarning(message);
             }
         }
 
@@ -220,6 +278,12 @@ namespace BlockShooter
                 if (UIManager.Instance != null && UIManager.Instance.coinText != null)
                 {
                     UIManager.Instance.coinText.transform.DOPunchPosition(Vector3.right * 10f, 0.25f, 5, 0.5f).SetUpdate(true);
+                }
+
+                // Show warning popup
+                if (WarningManager.Instance != null)
+                {
+                    WarningManager.Instance.ShowWarning("Not enough coins!");
                 }
             }
         }

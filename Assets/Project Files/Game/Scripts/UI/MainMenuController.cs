@@ -63,7 +63,11 @@ namespace BlockShooter
         {
             if (tabType == MenuButtonType.Achievement)
             {
-                // Achievement button is a placeholder, do nothing as requested.
+                // Achievement button is a placeholder, show warning
+                if (WarningManager.Instance != null)
+                {
+                    WarningManager.Instance.ShowWarning("Coming soon!");
+                }
                 return;
             }
 

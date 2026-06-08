@@ -1186,7 +1186,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &6241908254289294077
 RectTransform:
   m_ObjectHideFlags: 0
@@ -22016,6 +22016,7 @@ GameObject:
   - component: {fileID: 7216935656240162073}
   - component: {fileID: 1572865333512738721}
   - component: {fileID: 1578350036177582548}
+  - component: {fileID: 6495637273208537153}
   m_Layer: 0
   m_Name: UI_Canvas
   m_TagString: Untagged
@@ -22145,6 +22146,24 @@ MonoBehaviour:
   keepPlayingPanel: {fileID: 3436667066093691222}
   playOnButton: {fileID: 5263279642163329061}
   watchAdButton: {fileID: 5275670667130646622}
+--- !u!114 &6495637273208537153
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5234630638683635155}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3cae3391ae60ae043b6bd91d326b59a8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  warningPanel: {fileID: 498264157162898726}
+  warningBox: {fileID: 8874098063417646969}
+  warningText: {fileID: 2882127095357864151}
+  showDuration: 0.25
+  delayDuration: 1
+  hideDuration: 0.25
 --- !u!1 &5239329151388308313
 GameObject:
   m_ObjectHideFlags: 0
@@ -24468,7 +24487,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 139.4}
+  m_SizeDelta: {x: -23.1903, y: 130.7036}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7192534128475187463
 CanvasRenderer:
@@ -24529,7 +24548,7 @@ MonoBehaviour:
   m_fontSizeBase: 42
   m_fontWeight: 400
   m_enableAutoSizing: 1
-  m_fontSizeMin: 32
+  m_fontSizeMin: 42
   m_fontSizeMax: 64
   m_fontStyle: 0
   m_HorizontalAlignment: 2
@@ -24543,7 +24562,7 @@ MonoBehaviour:
   m_charWidthMaxAdj: 0
   m_TextWrappingMode: 1
   m_wordWrappingRatios: 0.4
-  m_overflowMode: 0
+  m_overflowMode: 2
   m_linkedTextComponent: {fileID: 0}
   parentLinkedComponent: {fileID: 0}
   m_enableKerning: 0
@@ -27345,12 +27364,12 @@ GameObject:
   - component: {fileID: 7758461292550474361}
   - component: {fileID: 4682210246324900952}
   m_Layer: 0
-  m_Name: CommingSoon
+  m_Name: WarningBox
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &8874098063417646969
 RectTransform:
   m_ObjectHideFlags: 0
@@ -27358,7 +27377,7 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6993852928514839784}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -27369,7 +27388,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 1080, y: 139.3994}
+  m_SizeDelta: {x: 1080, y: 150}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7758461292550474361
 CanvasRenderer:

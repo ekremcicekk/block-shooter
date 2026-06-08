@@ -414,6 +414,12 @@ namespace BlockShooter
             {
                 // Shake KeepPlaying window or button to show insufficient coins
                 playOnButton?.transform.DOPunchPosition(Vector3.right * 15f, 0.3f, 5, 0.5f).SetUpdate(true);
+
+                // Show warning popup
+                if (WarningManager.Instance != null)
+                {
+                    WarningManager.Instance.ShowWarning("Not enough coins!");
+                }
             }
         }
 
