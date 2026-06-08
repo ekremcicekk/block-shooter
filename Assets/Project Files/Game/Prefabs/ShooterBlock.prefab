@@ -565,7 +565,7 @@ MonoBehaviour:
   glowRenderer: {fileID: 4833198214337232911}
   shotCountText: {fileID: 291678120616329798}
   muzzleFlash: {fileID: 5937769459577034701}
-  depletedParticle: {fileID: 0}
+  depletedParticle: {fileID: 4062554441688511027, guid: a5a38311f976ad54e8d0f05d055d2cb9, type: 3}
   slotArrivalParticle: {fileID: 8471301242725099700}
   accessibleIndicator: {fileID: 0}
   bodyAnimator: {fileID: 1583414759827294181}

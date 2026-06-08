@@ -25,7 +25,6 @@ namespace BlockShooter
         public MeshRenderer glowRenderer;
         public TextMeshPro  shotCountText;
         public ParticleSystem muzzleFlash;
-        public ParticleSystem depletedParticle;
         public ParticleSystem slotArrivalParticle; // played once when the block arrives at its slot
         public GameObject accessibleIndicator;   // optional highlight ring shown when selectable
         public Animator bodyAnimator;
@@ -159,7 +158,7 @@ namespace BlockShooter
         }
 #endif
 
-        // ── Tap handling ──────────────────────────────────────────────────────
+        // ── Tap handling ─────────────────────────────────────────────────────
 
         private void OnMouseDown()
         {
@@ -746,23 +745,45 @@ namespace BlockShooter
             State = BlockState.Depleted;
             StopShooting();
 
-            if (depletedParticle != null) depletedParticle.Play();
-
             // Notify systems immediately so slot/grid update right away
             SlotSystem.Instance?.ReleaseSlot(this);
             ShooterGrid.Instance?.OnBlockDepleted(this);
             OnDepleted?.Invoke(this);
 
-            if (bodyAnimator != null)
+            if (bodyMesh != null)
             {
-                bodyAnimator.enabled = true; // Re-enable animator so it can play the deplete animation
-                bodyAnimator.SetTrigger("ShooterDeplete");
-                DOVirtual.DelayedCall(0.5f, () => gameObject.SetActive(false));
+                // Kill any active tweens on bodyMesh to avoid conflicts
+                bodyMesh.DOKill();
+                // 1. Smoothly reset BodyMesh rotation to 0
+                bodyMesh.DOLocalRotate(Vector3.zero, 0.25f).SetEase(Ease.OutQuad).OnComplete(() =>
+                {
+                    ExecuteDepleteSequence();
+                });
             }
             else
             {
-                // Fallback to standard tween if no animator is present
-                transform.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack)
+                ExecuteDepleteSequence();
+            }
+        }
+
+        private void ExecuteDepleteSequence()
+        {
+            // 2. Play particle effect at relative offset (y:1, z:-0.5) with a delay matching the animation's impact frame.
+            // Using PlayDelayed ensures the coroutine runs on the persistent manager and survives block deactivation.
+            Vector3 particlePosition = transform.position + new Vector3(0f, 1f, -0.5f);
+            ParticlePoolManager.Instance?.PlayDelayed("depleted", particlePosition, 0.2f);
+
+            // 3. Play animator or fallback tween
+            if (bodyAnimator != null)
+            {
+                bodyAnimator.enabled = true;
+                bodyAnimator.SetTrigger("ShooterDeplete");
+                
+                DOVirtual.DelayedCall(1f, () => gameObject.SetActive(false));
+            }
+            else
+            {
+                transform.DOScale(Vector3.zero, 0.15f).SetEase(Ease.InBack)
                     .OnComplete(() => gameObject.SetActive(false));
             }
         }
@@ -770,7 +791,11 @@ namespace BlockShooter
         public void RefillShots(int amount)
         {
             _shotCount += amount;
-            if (IsDepleted && _shotCount > 0) { State = BlockState.InGrid; ApplyColor(); }
+            if (IsDepleted && _shotCount > 0)
+            {
+                State = BlockState.InGrid;
+                ApplyColor();
+            }
             UpdateShotCountUI();
         }
 
@@ -807,7 +832,8 @@ namespace BlockShooter
 
         private void UpdateShotCountUI()
         {
-            if (shotCountText != null) shotCountText.text = _shotCount.ToString();
+            if (shotCountText != null) 
+                shotCountText.text = _shotCount <= 0 ? "" : _shotCount.ToString();
         }
 
         private void OnDisable()
