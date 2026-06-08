@@ -7,5 +7,4 @@
   <Project Path="NaughtyAttributes.Test.csproj" />
   <Project Path="NaughtyAttributes.Editor.csproj" />
   <Project Path="UIEffect-Editor.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>
