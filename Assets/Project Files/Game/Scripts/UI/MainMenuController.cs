@@ -223,7 +223,7 @@ namespace BlockShooter
         public void StartGame()
         {
             DOTween.KillAll();
-            SceneManager.LoadScene(1);
+            SceneManager.LoadScene("Game");
         }
     }
 }

@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using TMPro;
 
 namespace BlockShooter
@@ -23,6 +25,26 @@ namespace BlockShooter
         private void Start()
         {
             UpdateLevelPath();
+            BindPlayButton();
+        }
+
+        private void BindPlayButton()
+        {
+            if (playButton != null)
+            {
+                Button btn = playButton.GetComponent<Button>();
+                if (btn != null)
+                {
+                    btn.onClick.RemoveListener(StartGame);
+                    btn.onClick.AddListener(StartGame);
+                }
+            }
+        }
+
+        private void StartGame()
+        {
+            DG.Tweening.DOTween.KillAll();
+            SceneManager.LoadScene("Game");
         }
 
         public void UpdateLevelPath()
