@@ -45,7 +45,7 @@ namespace BlockShooter
                 RectTransform pathRect = pathLine.GetComponent<RectTransform>();
                 if (pathRect != null)
                 {
-                    // Stretch from startY (active level center) to the top of the container
+                    // Stretch from play button Y position to the top of the container
                     pathRect.anchorMin = new Vector2(0.5f, 0.5f);
                     pathRect.anchorMax = new Vector2(0.5f, 1f);
                     pathRect.pivot = new Vector2(0.5f, 0.5f);
@@ -79,11 +79,13 @@ namespace BlockShooter
 
             if (isActive)
             {
+                // Active level can be hard or normal active level
                 prefabToSpawn = isHard ? hardLevelPrefab : activeLevelPrefab;
             }
             else
             {
-                prefabToSpawn = isHard ? hardLevelPrefab : nextLevelPrefab;
+                // Upcoming levels always use the standard next level prefab
+                prefabToSpawn = nextLevelPrefab;
             }
 
             if (prefabToSpawn == null)
@@ -135,7 +137,7 @@ namespace BlockShooter
                 RectTransform pathRect = pathLine.GetComponent<RectTransform>();
                 if (pathRect != null)
                 {
-                    // Stretch from startY (active level center) to the top of the container
+                    // Stretch from play button Y position to the top of the container
                     pathRect.anchorMin = new Vector2(0.5f, 0.5f);
                     pathRect.anchorMax = new Vector2(0.5f, 1f);
                     pathRect.pivot = new Vector2(0.5f, 0.5f);
@@ -180,11 +182,13 @@ namespace BlockShooter
 
             if (isActive)
             {
+                // Active level can be hard or normal active level
                 prefabToSpawn = isHard ? hardLevelPrefab : activeLevelPrefab;
             }
             else
             {
-                prefabToSpawn = isHard ? hardLevelPrefab : nextLevelPrefab;
+                // Upcoming levels always use the standard next level prefab
+                prefabToSpawn = nextLevelPrefab;
             }
 
             if (prefabToSpawn == null) return;
