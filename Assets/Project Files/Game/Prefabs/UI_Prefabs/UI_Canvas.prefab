@@ -1957,7 +1957,7 @@ GameObject:
   - component: {fileID: 1577788496169815652}
   - component: {fileID: 7856083675210392648}
   m_Layer: 0
-  m_Name: Levels
+  m_Name: LevelsPath
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1975,13 +1975,12 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 4173884492389463512}
   - {fileID: 8248000673906315470}
   - {fileID: 7340562504640501757}
   - {fileID: 258089285990940012}
   - {fileID: 4828917789091727861}
   - {fileID: 8025789019572576881}
-  m_Father: {fileID: 1083597767176614387}
+  m_Father: {fileID: 7097396835917010744}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
@@ -17114,12 +17113,12 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 6538626929882917484}
+  m_Father: {fileID: 7097396835917010744}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 457.1575, y: 2944.3635}
+  m_SizeDelta: {x: 581.3711, y: 2944.3635}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2913661317834441402
 CanvasRenderer:
@@ -20962,7 +20961,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8600568511743567283}
-  - {fileID: 6538626929882917484}
+  - {fileID: 7097396835917010744}
   m_Father: {fileID: 4881772398093412939}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -25327,6 +25326,43 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!1 &6250604602735480620
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7097396835917010744}
+  m_Layer: 0
+  m_Name: Levels
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &7097396835917010744
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6250604602735480620}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 4173884492389463512}
+  - {fileID: 6538626929882917484}
+  m_Father: {fileID: 1083597767176614387}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &6264049108444470191
 GameObject:
   m_ObjectHideFlags: 0
@@ -44585,17 +44621,14 @@ MonoBehaviour:
     button: {fileID: 5910901171608790415}
     icon: {fileID: 7908555674996733475}
     textRect: {fileID: 2230593696058731264}
-    textGo: {fileID: 8576883737920633959}
   homeBtnData:
     button: {fileID: 6696275715275873625}
     icon: {fileID: 6572232271233343107}
     textRect: {fileID: 8219282673064458937}
-    textGo: {fileID: 8576883737920633959}
   arcBtnData:
     button: {fileID: 8028346869312032592}
     icon: {fileID: 1120902459028739424}
     textRect: {fileID: 3650902155154116167}
-    textGo: {fileID: 4064757408842460007}
 --- !u!1 &8742347754827406671
 GameObject:
   m_ObjectHideFlags: 0
