@@ -19,10 +19,17 @@ namespace BlockShooter
     {
         [Header("MenuBar Navigation")]
         public RectTransform selectedImg;
-        public GameObject storeGroup;
         public MenuButtonData shopBtnData;
         public MenuButtonData homeBtnData;
         public MenuButtonData arcBtnData;
+
+        [Header("Sliding Panels")]
+        [Tooltip("The Store page panel (slides in from left to center)")]
+        public RectTransform storePage;
+        [Tooltip("The Home page/level path panel (slides out from center to right)")]
+        public RectTransform homePage;
+        [Tooltip("The screen/canvas width used as the offset for sliding panels")]
+        public float pageWidth = 1080f;
 
         private MenuButtonType _currentTab = MenuButtonType.Home;
         
@@ -48,7 +55,7 @@ namespace BlockShooter
             if (arcBtnData != null && arcBtnData.button != null)
                 arcBtnData.button.onClick.AddListener(() => SelectTab(MenuButtonType.Achievement));
 
-            // Set default tab to Home without animation on start
+            // Setup initial position of panels without animation
             SelectTab(MenuButtonType.Home, animate: false);
         }
 
@@ -144,10 +151,69 @@ namespace BlockShooter
                 }
             }
 
-            // 4. Toggle the Store panel group visibility
-            if (storeGroup != null)
+            // 4. Slide transitions between Shop (Store) and Home page
+            if (storePage != null && homePage != null)
             {
-                storeGroup.SetActive(tabType == MenuButtonType.Shop);
+                storePage.DOKill();
+                homePage.DOKill();
+
+                // Dynamically calculate the sliding width based on the actual RectTransform width of this container or its parent
+                float dynamicWidth = pageWidth;
+                RectTransform myRect = transform as RectTransform;
+                if (myRect != null && myRect.rect.width > 0)
+                {
+                    dynamicWidth = myRect.rect.width;
+                }
+                else if (transform.parent != null)
+                {
+                    RectTransform parentRect = transform.parent as RectTransform;
+                    if (parentRect != null && parentRect.rect.width > 0)
+                    {
+                        dynamicWidth = parentRect.rect.width;
+                    }
+                }
+
+                if (tabType == MenuButtonType.Shop)
+                {
+                    // Shop selected:
+                    // - Home page slides out to the right (X: dynamicWidth)
+                    // - Store page slides in from the left (X: 0)
+                    storePage.gameObject.SetActive(true);
+                    
+                    if (animate)
+                    {
+                        homePage.DOAnchorPosX(dynamicWidth, 0.35f).SetEase(Ease.OutCubic);
+                        storePage.DOAnchorPosX(0f, 0.35f).SetEase(Ease.OutCubic);
+                    }
+                    else
+                    {
+                        homePage.anchoredPosition = new Vector2(dynamicWidth, homePage.anchoredPosition.y);
+                        storePage.anchoredPosition = new Vector2(0f, storePage.anchoredPosition.y);
+                    }
+                }
+                else if (tabType == MenuButtonType.Home)
+                {
+                    // Home selected:
+                    // - Home page slides back in to center (X: 0)
+                    // - Store page slides back out to the left (X: -dynamicWidth)
+                    homePage.gameObject.SetActive(true);
+
+                    if (animate)
+                    {
+                        homePage.DOAnchorPosX(0f, 0.35f).SetEase(Ease.OutCubic);
+                        storePage.DOAnchorPosX(-dynamicWidth, 0.35f).SetEase(Ease.OutCubic)
+                            .OnComplete(() => {
+                                if (_currentTab == MenuButtonType.Home)
+                                    storePage.gameObject.SetActive(false);
+                            });
+                    }
+                    else
+                    {
+                        homePage.anchoredPosition = new Vector2(0f, homePage.anchoredPosition.y);
+                        storePage.anchoredPosition = new Vector2(-dynamicWidth, storePage.anchoredPosition.y);
+                        storePage.gameObject.SetActive(false);
+                    }
+                }
             }
         }
 

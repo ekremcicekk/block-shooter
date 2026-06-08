@@ -14255,8 +14255,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -13.475494}
-  m_SizeDelta: {x: -719.36, y: 122.3165}
+  m_AnchoredPosition: {x: 0, y: -26.8372}
+  m_SizeDelta: {x: -719.36, y: 196.3194}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7612566665312211735
 CanvasRenderer:
@@ -14295,7 +14295,7 @@ MonoBehaviour:
   m_FillClockwise: 1
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1.25
+  m_PixelsPerUnitMultiplier: 1.3
 --- !u!1 &2744997577457157456
 GameObject:
   m_ObjectHideFlags: 0
@@ -17150,7 +17150,7 @@ MonoBehaviour:
       m_Calls: []
   m_Sprite: {fileID: 21300000, guid: 340bb378e150ad544ba5cb24389ef7f0, type: 3}
   m_Type: 0
-  m_PreserveAspect: 1
+  m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
   m_FillAmount: 1
@@ -19529,7 +19529,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4066944310346268604}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 31a19414c41e5ae4aae2af33fee712f6, type: 3}
   m_Name: 
@@ -44616,7 +44616,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   selectedImg: {fileID: 6109142161979247262}
-  storeGroup: {fileID: 5896191555394411704}
   shopBtnData:
     button: {fileID: 5910901171608790415}
     icon: {fileID: 7908555674996733475}
@@ -44629,6 +44628,9 @@ MonoBehaviour:
     button: {fileID: 8028346869312032592}
     icon: {fileID: 1120902459028739424}
     textRect: {fileID: 3650902155154116167}
+  storePage: {fileID: 0}
+  homePage: {fileID: 0}
+  pageWidth: 1080
 --- !u!1 &8742347754827406671
 GameObject:
   m_ObjectHideFlags: 0

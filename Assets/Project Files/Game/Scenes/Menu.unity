@@ -288,6 +288,16 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!224 &1036604874 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 7097396835917010744, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+  m_PrefabInstance: {fileID: 6203770898875092174}
+  m_PrefabAsset: {fileID: 0}
+--- !u!224 &1154825218 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 8600568511743567283, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+  m_PrefabInstance: {fileID: 6203770898875092174}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1677898172
 GameObject:
   m_ObjectHideFlags: 0
@@ -446,6 +456,22 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4142966428735177331, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
       propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4173884492389463512, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4173884492389463512, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4173884492389463512, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: -0.0001
+      objectReference: {fileID: 0}
+    - target: {fileID: 4173884492389463512, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: m_SizeDelta.y
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4337331774378376106, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
@@ -632,6 +658,14 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 8994330230479752925, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: homePage
+      value: 
+      objectReference: {fileID: 1036604874}
+    - target: {fileID: 8994330230479752925, guid: f8a308b2e90b3d2448bc29b309889527, type: 3}
+      propertyPath: storePage
+      value: 
+      objectReference: {fileID: 1154825218}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
