@@ -16,6 +16,22 @@ namespace BlockShooter
         [Header("Setup")]
         public Transform contentParent;
         public RectTransform playButton;
+        public GameConfig gameConfig;
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (gameConfig == null)
+            {
+                var gc = UnityEditor.AssetDatabase.FindAssets("t:GameConfig");
+                if (gc.Length > 0)
+                {
+                    gameConfig = UnityEditor.AssetDatabase.LoadAssetAtPath<GameConfig>(
+                        UnityEditor.AssetDatabase.GUIDToAssetPath(gc[0]));
+                }
+            }
+        }
+#endif
 
         [Header("Layout Settings")]
         public float startY = -120f;
@@ -96,7 +112,20 @@ namespace BlockShooter
 
         private void SpawnNode(int levelNumber, float posY, bool isActive)
         {
-            bool isHard = (levelNumber % 5 == 4);
+            bool isHard = false;
+            if (gameConfig != null && gameConfig.levelPrefabs != null && gameConfig.levelPrefabs.Count > 0)
+            {
+                int index = (levelNumber - 1) % gameConfig.levelPrefabs.Count;
+                var prefab = gameConfig.levelPrefabs[index];
+                if (prefab != null)
+                {
+                    isHard = prefab.isHardLevel;
+                }
+            }
+            else
+            {
+                isHard = (levelNumber % 5 == 4);
+            }
             GameObject prefabToSpawn;
 
             if (isActive)
@@ -199,7 +228,20 @@ namespace BlockShooter
 
         private void SpawnNodeEditor(int levelNumber, float posY, bool isActive)
         {
-            bool isHard = (levelNumber % 5 == 4);
+            bool isHard = false;
+            if (gameConfig != null && gameConfig.levelPrefabs != null && gameConfig.levelPrefabs.Count > 0)
+            {
+                int index = (levelNumber - 1) % gameConfig.levelPrefabs.Count;
+                var prefab = gameConfig.levelPrefabs[index];
+                if (prefab != null)
+                {
+                    isHard = prefab.isHardLevel;
+                }
+            }
+            else
+            {
+                isHard = (levelNumber % 5 == 4);
+            }
             GameObject prefabToSpawn;
 
             if (isActive)

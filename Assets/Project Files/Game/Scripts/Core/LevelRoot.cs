@@ -49,6 +49,7 @@ namespace BlockShooter
         public FireRange          fireRange;
 
         // ── Design data (written by Level Editor) ─────────────────────────────
+        public bool isHardLevel = false;
         [HideInInspector] public int   gridCols     = 4;
         [HideInInspector] public int   gridRows     = 2;
         [HideInInspector] public float splineWidth  = 6f;

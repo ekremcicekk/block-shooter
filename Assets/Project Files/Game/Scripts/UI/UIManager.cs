@@ -37,6 +37,14 @@ namespace BlockShooter
         public Button playOnButton;
         public Button watchAdButton;
 
+        [Header("Hard Level UI")]
+        public GameObject sliderOut;
+        public GameObject hardLevelSliderOut;
+        public GameObject hardLevelOpen;
+
+        private Color _defaultLevelTextColor;
+        private bool _hasStoredDefaultTextColor = false;
+
         // Runtime states
         public bool HasRevivedThisLevel { get; private set; }
         public static float SpeedMultiplier { get; private set; } = 1f;
@@ -124,7 +132,52 @@ namespace BlockShooter
             // Wait for end of frame to ensure LevelManager has fully spawned the level
             yield return new UnityEngine.WaitForEndOfFrame();
 
+            ConfigureHardLevelUI();
+
             InitializeProgress();
+        }
+
+        private void ConfigureHardLevelUI()
+        {
+            if (levelText != null && !_hasStoredDefaultTextColor)
+            {
+                _defaultLevelTextColor = levelText.color;
+                _hasStoredDefaultTextColor = true;
+            }
+
+            LevelRoot currentLevel = LevelManager.Instance != null ? LevelManager.Instance.CurrentLevelRoot : null;
+            bool isHard = currentLevel != null && currentLevel.isHardLevel;
+
+            if (isHard)
+            {
+                // Active level is hard: show hard slider and hide normal slider
+                if (sliderOut != null) sliderOut.SetActive(false);
+                if (hardLevelSliderOut != null) hardLevelSliderOut.SetActive(true);
+
+                // Change level text color to white
+                if (levelText != null)
+                {
+                    levelText.color = Color.white;
+                }
+
+                // Activate the HardLevel_Open root group under HUD_Panel
+                if (hardLevelOpen != null) hardLevelOpen.SetActive(true);
+            }
+            else
+            {
+                // Normal level: show normal slider and hide hard slider
+                if (sliderOut != null) sliderOut.SetActive(true);
+                if (hardLevelSliderOut != null) hardLevelSliderOut.SetActive(false);
+
+                // Restore level text color
+                if (levelText != null && _hasStoredDefaultTextColor)
+                {
+                    levelText.color = _defaultLevelTextColor;
+                }
+
+                // Deactivate the HardLevel_Open root group
+                if (hardLevelOpen != null) hardLevelOpen.SetActive(false);
+            }
         }
 
         private void OnEnable()

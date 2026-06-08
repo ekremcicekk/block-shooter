@@ -2149,6 +2149,7 @@ MonoBehaviour:
   nextLevelPrefab: {fileID: 5339951217051524996, guid: bec29237d8de9a04ea5a17caf35e815e, type: 3}
   contentParent: {fileID: 6538626929882917484}
   playButton: {fileID: 8025789019572576881}
+  gameConfig: {fileID: 11400000, guid: 98319b29f3d687d4a85f843e9547ed21, type: 2}
   startY: -120
   spacing: 350
   playButtonOffset: -350
@@ -15309,7 +15310,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -22581,6 +22582,9 @@ MonoBehaviour:
   keepPlayingPanel: {fileID: 3436667066093691222}
   playOnButton: {fileID: 5263279642163329061}
   watchAdButton: {fileID: 5275670667130646622}
+  sliderOut: {fileID: 5446071913995948307}
+  hardLevelSliderOut: {fileID: 1755180556382548538}
+  hardLevelOpen: {fileID: 2686690440366373835}
 --- !u!114 &6495637273208537153
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -27922,7 +27926,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 0, g: 0, b: 0, a: 0.6}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -45264,7 +45268,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 0, g: 0, b: 0, a: 0.8}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:

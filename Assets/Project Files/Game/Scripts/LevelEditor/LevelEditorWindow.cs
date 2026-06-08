@@ -46,6 +46,7 @@ namespace BlockShooter.Editor
         // ── Design data ───────────────────────────────────────────────────────
         private int           _levelIndex  = 1;
         private string        _levelName   = "Level 1";
+        private bool          _isHardLevel = false;
         private LevelGoalType _goalType    = LevelGoalType.ClearAllBlocks;
         private int           _goalAmount  = 0;
 
@@ -365,9 +366,24 @@ namespace BlockShooter.Editor
                 float mainW = rect.width - 48f;
 
                 // Draw background selection highlight
+                bool isHard = false;
+                var prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(_paths[index]);
+                if (prefabAsset != null)
+                {
+                    var lrComp = prefabAsset.GetComponent<LevelRoot>();
+                    if (lrComp != null)
+                    {
+                        isHard = lrComp.isHardLevel;
+                    }
+                }
+
                 if (active)
                 {
                     EditorGUI.DrawRect(new Rect(rect.x - 2, rect.y, rect.width + 4, rect.height), new Color(.4f, .65f, 1f, 0.25f));
+                }
+                else if (isHard)
+                {
+                    EditorGUI.DrawRect(new Rect(rect.x - 2, rect.y, rect.width + 4, rect.height), new Color(1f, 0.3f, 0.3f, 0.15f));
                 }
 
                 // Draw Level Name Label
@@ -2448,6 +2464,15 @@ namespace BlockShooter.Editor
             }
 
             // Nothing selected
+            Hdr("LEVEL CONFIG");
+            EditorGUI.BeginChangeCheck();
+            _isHardLevel = EditorGUILayout.Toggle("Is Hard Level", _isHardLevel);
+            if (EditorGUI.EndChangeCheck())
+            {
+                _isDirty = true;
+                Repaint();
+            }
+
             GUILayout.Space(20);
             EditorGUILayout.HelpBox(
                 "Click a grid cell to inspect.\nOr click 'Edit Spline' to manage track spline.", MessageType.None);
@@ -2767,6 +2792,7 @@ namespace BlockShooter.Editor
             _levelName  = $"Level {_levelIndex}";
             _goalType   = LevelGoalType.ClearAllBlocks;
             _goalAmount = 0;
+            _isHardLevel = false;
             _gridCols   = 4; _gridRows = 2;
             _splinePreset = 0; _splineWidth = 3.5f; _splineDepth = 5f;
             _selC = -1; _selR = -1; _selKnot = -1;
@@ -2821,6 +2847,7 @@ namespace BlockShooter.Editor
             _levelName    = $"Level {_levelIndex}";
             _goalType     = LevelGoalType.ClearAllBlocks;
             _goalAmount   = 0;
+            _isHardLevel  = lr.isHardLevel;
             // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
             _gridCols     = lr.gridCols  > 0 ? Mathf.Clamp(lr.gridCols,  1, MaxCols) : 4;
             _gridRows     = lr.gridRows  > 0 ? Mathf.Clamp(lr.gridRows,  1, MaxRows) : 2;
@@ -3040,6 +3067,7 @@ namespace BlockShooter.Editor
             lr.splineDepth  = _splineDepth;
             lr.splinePreset  = _splinePreset;
             lr.openZoneHalfT = _openZoneHalfT;
+            lr.isHardLevel   = _isHardLevel;
             lr.splineKnots   = new List<Vector3>(_knots);
             EnsureTangentLists();
             lr.splineTangentsIn   = new List<Vector3>(_tangentsIn);
