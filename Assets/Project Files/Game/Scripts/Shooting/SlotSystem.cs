@@ -214,6 +214,25 @@ namespace BlockShooter
             ind.transform.localPosition = Vector3.zero;
             ind.transform.localRotation = Quaternion.identity;
 
+            // Find and play ExtraSlotExplosion particle system inside the new indicator
+            var explosion = ind.transform.Find("ExtraSlotExplosion")?.GetComponent<ParticleSystem>();
+            if (explosion == null)
+            {
+                foreach (var ps in ind.GetComponentsInChildren<ParticleSystem>(true))
+                {
+                    if (ps.name == "ExtraSlotExplosion")
+                    {
+                        explosion = ps;
+                        break;
+                    }
+                }
+            }
+            if (explosion != null)
+            {
+                explosion.gameObject.SetActive(true);
+                explosion.Play();
+            }
+
             Vector3 originalScale = ind.transform.localScale;
             ind.transform.localScale = Vector3.zero;
             ind.transform.DOScale(originalScale, 0.4f).SetEase(Ease.OutBack);
