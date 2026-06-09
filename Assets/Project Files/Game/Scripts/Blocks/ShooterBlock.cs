@@ -370,7 +370,11 @@ namespace BlockShooter
                     if (block == null || block.IsDestroyed || block.IsTargeted) continue;
 
                     if (firedAny)
+                    {
                         yield return new WaitForSeconds(laneDelay / UIManager.SpeedMultiplier);
+                        // Re-check after yield — another shooter may have claimed this block during the delay
+                        if (block == null || block.IsDestroyed || block.IsTargeted) continue;
+                    }
 
                     firedAny = true;
                     FireAt(block);

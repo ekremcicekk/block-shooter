@@ -92,7 +92,7 @@ namespace BlockShooter
             Vector3         origin   = transform.position;
             foreach (var b in _blocksInRange)
             {
-                if (b == null || b.IsDestroyed || b.ColorType != colorType) continue;
+                if (b == null || b.IsDestroyed || b.IsTargeted || b.ColorType != colorType) continue;
                 float d = Vector3.SqrMagnitude(b.transform.position - origin);
                 if (d < bestDist) { bestDist = d; best = b; }
             }
