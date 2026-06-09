@@ -168,7 +168,14 @@ namespace BlockShooter
         {
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying || slot == null) return;
 
+            TutorialTarget target = slot.tutorialTarget != null ? slot.tutorialTarget : slot.GetComponent<TutorialTarget>();
+            if (global::BlockShooter.TutorialManager.Instance != null && global::BlockShooter.TutorialManager.Instance.TryHandleTargetClick(target))
+            {
+                return;
+            }
+
             BoosterType type = slot.boosterType;
+
             int count = SaveManager.GetBoosterCount(type);
             if (count > 0)
             {

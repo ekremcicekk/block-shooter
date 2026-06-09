@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -6,6 +7,7 @@ namespace BlockShooter
     public class LevelManager : MonoBehaviour
     {
         public static LevelManager Instance { get; private set; }
+        public static event Action<LevelRoot> OnLevelLoaded;
 
         [Header("Spawn Point")]
         [Tooltip("Parent transform under which the active level prefab is instantiated.")]
@@ -56,6 +58,7 @@ namespace BlockShooter
             _activeLevelRoot = Instantiate(prefab, parent);
             _activeLevelRoot.transform.localPosition = Vector3.zero;
             _activeLevelRoot.Initialize();
+            OnLevelLoaded?.Invoke(_activeLevelRoot);
         }
 
         public void RestartLevel()  => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);

@@ -3300,6 +3300,7 @@ MonoBehaviour:
   shooterGrid: {fileID: 3413490527989655859}
   slotSystem: {fileID: 8185292390376405080}
   fireRange: {fileID: 485394152894999091}
+  isHardLevel: 0
   gridCols: 6
   gridRows: 3
   splineWidth: 6
@@ -10771,8 +10772,32 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 9104099848893320791, guid: d352cff43f63e444da50c3c9e6f33540, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7913994002743050132}
   m_SourcePrefab: {fileID: 100100000, guid: d352cff43f63e444da50c3c9e6f33540, type: 3}
+--- !u!1 &6942548770602540787 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 9104099848893320791, guid: d352cff43f63e444da50c3c9e6f33540, type: 3}
+  m_PrefabInstance: {fileID: 2161905673308180644}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &7913994002743050132
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6942548770602540787}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04bd9f3e302fc224994946f639294adb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _targetId: level1block
+  _uiTarget: {fileID: 0}
+  _worldTarget: {fileID: 7306489046004585827}
+  _highlightObject: {fileID: 0}
 --- !u!4 &7306489046004585827 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8891650280715535815, guid: d352cff43f63e444da50c3c9e6f33540, type: 3}

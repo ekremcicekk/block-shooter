@@ -14,6 +14,9 @@ namespace BlockShooter
         [Tooltip("The type of booster this slot represents")]
         public BoosterType boosterType;
 
+        [Header("Tutorial")]
+        public TutorialTarget tutorialTarget;
+
         [Header("Internal UI References")]
         public Button mainButton;
         

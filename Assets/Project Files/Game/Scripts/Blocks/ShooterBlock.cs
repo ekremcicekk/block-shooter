@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -36,6 +36,9 @@ namespace BlockShooter
 
         [Header("Mystery Shooter Settings")]
         [SerializeField] private bool _isMystery;
+
+        [Header("Tutorial")]
+        [SerializeField] private TutorialTarget tutorialTarget;
 
         // ── State ──────────────────────────────────────────────────────────────
         // Serialized so the Level Editor can bake color/shots/position into the prefab.
@@ -164,6 +167,12 @@ namespace BlockShooter
         {
             if (!GameManager.Instance.IsPlaying) return;
             if (State != BlockState.InGrid) return;
+
+            TutorialTarget target = tutorialTarget != null ? tutorialTarget : GetComponent<TutorialTarget>();
+            if (global::BlockShooter.TutorialManager.Instance != null && global::BlockShooter.TutorialManager.Instance.TryHandleTargetClick(target))
+            {
+                return;
+            }
 
             if (IsFrozen)
             {
