@@ -34,6 +34,7 @@ namespace BlockShooter.Editor
         private Dictionary<BranchPathData, UnityEditorInternal.ReorderableList> _branchGroupsLists = new();
         private int _groupIndexToRemoveDeferred = -1;
         private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
+        private int _branchIndexToRemoveDeferred = -1;
         private List<int> _selectedKnots = new();
         [SerializeField] private bool _snapToGrid = false;
         [SerializeField] private float _snapSize = 0.5f;
@@ -3687,17 +3688,7 @@ namespace BlockShooter.Editor
                 EditorGUI.BeginDisabledGroup(_editingSpline);
                 GUI.backgroundColor = new Color(.9f, .3f, .3f);
                 if (GUILayout.Button("✕ Remove Branch", GUILayout.Width(110)))
-                {
-                    _windowSerialized.ApplyModifiedProperties();
-                    _branches.RemoveAt(i);
-                    _windowSerialized.Update();
-                    _isDirty = true;
-                    EditorGUILayout.EndHorizontal();
-                    EditorGUILayout.EndVertical();
-                    EditorGUI.EndDisabledGroup(); // end inner disabled group
-                    EditorGUI.EndDisabledGroup(); // end outer disabled group
-                    continue;
-                }
+                    _branchIndexToRemoveDeferred = i;
                 GUI.backgroundColor = Color.white;
                 EditorGUI.EndDisabledGroup(); // end inner disabled group
                 EditorGUILayout.EndHorizontal();
@@ -3788,8 +3779,22 @@ namespace BlockShooter.Editor
                 _windowSerialized.ApplyModifiedProperties();
                 _branchGroupIndexToRemoveDeferred.branch.groups.RemoveAt(_branchGroupIndexToRemoveDeferred.index);
                 _branchGroupIndexToRemoveDeferred = (null, -1);
+                _branchGroupsLists.Clear();
                 _windowSerialized.Update();
                 _isDirty = true;
+            }
+
+            // Execute deferred branch removal outside the draw loop to avoid layout
+            // state corruption and stale SerializedProperty references in _branchGroupsLists.
+            if (_branchIndexToRemoveDeferred >= 0)
+            {
+                _windowSerialized.ApplyModifiedProperties();
+                _branches.RemoveAt(_branchIndexToRemoveDeferred);
+                _branchIndexToRemoveDeferred = -1;
+                _branchGroupsLists.Clear();
+                _windowSerialized.Update();
+                _isDirty = true;
+                Repaint();
             }
 
             EditorGUI.BeginDisabledGroup(_editingSpline);
