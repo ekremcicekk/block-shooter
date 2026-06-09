@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,6 +8,8 @@ namespace BlockShooter
     public class GameManager : MonoBehaviour
     {
         public static GameManager Instance { get; private set; }
+
+        private const float WinDelaySeconds = 1.5f;
 
         [Header("Config")]
         public GameConfig config;
@@ -41,6 +44,13 @@ namespace BlockShooter
             if (State != GameState.Playing) return;
             SetState(GameState.Win);
 
+            StartCoroutine(TriggerWinDelayed());
+        }
+
+        private IEnumerator TriggerWinDelayed()
+        {
+            yield return new WaitForSecondsRealtime(WinDelaySeconds);
+
             // Trigger LevelWin on active level root animator if present
             if (LevelManager.Instance != null && LevelManager.Instance.CurrentLevelRoot != null)
             {
@@ -55,13 +65,13 @@ namespace BlockShooter
                     animator.SetTrigger("LevelWin");
                 }
             }
-            
+
             // Award level win coins
             if (config != null)
             {
                 SaveManager.Coins += config.winRewardCoins;
             }
-            
+
             SaveManager.CurrentLevel++;
             OnLevelWin?.Invoke();
         }

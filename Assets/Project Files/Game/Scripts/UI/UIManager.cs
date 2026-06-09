@@ -379,12 +379,6 @@ namespace BlockShooter
 
         private void HandleLevelWin()
         {
-            StartCoroutine(ShowWinPanelDelayed(1.0f));
-        }
-
-        private System.Collections.IEnumerator ShowWinPanelDelayed(float delay)
-        {
-            yield return new WaitForSeconds(delay);
             ShowWinPanel();
         }
 
