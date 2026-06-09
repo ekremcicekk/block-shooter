@@ -3045,13 +3045,21 @@ namespace BlockShooter.Editor
             PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
             DestroyImmediate(root);
             AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
+            // Do NOT call AssetDatabase.Refresh() here — it reimports all assets and can
+            // invalidate the MonoBehaviour references in levelPrefabs, causing IndexOf to
+            // return -1 and clearing the active selection. SaveAsPrefabAsset already
+            // registers the asset; SaveAssets flushes all pending dirty marks.
             RefreshList();
 
             if (ok)
             {
-                _activeIdx = _paths.IndexOf(path.Replace('\\', '/'));
-                if (_levelList != null) _levelList.index = _activeIdx;
+                int found = _paths.IndexOf(path.Replace('\\', '/'));
+                if (found >= 0)
+                {
+                    _activeIdx = found;
+                    if (_levelList != null) _levelList.index = _activeIdx;
+                }
+                // else: keep the selection that RefreshList() already restored
                 _isDirty = false;
                 Debug.Log($"[LevelEditor] Saved: {path}");
                 ShowLevelPreview(path);
