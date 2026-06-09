@@ -35,6 +35,7 @@ namespace BlockShooter.Editor
         private int _groupIndexToRemoveDeferred = -1;
         private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
         private int _branchIndexToRemoveDeferred = -1;
+        private int _branchMirrorIndexDeferred   = -1;
         private List<int> _selectedKnots = new();
         [SerializeField] private bool _snapToGrid = false;
         [SerializeField] private float _snapSize = 0.5f;
@@ -3684,10 +3685,13 @@ namespace BlockShooter.Editor
                 GUILayout.Label("Branch Name:", GUILayout.Width(80));
                 b.branchName = EditorGUILayout.TextField(b.branchName);
                 
-                // Disable Remove button if currently editing any spline
+                // Mirror / Remove buttons — disabled while editing any spline
                 EditorGUI.BeginDisabledGroup(_editingSpline);
+                GUI.backgroundColor = new Color(.35f, .75f, 1f);
+                if (GUILayout.Button("⇆ Mirror", GUILayout.Width(62)))
+                    _branchMirrorIndexDeferred = i;
                 GUI.backgroundColor = new Color(.9f, .3f, .3f);
-                if (GUILayout.Button("✕ Remove Branch", GUILayout.Width(110)))
+                if (GUILayout.Button("✕ Remove", GUILayout.Width(68)))
                     _branchIndexToRemoveDeferred = i;
                 GUI.backgroundColor = Color.white;
                 EditorGUI.EndDisabledGroup(); // end inner disabled group
@@ -3792,6 +3796,34 @@ namespace BlockShooter.Editor
                 _branches.RemoveAt(_branchIndexToRemoveDeferred);
                 _branchIndexToRemoveDeferred = -1;
                 _branchGroupsLists.Clear();
+                _windowSerialized.Update();
+                _isDirty = true;
+                Repaint();
+            }
+
+            // Execute deferred branch mirror — creates a new branch with all X-coordinates negated.
+            if (_branchMirrorIndexDeferred >= 0)
+            {
+                _windowSerialized.ApplyModifiedProperties();
+                var src = _branches[_branchMirrorIndexDeferred];
+                var mirrored = new BranchPathData
+                {
+                    branchName        = src.branchName + "_mirror",
+                    mergeT            = src.mergeT,
+                    connectFromLeft   = !src.connectFromLeft,
+                    splineKnots       = src.splineKnots.Select(k  => new Vector3(-k.x,  k.y,  k.z)).ToList(),
+                    splineTangentsIn  = src.splineTangentsIn.Select(t  => new Vector3(-t.x,  t.y,  t.z)).ToList(),
+                    splineTangentsOut = src.splineTangentsOut.Select(t => new Vector3(-t.x,  t.y,  t.z)).ToList(),
+                    splineTangentModes = new List<int>(src.splineTangentModes),
+                    groups = src.groups.Select(g => new LevelConveyorGroup
+                    {
+                        color     = g.color,
+                        rowCount  = g.rowCount,
+                        laneCount = g.laneCount
+                    }).ToList()
+                };
+                _branches.Add(mirrored);
+                _branchMirrorIndexDeferred = -1;
                 _windowSerialized.Update();
                 _isDirty = true;
                 Repaint();
