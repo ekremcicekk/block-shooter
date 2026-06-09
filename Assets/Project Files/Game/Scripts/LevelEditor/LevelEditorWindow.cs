@@ -800,36 +800,17 @@ namespace BlockShooter.Editor
 
             if (_editingBranchIndex >= 0)
             {
-                var branch = _branches[_editingBranchIndex];
-                meshBuilder.trimBranchEnd = true;
-                meshBuilder.openZoneEnabled = false;
-
-                if (_levelPreviewGo != null)
-                {
-                    var mainTrack = _levelPreviewGo.transform.Find("ConveyorSystem/Track");
-                    if (mainTrack != null)
-                    {
-                        var mainSc = mainTrack.GetComponent<SplineContainer>();
-                        meshBuilder.mainTrackSpline = mainSc;
-
-                        if (mainSc != null && _knots != null && _knots.Count >= 2)
-                        {
-                            mainSc.Spline.Evaluate(branch.mergeT, out var mPos, out var mTan, out var mUp);
-                            Vector3 worldMergePos = mainTrack.TransformPoint(mPos);
-                            Vector3 worldMergeTan = mainTrack.TransformDirection((Vector3)mTan).normalized;
-                            Vector3 worldMergeUp  = mainTrack.TransformDirection((Vector3)mUp).normalized;
-                            if (worldMergeUp.sqrMagnitude < 0.001f) worldMergeUp = Vector3.up;
-                            Vector3 worldMergeRight = Vector3.Cross(worldMergeUp, worldMergeTan).normalized;
-
-                            Vector3 branchLast = _knots[_knots.Count - 1];
-                            Vector3 branchSecondLast = _knots[_knots.Count - 2];
-                            Vector3 toBranch = (branchSecondLast - branchLast).normalized;
-                            float dot = Vector3.Dot(toBranch, worldMergeRight);
-
-                            meshBuilder.branchOnRightSide = (dot >= 0f);
-                        }
-                    }
-                }
+                // Editor preview: leave mainTrackSpline null so Sweep() uses the simple
+                // distance-based fallback trim instead of IsRingFullyInsideConveyor().
+                // The spline-tangent-based "right" direction is unreliable in the editor
+                // (e.g. at mergeT=0.5 the track tangent points sideways, making
+                // worldMergeRight face forward/backward instead of left/right — this
+                // causes all branch rings to be classified as "inside" and removed,
+                // producing an empty mesh). The distance fallback is accurate enough
+                // for interactive editing; the final saved prefab uses full trimming.
+                meshBuilder.trimBranchEnd    = true;
+                meshBuilder.openZoneEnabled  = false;
+                // mainTrackSpline intentionally NOT set → distance-check fallback active
             }
             else
             {
@@ -853,16 +834,6 @@ namespace BlockShooter.Editor
             Selection.activeGameObject = track;
             SceneView.lastActiveSceneView?.FrameSelected();
             SceneView.RepaintAll();
-
-            // SplineContainer caches its internal curve data asynchronously on the first
-            // frame after knots are written. Rebuild the mesh one frame later so Sweep()
-            // sees fully-initialized spline data — otherwise a freshly-created branch
-            // (e.g. from Mirror) may produce an empty mesh until the user moves a knot.
-            EditorApplication.delayCall += () =>
-            {
-                if (_editingSpline && _previewGo != null)
-                    SyncPreviewSpline();
-            };
         }
 
         private void StopSplineEdit(bool save)
