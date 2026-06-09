@@ -853,6 +853,16 @@ namespace BlockShooter.Editor
             Selection.activeGameObject = track;
             SceneView.lastActiveSceneView?.FrameSelected();
             SceneView.RepaintAll();
+
+            // SplineContainer caches its internal curve data asynchronously on the first
+            // frame after knots are written. Rebuild the mesh one frame later so Sweep()
+            // sees fully-initialized spline data — otherwise a freshly-created branch
+            // (e.g. from Mirror) may produce an empty mesh until the user moves a knot.
+            EditorApplication.delayCall += () =>
+            {
+                if (_editingSpline && _previewGo != null)
+                    SyncPreviewSpline();
+            };
         }
 
         private void StopSplineEdit(bool save)
