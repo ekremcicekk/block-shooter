@@ -2515,7 +2515,7 @@ namespace BlockShooter.Editor
         private void DrawKnotInspector()
         {
             int  i    = _selKnot;
-            bool anch = (i == 0);
+            bool anch = (i == 0 && _editingBranchIndex < 0);
             Hdr($"KNOT #{i}{(anch ? "  🔒" : "")}");
 
             EnsureTangentLists();
