@@ -32,9 +32,10 @@ namespace BlockShooter.Editor
         private SerializedObject _windowSerialized;
         private UnityEditorInternal.ReorderableList _groupsList;
         private Dictionary<BranchPathData, UnityEditorInternal.ReorderableList> _branchGroupsLists = new();
-        private int _groupIndexToRemoveDeferred = -1;
-        private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
-        private int _branchIndexToRemoveDeferred = -1;
+        [System.NonSerialized] private int _groupIndexToRemoveDeferred = -1;
+        [System.NonSerialized] private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
+        [System.NonSerialized] private int _branchIndexToRemoveDeferred = -1;
+        [System.NonSerialized] private BranchPathData _branchToMirrorDeferred = null;
         private List<int> _selectedKnots = new();
         [SerializeField] private bool _snapToGrid = false;
         [SerializeField] private float _snapSize = 0.5f;
@@ -3696,6 +3697,36 @@ namespace BlockShooter.Editor
                 new Color(.22f,.22f,.22f));
         }
 
+        private void MirrorBranch(BranchPathData source)
+        {
+            _windowSerialized.ApplyModifiedProperties();
+            
+            var mirroredBranch = new BranchPathData
+            {
+                branchName = $"{source.branchName}_Mirrored",
+                mergeT = 1.0f - source.mergeT,
+                connectFromLeft = !source.connectFromLeft,
+                
+                splineKnots = source.splineKnots.Select(k => new Vector3(-k.x, k.y, k.z)).ToList(),
+                splineTangentsIn = source.splineTangentsIn.Select(t => new Vector3(-t.x, t.y, t.z)).ToList(),
+                splineTangentsOut = source.splineTangentsOut.Select(t => new Vector3(-t.x, t.y, t.z)).ToList(),
+                splineTangentModes = new List<int>(source.splineTangentModes),
+                
+                groups = source.groups.Select(g => new LevelConveyorGroup
+                {
+                    color = g.color,
+                    rowCount = g.rowCount,
+                    laneCount = g.laneCount
+                }).ToList()
+            };
+
+            _branches.Add(mirroredBranch);
+            _branchGroupsLists.Clear();
+            _windowSerialized.Update();
+            _isDirty = true;
+            Repaint();
+        }
+
         private void DrawBranchesSection()
         {
             EditorGUI.BeginChangeCheck();
@@ -3713,20 +3744,28 @@ namespace BlockShooter.Editor
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label("Branch Name:", GUILayout.Width(80));
                 b.branchName = EditorGUILayout.TextField(b.branchName);
-                
-                // Disable Remove button if currently editing any spline
-                EditorGUI.BeginDisabledGroup(_editingSpline);
-                GUI.backgroundColor = new Color(.9f, .3f, .3f);
-                if (GUILayout.Button("✕ Remove Branch", GUILayout.Width(110)))
-                    _branchIndexToRemoveDeferred = i;
-                GUI.backgroundColor = Color.white;
-                EditorGUI.EndDisabledGroup(); // end inner disabled group
                 EditorGUILayout.EndHorizontal();
 
                 // Connections
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label("Merge T (0-1):", GUILayout.Width(90));
+                GUILayout.Label("Merge T (0-1):", GUILayout.Width(80));
                 b.mergeT = EditorGUILayout.Slider(b.mergeT, 0f, 1f);
+                EditorGUILayout.EndHorizontal();
+
+                // Action buttons
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginDisabledGroup(_editingSpline);
+                
+                GUI.backgroundColor = new Color(.4f, .8f, 1f);
+                if (GUILayout.Button("↟ Mirror Branch", GUILayout.Height(18)))
+                    _branchToMirrorDeferred = b;
+                
+                GUI.backgroundColor = new Color(.9f, .3f, .3f);
+                if (GUILayout.Button("✕ Remove Branch", GUILayout.Height(18)))
+                    _branchIndexToRemoveDeferred = i;
+                
+                GUI.backgroundColor = Color.white;
+                EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
 
                 float branchLen = GetBranchSplineLength(b);
@@ -3825,6 +3864,12 @@ namespace BlockShooter.Editor
                 _windowSerialized.Update();
                 _isDirty = true;
                 Repaint();
+            }
+
+            if (_branchToMirrorDeferred != null)
+            {
+                MirrorBranch(_branchToMirrorDeferred);
+                _branchToMirrorDeferred = null;
             }
 
             EditorGUI.BeginDisabledGroup(_editingSpline);
