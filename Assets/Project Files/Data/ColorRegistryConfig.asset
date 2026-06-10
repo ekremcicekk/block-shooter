@@ -41,6 +41,10 @@ MonoBehaviour:
     displayName: Gray
     editorColor: {r: 0.53395337, g: 0.5986768, b: 0.6698113, a: 1}
     material: {fileID: 2100000, guid: 96cd588f00304a54da5dfd75f5e4daee, type: 2}
+  - colorType: 8
+    displayName: LightBlue
+    editorColor: {r: 0.19999999, g: 0.7991499, b: 0.9019608, a: 1}
+    material: {fileID: 2100000, guid: 34378ae5269e41041a904673f4f0bc67, type: 2}
   redMaterial: {fileID: 2100000, guid: 33257ab040a58eb4bbcd20bc6f183a1a, type: 2}
   blueMaterial: {fileID: 2100000, guid: a881a86269c331e4485780f92ae9cf12, type: 2}
   greenMaterial: {fileID: 2100000, guid: 18f9dd7617a8de54da7342ef6fbf37bf, type: 2}

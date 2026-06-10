@@ -39,5 +39,10 @@ namespace EKStudio
 			.SetEase(Ease)
 			.SetLoops(-1, LoopType);
 	}
+
+	private void OnDisable()
+	{
+		transform.DOKill();
+	}
     }
 }

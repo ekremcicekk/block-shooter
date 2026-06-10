@@ -48,8 +48,6 @@ namespace BlockShooter.Editor
         private int           _levelIndex  = 1;
         private string        _levelName   = "Level 1";
         private bool          _isHardLevel = false;
-        private LevelGoalType _goalType    = LevelGoalType.ClearAllBlocks;
-        private int           _goalAmount  = 0;
 
         private int   _gridCols = 4, _gridRows = 2;
         private GridCellType[,]   _type;
@@ -2791,8 +2789,6 @@ namespace BlockShooter.Editor
             }
             _levelIndex = maxIdx + 1;
             _levelName  = $"Level {_levelIndex}";
-            _goalType   = LevelGoalType.ClearAllBlocks;
-            _goalAmount = 0;
             _isHardLevel = false;
             _gridCols   = 4; _gridRows = 2;
             _splinePreset = 0; _splineWidth = 3.5f; _splineDepth = 5f;
@@ -2846,8 +2842,6 @@ namespace BlockShooter.Editor
 
             _levelIndex   = idx + 1;
             _levelName    = $"Level {_levelIndex}";
-            _goalType     = LevelGoalType.ClearAllBlocks;
-            _goalAmount   = 0;
             _isHardLevel  = lr.isHardLevel;
             // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
             _gridCols     = lr.gridCols  > 0 ? Mathf.Clamp(lr.gridCols,  1, MaxCols) : 4;
@@ -3342,7 +3336,7 @@ namespace BlockShooter.Editor
                 fc.size = new Vector3(1.8f, 2f, 0.8f);
                 frGo.AddComponent<FireRange>();
             }
-            frGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+            frGo.transform.localPosition = new Vector3(0f, 0f, 0f);
             if (PrefabUtility.IsPartOfPrefabInstance(frGo))
                 PrefabUtility.RecordPrefabInstancePropertyModifications(frGo.transform);
             lr.fireRange = frGo.GetComponent<FireRange>();

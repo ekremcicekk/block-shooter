@@ -9,7 +9,7 @@ namespace BlockShooter
     {
         public static GameManager Instance { get; private set; }
 
-        private const float WinDelaySeconds = 1.5f;
+        private const float WinDelaySeconds = 1.2f;
 
         [Header("Config")]
         public GameConfig config;
