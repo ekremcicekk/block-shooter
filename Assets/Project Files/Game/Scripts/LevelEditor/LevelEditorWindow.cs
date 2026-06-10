@@ -48,6 +48,7 @@ namespace BlockShooter.Editor
         private int           _levelIndex  = 1;
         private string        _levelName   = "Level 1";
         private bool          _isHardLevel = false;
+        private float         _cameraSize  = 9f;
 
         private int   _gridCols = 4, _gridRows = 2;
         private GridCellType[,]   _type;
@@ -1692,15 +1693,38 @@ namespace BlockShooter.Editor
             EnsureTangentLists();
 
             int N = _knots.Count;
-            for (int i = 0; i <= N / 2; i++)
-            {
-                int opp = N - 1 - i;
-                if (opp == i) continue;
+            
+            // Index 0 is always a center point (locked at the fire zone, x = 0)
+            _knots[0] = new Vector3(0f, _knots[0].y, _knots[0].z);
 
-                _knots[opp] = new Vector3(-_knots[i].x, 0f, _knots[i].z);
-                _tangentsIn[opp] = new Vector3(-_tangentsOut[i].x, 0f, _tangentsOut[i].z);
-                _tangentsOut[opp] = new Vector3(-_tangentsIn[i].x, 0f, _tangentsIn[i].z);
-                _tangentModes[opp] = _tangentModes[i];
+            if (N % 2 == 0)
+            {
+                int mid = N / 2;
+                // Middle knot is also on the axis of symmetry (x = 0)
+                _knots[mid] = new Vector3(0f, _knots[mid].y, _knots[mid].z);
+
+                // Mirror left-side knots (indices N - i) to right-side knots (indices i)
+                for (int i = 1; i < mid; i++)
+                {
+                    int opp = N - i;
+                    _knots[i] = new Vector3(-_knots[opp].x, _knots[opp].y, _knots[opp].z);
+                    _tangentsIn[i] = new Vector3(-_tangentsOut[opp].x, _tangentsOut[opp].y, _tangentsOut[opp].z);
+                    _tangentsOut[i] = new Vector3(-_tangentsIn[opp].x, _tangentsIn[opp].y, _tangentsIn[opp].z);
+                    _tangentModes[i] = _tangentModes[opp];
+                }
+            }
+            else
+            {
+                // Odd number of knots: index 0 is center, pair the rest symmetrically
+                int limit = (N - 1) / 2;
+                for (int i = 1; i <= limit; i++)
+                {
+                    int opp = N - i;
+                    _knots[i] = new Vector3(-_knots[opp].x, _knots[opp].y, _knots[opp].z);
+                    _tangentsIn[i] = new Vector3(-_tangentsOut[opp].x, _tangentsOut[opp].y, _tangentsOut[opp].z);
+                    _tangentsOut[i] = new Vector3(-_tangentsIn[opp].x, _tangentsIn[opp].y, _tangentsIn[opp].z);
+                    _tangentModes[i] = _tangentModes[opp];
+                }
             }
 
             SyncPreviewSpline();
@@ -2051,9 +2075,16 @@ namespace BlockShooter.Editor
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
-                if (e.button == 0) // Left-click = select
+                if (e.button == 0) // Left-click = select / deselect
                 {
-                    _selC = c; _selR = r; _selKnot = -1;
+                    if (_selC == c && _selR == r)
+                    {
+                        _selC = -1; _selR = -1;
+                    }
+                    else
+                    {
+                        _selC = c; _selR = r; _selKnot = -1;
+                    }
                     e.Use(); Repaint();
                 }
                 else if (e.button == 1) // Right-click = context menu
@@ -2466,6 +2497,8 @@ namespace BlockShooter.Editor
             Hdr("LEVEL CONFIG");
             EditorGUI.BeginChangeCheck();
             _isHardLevel = EditorGUILayout.Toggle("Is Hard Level", _isHardLevel);
+            _cameraSize = EditorGUILayout.FloatField("Camera Size", _cameraSize);
+            _cameraSize = Mathf.Max(1f, _cameraSize); // clamp to positive
             if (EditorGUI.EndChangeCheck())
             {
                 _isDirty = true;
@@ -2790,6 +2823,7 @@ namespace BlockShooter.Editor
             _levelIndex = maxIdx + 1;
             _levelName  = $"Level {_levelIndex}";
             _isHardLevel = false;
+            _cameraSize  = 9f;
             _gridCols   = 4; _gridRows = 2;
             _splinePreset = 0; _splineWidth = 3.5f; _splineDepth = 5f;
             _selC = -1; _selR = -1; _selKnot = -1;
@@ -2843,6 +2877,7 @@ namespace BlockShooter.Editor
             _levelIndex   = idx + 1;
             _levelName    = $"Level {_levelIndex}";
             _isHardLevel  = lr.isHardLevel;
+            _cameraSize   = lr.cameraSize > 0f ? lr.cameraSize : 9f;
             // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
             _gridCols     = lr.gridCols  > 0 ? Mathf.Clamp(lr.gridCols,  1, MaxCols) : 4;
             _gridRows     = lr.gridRows  > 0 ? Mathf.Clamp(lr.gridRows,  1, MaxRows) : 2;
@@ -3071,6 +3106,7 @@ namespace BlockShooter.Editor
             lr.splinePreset  = _splinePreset;
             lr.openZoneHalfT = _openZoneHalfT;
             lr.isHardLevel   = _isHardLevel;
+            lr.cameraSize    = _cameraSize;
             lr.splineKnots   = new List<Vector3>(_knots);
             EnsureTangentLists();
             lr.splineTangentsIn   = new List<Vector3>(_tangentsIn);

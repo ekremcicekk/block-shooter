@@ -57,6 +57,12 @@ namespace BlockShooter
             Transform parent = levelSpawnParent != null ? levelSpawnParent : transform;
             _activeLevelRoot = Instantiate(prefab, parent);
             _activeLevelRoot.transform.localPosition = Vector3.zero;
+
+            if (Camera.main != null)
+            {
+                Camera.main.orthographicSize = _activeLevelRoot.cameraSize;
+            }
+
             _activeLevelRoot.Initialize();
             OnLevelLoaded?.Invoke(_activeLevelRoot);
         }
