@@ -2506,10 +2506,142 @@ namespace BlockShooter.Editor
                 Repaint();
             }
 
+            GUILayout.Space(15);
+            DrawLevelValidationSection();
+
             GUILayout.Space(20);
             EditorGUILayout.HelpBox(
                 "Click a grid cell to inspect.\nOr click 'Edit Spline' to manage track spline.", MessageType.None);
             EditorGUILayout.EndVertical();
+        }
+
+        private void DrawLevelValidationSection()
+        {
+            Hdr("COLOR MATCH VALIDATION");
+
+            var pal = GetActiveColors();
+            var gridShots = new Dictionary<BlockColorType, int>();
+            var conveyorTargets = new Dictionary<BlockColorType, int>();
+
+            foreach (var entry in pal)
+            {
+                gridShots[entry.t] = 0;
+                conveyorTargets[entry.t] = 0;
+            }
+
+            // 1. Calculate Grid Shots
+            if (_type != null)
+            {
+                for (int c = 0; c < _gridCols; c++)
+                {
+                    for (int r = 0; r < _gridRows; r++)
+                    {
+                        if (c >= _type.GetLength(0) || r >= _type.GetLength(1)) continue;
+                        if (_type[c, r] == GridCellType.Empty) continue;
+
+                        BlockColorType color = _color[c, r];
+                        if (!gridShots.ContainsKey(color)) continue;
+
+                        if (_type[c, r] == GridCellType.ShooterBlock ||
+                            _type[c, r] == GridCellType.MysteryShooter ||
+                            _type[c, r] == GridCellType.FreezeShooter)
+                        {
+                            gridShots[color] += Mathf.Max(0, _shots[c, r]);
+                        }
+                        else if (_type[c, r] == GridCellType.Door)
+                        {
+                            gridShots[color] += Mathf.Max(0, _doors[c, r]) * 100; // Doors spawn 100-shot blocks
+                        }
+                    }
+                }
+            }
+
+            // 2. Calculate Conveyor Targets
+            if (_groups != null)
+            {
+                foreach (var g in _groups)
+                {
+                    if (g != null && conveyorTargets.ContainsKey(g.color))
+                    {
+                        conveyorTargets[g.color] += g.rowCount * g.laneCount;
+                    }
+                }
+            }
+
+            if (_branches != null)
+            {
+                foreach (var b in _branches)
+                {
+                    if (b == null || b.groups == null) continue;
+                    foreach (var g in b.groups)
+                    {
+                        if (g != null && conveyorTargets.ContainsKey(g.color))
+                        {
+                            conveyorTargets[g.color] += g.rowCount * 5; // Branch lanes default to 5 in hierarchy
+                        }
+                    }
+                }
+            }
+
+            // 3. Render Validation Info
+            bool hasAnyData = false;
+            foreach (var entry in pal)
+            {
+                int shots = gridShots[entry.t];
+                int targets = conveyorTargets[entry.t];
+
+                if (shots == 0 && targets == 0) continue;
+                hasAnyData = true;
+
+                EditorGUILayout.BeginHorizontal();
+                
+                // Color indicator square
+                Rect colorRect = GUILayoutUtility.GetRect(12, 12, GUILayout.Width(12));
+                colorRect.y += 2;
+                EditorGUI.DrawRect(colorRect, entry.c);
+                GUILayout.Space(5);
+
+                string labelText = $"{entry.n}: Shots {shots} / Blocks {targets}";
+                
+                // Validation State label
+                string statusText = "OK";
+                Color statusColor = new Color(0.2f, 0.7f, 0.2f); // Green
+                
+                if (targets > shots)
+                {
+                    statusText = $"-{targets - shots} (SHORTAGE!)";
+                    statusColor = new Color(0.9f, 0.2f, 0.2f); // Red
+                }
+                else if (shots > targets)
+                {
+                    if (targets == 0)
+                    {
+                        statusText = "UNUSED";
+                        statusColor = new Color(0.9f, 0.7f, 0.1f); // Yellow/Orange
+                    }
+                    else
+                    {
+                        statusText = $"+{shots - targets} (SURPLUS)";
+                        statusColor = new Color(0.1f, 0.6f, 0.9f); // Soft Blue
+                    }
+                }
+
+                GUIStyle labelStyle = new GUIStyle(EditorStyles.label);
+                GUILayout.Label(labelText, labelStyle);
+
+                GUILayout.FlexibleSpace();
+
+                GUIStyle statusStyle = new GUIStyle(EditorStyles.boldLabel);
+                statusStyle.normal.textColor = statusColor;
+                GUILayout.Label(statusText, statusStyle);
+
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (!hasAnyData)
+            {
+                EditorGUILayout.HelpBox("No Shooter Blocks or Conveyor Groups defined.", MessageType.Info);
+            }
         }
 
         // ── Knot inspector ────────────────────────────────────────────────────
