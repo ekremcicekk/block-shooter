@@ -119,6 +119,14 @@ namespace BlockShooter
             if (SlotSystem.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: SlotSystem null"); return false; }
             if (ConveyorController.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: ConveyorController null"); return false; }
 
+            // Projectiles in flight mean blocks are still being hit — conveyor state is unsettled.
+            // NotifyAllProjectilesLanded will re-run this check once the last projectile lands.
+            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0)
+            {
+                Debug.Log($"[FAIL] IsDeadlocked: {ProjectilePool.Instance.ActiveCount} projectile(s) in flight → defer");
+                return false;
+            }
+
             if (SlotSystem.Instance.HasEmptySlot)
             {
                 Debug.Log($"[FAIL] IsDeadlocked: slots not full ({SlotSystem.Instance.GetSlottedBlocks().Count}/{SlotSystem.Instance.MaxSlots})");
