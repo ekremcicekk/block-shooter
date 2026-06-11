@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 6865033423993424016}
   - component: {fileID: 4669848182496132300}
   - component: {fileID: 7845984203757311828}
+  - component: {fileID: 1059678758455966764}
   m_Layer: 0
   m_Name: LevelNode_Active
   m_TagString: Untagged
@@ -77,6 +78,24 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &1059678758455966764
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5339951217051524996}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2d230e664fb53f4ba975b995a45e70f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ScaleDirection: 0
+  ScaleAxis: 3
+  Ease: 7
+  Duration: 1.1
+  ScaleFactor: 1.05
+  Delay: 0
 --- !u!1 &7400603313736144853
 GameObject:
   m_ObjectHideFlags: 0
@@ -224,6 +243,7 @@ GameObject:
   - component: {fileID: 7806189836281622501}
   - component: {fileID: 718260150411340823}
   - component: {fileID: 7225030687191615435}
+  - component: {fileID: 2485383386697402667}
   m_Layer: 0
   m_Name: Inner_BG
   m_TagString: Untagged
@@ -288,3 +308,29 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1.8
+--- !u!114 &2485383386697402667
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8587751926463437269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f19b7e2285c104f6ca47d583f3e5444f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_EffectFactor: 0
+  m_Width: 0.322
+  m_Rotation: 135
+  m_Softness: 1
+  m_Brightness: 0.133
+  m_Gloss: 1
+  m_EffectArea: 0
+  m_Player:
+    play: 1
+    initialPlayDelay: 0
+    duration: 1
+    loop: 1
+    loopDelay: 1.5
+    updateMode: 0

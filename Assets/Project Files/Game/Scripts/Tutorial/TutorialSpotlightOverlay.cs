@@ -97,15 +97,21 @@ namespace BlockShooter
                 var canvas = _rectTransform.GetComponentInParent<Canvas>();
                 var cam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay) ? canvas.worldCamera : null;
 
-                // Project 3D target coordinates to 2D Screen pixel coordinates
-                Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(cam ?? Camera.main, targetWorldPos);
-                
-                // If it's a UI target, we project its UI world position instead
-                if (target.UiTarget != null && target.UiTarget != target.transform)
+                Vector2 screenPoint;
+                var targetUi = target.UiTarget;
+                if (targetUi != null)
                 {
-                    var targetCanvas = target.UiTarget.GetComponentInParent<Canvas>();
-                    var targetCam = (targetCanvas != null && targetCanvas.renderMode != RenderMode.ScreenSpaceOverlay) ? targetCanvas.worldCamera : null;
-                    screenPoint = RectTransformUtility.WorldToScreenPoint(targetCam ?? Camera.main, target.UiTarget.position);
+                    var targetCanvas = targetUi.GetComponentInParent<Canvas>();
+                    Camera targetCam = null;
+                    if (targetCanvas != null && targetCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                    {
+                        targetCam = targetCanvas.worldCamera;
+                    }
+                    screenPoint = RectTransformUtility.WorldToScreenPoint(targetCam, targetUi.position);
+                }
+                else
+                {
+                    screenPoint = RectTransformUtility.WorldToScreenPoint(cam ?? Camera.main, targetWorldPos);
                 }
 
                 // Convert screen coordinates to local coordinate space of our overlay RectTransform

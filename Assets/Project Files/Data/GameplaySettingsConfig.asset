@@ -18,15 +18,15 @@ MonoBehaviour:
   startGameCoins: 100
   playOnCost: 100
   winRewardCoins: 50
-  mysteryShooterUnlockLevel: 1
+  mysteryShooterUnlockLevel: 15
   freezeShooterUnlockLevel: 1
   doorUnlockLevel: 1
   extraSlotSettings:
-    unlockLevel: 1
+    unlockLevel: 12
     buyCost: 900
   superShooterSettings:
-    unlockLevel: 1
+    unlockLevel: 32
     buyCost: 900
   moveShooterSettings:
-    unlockLevel: 1
+    unlockLevel: 22
     buyCost: 900

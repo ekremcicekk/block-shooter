@@ -2440,6 +2440,7 @@ GameObject:
   - component: {fileID: 1301437408690381839}
   - component: {fileID: 8637503110213271231}
   - component: {fileID: 1593641893000599732}
+  - component: {fileID: 5805730656930903752}
   m_Layer: 0
   m_Name: Booster_Slot
   m_TagString: Untagged
@@ -2466,9 +2467,9 @@ RectTransform:
   - {fileID: 140370592852660172}
   m_Father: {fileID: 7693475353970287082}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -270, y: -0.40504456}
   m_SizeDelta: {x: 170, y: 170}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &5910403262440473455
@@ -2566,7 +2567,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   boosterType: 0
-  tutorialTarget: {fileID: 0}
+  tutorialTarget: {fileID: 5805730656930903752}
   mainButton: {fileID: 8637503110213271231}
   lockGroup: {fileID: 8323870563663513394}
   lockLvlText: {fileID: 5615149149442565037}
@@ -2578,6 +2579,22 @@ MonoBehaviour:
   buyPanel: {fileID: 9153843269310641102}
   buyWithCoinsButton: {fileID: 4282078200232376458}
   buyPriceText: {fileID: 653354909327867089}
+--- !u!114 &5805730656930903752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 868082204532337712}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04bd9f3e302fc224994946f639294adb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _targetId: extraslot
+  _uiTarget: {fileID: 538608747002777285}
+  _worldTarget: {fileID: 538608747002777285}
+  _highlightObject: {fileID: 0}
 --- !u!1 &871744779617280535
 GameObject:
   m_ObjectHideFlags: 0
@@ -28903,6 +28920,7 @@ GameObject:
   - component: {fileID: 141676940131962374}
   - component: {fileID: 4292329611987837398}
   - component: {fileID: 5108011906399919992}
+  - component: {fileID: 4086759173586517898}
   m_Layer: 0
   m_Name: Booster_MoveShooter
   m_TagString: Untagged
@@ -28929,9 +28947,9 @@ RectTransform:
   - {fileID: 5569245271884632529}
   m_Father: {fileID: 7693475353970287082}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: -0.40504456}
   m_SizeDelta: {x: 170, y: 170}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &3532068047712063008
@@ -29041,6 +29059,22 @@ MonoBehaviour:
   buyPanel: {fileID: 5306183816000669365}
   buyWithCoinsButton: {fileID: 5861309816239442675}
   buyPriceText: {fileID: 8404802949341884623}
+--- !u!114 &4086759173586517898
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7135747189563357428}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04bd9f3e302fc224994946f639294adb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _targetId: movebooster
+  _uiTarget: {fileID: 4658807961818765612}
+  _worldTarget: {fileID: 4658807961818765612}
+  _highlightObject: {fileID: 0}
 --- !u!1 &7139266163951196543
 GameObject:
   m_ObjectHideFlags: 0
@@ -44317,7 +44351,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7693475353970287082}
-  - component: {fileID: 89309379282558840}
   m_Layer: 0
   m_Name: BoosterBar
   m_TagString: Untagged
@@ -44347,32 +44380,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 194.69739}
   m_SizeDelta: {x: 1080, y: 386.8101}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &89309379282558840
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8569746403577513314}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_Padding:
-    m_Left: 0
-    m_Right: 0
-    m_Top: 0
-    m_Bottom: 0
-  m_ChildAlignment: 4
-  m_Spacing: 100
-  m_ChildForceExpandWidth: 0
-  m_ChildForceExpandHeight: 1
-  m_ChildControlWidth: 0
-  m_ChildControlHeight: 0
-  m_ChildScaleWidth: 0
-  m_ChildScaleHeight: 0
-  m_ReverseArrangement: 0
 --- !u!1 &8576883737920633959
 GameObject:
   m_ObjectHideFlags: 0
@@ -44841,9 +44848,9 @@ RectTransform:
   - {fileID: 8699154820620993806}
   m_Father: {fileID: 7693475353970287082}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 270, y: -0.40504456}
   m_SizeDelta: {x: 170, y: 170}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1493173018447362184
@@ -45263,7 +45270,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -0.00024414062}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &5747908998667282057

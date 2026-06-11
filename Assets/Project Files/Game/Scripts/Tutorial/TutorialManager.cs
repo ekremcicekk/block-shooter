@@ -208,9 +208,10 @@ namespace BlockShooter
                     if (clickedTarget != null && string.Equals(clickedTarget.TargetId, _activeStep.TargetId, StringComparison.OrdinalIgnoreCase))
                     {
                         AdvanceStep();
+                        return false; // Correct target: let the click pass through to gameplay!
                     }
 
-                    return true;
+                    return true; // Wrong target: block click!
                 }
 
                 return true;
@@ -222,9 +223,10 @@ namespace BlockShooter
                 if (clickedTarget != null && string.Equals(clickedTarget.TargetId, targetId, StringComparison.OrdinalIgnoreCase))
                 {
                     CompleteActiveTutorial();
+                    return false; // Correct target: let the click pass through to gameplay!
                 }
 
-                return true;
+                return true; // Wrong target: block click!
             }
 
             return true;
@@ -338,7 +340,7 @@ namespace BlockShooter
             if (TutorialTarget.TryGetRegistered(_activeTutorial.TargetId, out var target))
             {
                 _activeTarget = target;
-                _canvasController.ShowHandFollowTarget(_activeTarget.WorldTarget, _activeTutorial.HandOffset);
+                _canvasController.ShowHandFollowTarget(_activeTarget, _activeTutorial.HandOffset);
             }
             else
             {
@@ -367,7 +369,7 @@ namespace BlockShooter
 
             if (_canvasController != null && _activeTarget != null)
             {
-                _canvasController.ShowHandFollowTarget(_activeTarget.WorldTarget, _activeStep != null ? _activeStep.HandOffset : Vector3.zero);
+                _canvasController.ShowHandFollowTarget(_activeTarget, _activeStep != null ? _activeStep.HandOffset : Vector3.zero);
             }
         }
 

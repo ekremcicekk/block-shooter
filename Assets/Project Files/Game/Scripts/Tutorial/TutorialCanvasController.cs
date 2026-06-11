@@ -21,6 +21,7 @@ namespace BlockShooter
         [SerializeField] private TutorialSpotlightOverlay _spotlightOverlay;
 
         private Transform _trackedWorldTarget;
+        private RectTransform _trackedUiTarget;
         private Vector3 _trackedWorldOffset;
 
         private void Awake()
@@ -30,10 +31,7 @@ namespace BlockShooter
 
         private void LateUpdate()
         {
-            if (_trackedWorldTarget != null)
-            {
-                UpdateHandPosition(_trackedWorldTarget.position + _trackedWorldOffset);
-            }
+            UpdatePosition();
         }
 
         public void Show()
@@ -83,49 +81,99 @@ namespace BlockShooter
         public void ShowHandAtWorldPosition(Vector3 worldPos)
         {
             _trackedWorldTarget = null;
+            _trackedUiTarget = null;
             _trackedWorldOffset = Vector3.zero;
-            UpdateHandPosition(worldPos);
-        }
-
-        public void ShowHandFollowTarget(Transform worldTarget, Vector3 worldOffset = default)
-        {
-            _trackedWorldTarget = worldTarget;
-            _trackedWorldOffset = worldOffset;
-
-            if (_trackedWorldTarget != null)
+            
+            if (_handRect != null)
             {
-                UpdateHandPosition(_trackedWorldTarget.position + _trackedWorldOffset);
+                var canvas = _handRect.GetComponentInParent<Canvas>();
+                var cam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay) ? canvas.worldCamera : null;
+                var canvasRect = canvas != null ? canvas.GetComponent<RectTransform>() : null;
+                Vector2 localPoint;
+                if (canvasRect != null)
+                {
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, worldPos, cam, out localPoint);
+                    _handRect.anchoredPosition = localPoint;
+                }
+                else
+                {
+                    _handRect.position = worldPos;
+                }
+                _handRect.gameObject.SetActive(true);
             }
         }
 
-        private void UpdateHandPosition(Vector3 worldPos)
+        public void ShowHandFollowTarget(TutorialTarget target, Vector3 worldOffset = default)
         {
-            if (_handRect == null)
-                return;
+            _trackedWorldTarget = null;
+            _trackedUiTarget = null;
+            _trackedWorldOffset = worldOffset;
+
+            if (target != null)
+            {
+                if (target.UiTarget != null)
+                {
+                    _trackedUiTarget = target.UiTarget;
+                }
+                else
+                {
+                    _trackedWorldTarget = target.WorldTarget;
+                }
+            }
+
+            UpdatePosition();
+        }
+
+        private void UpdatePosition()
+        {
+            if (_handRect == null) return;
+
+            bool hasTarget = false;
+            Vector2 screenPoint = Vector2.zero;
 
             var canvas = _handRect.GetComponentInParent<Canvas>();
             var cam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay) ? canvas.worldCamera : null;
 
-            Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(cam ?? Camera.main, worldPos);
-
-            var canvasRect = canvas != null ? canvas.GetComponent<RectTransform>() : null;
-            Vector2 localPoint;
-            if (canvasRect != null)
+            if (_trackedUiTarget != null)
             {
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPoint, cam, out localPoint);
-                _handRect.anchoredPosition = localPoint;
+                hasTarget = true;
+                var targetCanvas = _trackedUiTarget.GetComponentInParent<Canvas>();
+                Camera targetCam = null;
+                if (targetCanvas != null && targetCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                {
+                    targetCam = targetCanvas.worldCamera;
+                }
+                
+                screenPoint = RectTransformUtility.WorldToScreenPoint(targetCam, _trackedUiTarget.position);
+                screenPoint += (Vector2)_trackedWorldOffset;
             }
-            else
+            else if (_trackedWorldTarget != null)
             {
-                _handRect.position = screenPoint;
+                hasTarget = true;
+                screenPoint = RectTransformUtility.WorldToScreenPoint(cam ?? Camera.main, _trackedWorldTarget.position + _trackedWorldOffset);
             }
 
-            _handRect.gameObject.SetActive(true);
+            if (hasTarget)
+            {
+                var canvasRect = canvas != null ? canvas.GetComponent<RectTransform>() : null;
+                Vector2 localPoint;
+                if (canvasRect != null)
+                {
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPoint, cam, out localPoint);
+                    _handRect.anchoredPosition = localPoint;
+                }
+                else
+                {
+                    _handRect.position = screenPoint;
+                }
+                _handRect.gameObject.SetActive(true);
+            }
         }
 
         public void HideHand()
         {
             _trackedWorldTarget = null;
+            _trackedUiTarget = null;
             _trackedWorldOffset = Vector3.zero;
 
             if (_handRect != null)
