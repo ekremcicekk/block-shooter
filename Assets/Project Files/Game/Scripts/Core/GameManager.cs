@@ -10,11 +10,14 @@ namespace BlockShooter
         public static GameManager Instance { get; private set; }
 
         private const float WinDelaySeconds = 1.2f;
+        private const float FailPollInterval = 0.5f;
 
         [Header("Config")]
         public GameConfig config;
 
         public GameState State { get; private set; } = GameState.Idle;
+
+        private float _failPollTimer;
 
         public static event Action<GameState> OnStateChanged;
         public static event Action OnLevelWin;
@@ -33,9 +36,22 @@ namespace BlockShooter
             OnLevelStart?.Invoke();
         }
 
+        private void Update()
+        {
+            if (State != GameState.Playing) return;
+
+            _failPollTimer += Time.deltaTime;
+            if (_failPollTimer >= FailPollInterval)
+            {
+                _failPollTimer = 0f;
+                CheckFailCondition();
+            }
+        }
+
         public void SetState(GameState newState)
         {
             State = newState;
+            _failPollTimer = 0f;
             OnStateChanged?.Invoke(newState);
         }
 
