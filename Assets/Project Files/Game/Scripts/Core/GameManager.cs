@@ -10,14 +10,11 @@ namespace BlockShooter
         public static GameManager Instance { get; private set; }
 
         private const float WinDelaySeconds = 1.2f;
-        private const float FailPollInterval = 0.5f;
 
         [Header("Config")]
         public GameConfig config;
 
         public GameState State { get; private set; } = GameState.Idle;
-
-        private float _failPollTimer;
 
         public static event Action<GameState> OnStateChanged;
         public static event Action OnLevelWin;
@@ -36,22 +33,9 @@ namespace BlockShooter
             OnLevelStart?.Invoke();
         }
 
-        private void Update()
-        {
-            if (State != GameState.Playing) return;
-
-            _failPollTimer += Time.deltaTime;
-            if (_failPollTimer >= FailPollInterval)
-            {
-                _failPollTimer = 0f;
-                CheckFailCondition();
-            }
-        }
-
         public void SetState(GameState newState)
         {
             State = newState;
-            _failPollTimer = 0f;
             OnStateChanged?.Invoke(newState);
         }
 
@@ -134,41 +118,47 @@ namespace BlockShooter
                 HandleFailState();
         }
 
-        // Returns true when all slots are full and no slotted block can match any live conveyor block.
+        // Returns true when:
+        // - all shooter slots are full
+        // - all branch paths have finished merging (main conveyor is stable)
+        // - no slotted shooter color matches any live block on the main conveyor
         private bool IsDeadlocked()
         {
             if (SlotSystem.Instance == null || SlotSystem.Instance.HasEmptySlot) return false;
+            if (ConveyorController.Instance == null) return false;
 
-            var conveyorColors = GetLiveConveyorColors();
-            if (conveyorColors.Count == 0) return false; // win path — CheckWinCondition handles this
+            // Branch blocks not yet merged could later bring matching colors — wait until all branches are done
+            var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
+            foreach (var bp in branchPaths)
+                if (!bp.IsFullyMerged) return false;
+
+            var mainColors = ConveyorController.Instance.GetLiveColorSet();
+            if (mainColors.Count == 0) return false; // win path
 
             foreach (var block in SlotSystem.Instance.GetSlottedBlocks())
             {
-                if (!block.IsDepleted && conveyorColors.Contains(block.ColorType))
+                if (!block.IsDepleted && mainColors.Contains(block.ColorType))
                     return false;
             }
 
             return true;
         }
 
-        // Returns true when there are no shooter blocks left (grid + slots) but conveyor still has blocks.
+        // Returns true when there are no shooter blocks left (grid + slots) but any track block remains.
         private bool AreAllShootersDepleted()
         {
             if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return false;
             if (ShooterGrid.Instance != null && ShooterGrid.Instance.GetActiveBlocks().Count > 0) return false;
             if (SlotSystem.Instance != null && SlotSystem.Instance.GetSlottedBlocks().Count > 0) return false;
 
-            return GetLiveConveyorColors().Count > 0;
-        }
+            // Check main conveyor AND branch blocks — if anything is left, it's a fail
+            if (ConveyorController.Instance != null && ConveyorController.Instance.GetLiveColorSet().Count > 0) return true;
 
-        private HashSet<BlockColorType> GetLiveConveyorColors()
-        {
-            var colors = new HashSet<BlockColorType>();
-            var blocks = FindObjectsByType<ConveyorBlock3D>(FindObjectsSortMode.None);
-            foreach (var b in blocks)
-                if (b != null && !b.IsDestroyed && b.gameObject.activeInHierarchy)
-                    colors.Add(b.ColorType);
-            return colors;
+            var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
+            foreach (var bp in branchPaths)
+                if (!bp.IsFullyMerged) return true;
+
+            return false;
         }
 
         private void HandleFailState()

@@ -11,6 +11,8 @@ namespace BlockShooter
         public BranchPathData data;
         public float mergeT = 0.5f;
 
+        public bool IsFullyMerged => _rows.Count == 0;
+
         private SplineContainer _splineContainer;
         private float _splineLength;
         private float _mergeStopT = 0.95f; // T value where blocks stop (outer wall of main conveyor)

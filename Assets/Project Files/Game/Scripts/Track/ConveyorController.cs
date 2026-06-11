@@ -394,6 +394,28 @@ namespace BlockShooter
             }
         }
 
+        /// <summary>
+        /// Returns the set of colors present on the main conveyor (groups managed by this controller only).
+        /// Branch blocks that have not yet merged are excluded.
+        /// </summary>
+        public HashSet<BlockColorType> GetLiveColorSet()
+        {
+            var colors = new HashSet<BlockColorType>();
+            foreach (var entry in _groups)
+            {
+                var group = entry.Group;
+                if (group == null) continue;
+                for (int r = 0; r < group.RowCount; r++)
+                    for (int l = 0; l < group.LaneCount; l++)
+                    {
+                        var block = group.GetBlock(r, l);
+                        if (block != null && !block.IsDestroyed)
+                            colors.Add(block.ColorType);
+                    }
+            }
+            return colors;
+        }
+
         private bool Overlays(float s1, float e1, float s2, float e2)
         {
             if (s1 <= e1)
