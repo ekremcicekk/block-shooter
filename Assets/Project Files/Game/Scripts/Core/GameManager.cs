@@ -152,15 +152,16 @@ namespace BlockShooter
             }
 
             // 2. No match on main conveyor.
-            //    A branch can prevent deadlock only when it both has a matching color AND
-            //    the conveyor has a real gap available at its merge point right now.
+            //    A branch prevents deadlock if it still has a row whose color matches a slot.
+            //    We do NOT check gap availability: the looping conveyor always opens mergeT
+            //    as groups pass by, so a gap will come. Only the color matters.
             var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
             foreach (var bp in branchPaths)
             {
                 if (bp.IsFullyMerged) continue;
-                if (bp.CanBringMatchingColor(activeSlotColors))
+                if (bp.HasMatchingColorInQueue(activeSlotColors))
                 {
-                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' has matching color AND gap available → not deadlocked yet");
+                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' has matching color in queue → not deadlocked");
                     return false;
                 }
             }

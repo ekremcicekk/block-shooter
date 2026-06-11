@@ -14,44 +14,15 @@ namespace BlockShooter
         public bool IsFullyMerged => _rows.Count == 0;
 
         /// <summary>
-        /// Returns true if this branch has pending rows with a color in slotColors AND
-        /// the main conveyor has at least one gap the branch can eventually fill.
-        /// A gap is: (a) empty T-range right now at mergeT, OR (b) a destroyed block slot
-        /// anywhere in the lane — on a looping conveyor every such slot cycles back to mergeT.
+        /// Returns true if this branch has ANY pending row whose color matches slotColors.
+        /// Gap availability is NOT checked here: the looping conveyor continuously moves groups
+        /// past mergeT, so a gap will always open up. The only relevant question is whether
+        /// the branch carries a color that would actually resolve the deadlock.
         /// </summary>
-        public bool CanBringMatchingColor(HashSet<BlockColorType> slotColors)
+        public bool HasMatchingColorInQueue(HashSet<BlockColorType> slotColors)
         {
-            if (_rows.Count == 0 || ConveyorController.Instance == null) return false;
-
-            var frontRow = _rows[0];
-            if (frontRow.MergedGroup != null) return false; // already mid-merge
-
-            // Check if any pending row has a matching color first (cheap check)
-            bool hasMatchingColor = false;
             foreach (var row in _rows)
-            {
-                if (slotColors.Contains(row.ColorType)) { hasMatchingColor = true; break; }
-            }
-            if (!hasMatchingColor) return false;
-
-            // Check if the conveyor has any gap the branch can eventually use.
-            // Gap = empty right now at mergeT  OR  destroyed slot anywhere in that lane
-            // (the latter will cycle to mergeT on the looping conveyor).
-            float checkHalfSize = frontRow.RowSpacing / ConveyorController.Instance.SplineWorldLength;
-            foreach (var block in frontRow.Blocks)
-            {
-                if (block == null || block.IsDestroyed) continue;
-                int lane = block.LaneIndex;
-                bool gapNow      = ConveyorController.Instance.IsRangeEmptyForLane(
-                                        mergeT - checkHalfSize, mergeT + checkHalfSize, lane);
-                bool gapCycling  = ConveyorController.Instance.HasAnyDestroyedSlotInLane(lane);
-                if (gapNow || gapCycling)
-                {
-                    Debug.Log($"[FAIL] CanBringMatchingColor '{name}': gap found (now={gapNow}, cycling={gapCycling}) lane={lane} → not deadlocked");
-                    return true;
-                }
-            }
-
+                if (slotColors.Contains(row.ColorType)) return true;
             return false;
         }
 
