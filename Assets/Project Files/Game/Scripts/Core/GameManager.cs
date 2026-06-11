@@ -117,43 +117,53 @@ namespace BlockShooter
         private bool IsDeadlocked()
         {
             if (SlotSystem.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: SlotSystem null"); return false; }
-            if (SlotSystem.Instance.HasEmptySlot)
-            {
-                var slotted = SlotSystem.Instance.GetSlottedBlocks();
-                Debug.Log($"[FAIL] IsDeadlocked: slots not full ({slotted.Count}/{SlotSystem.Instance.MaxSlots})");
-                return false;
-            }
             if (ConveyorController.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: ConveyorController null"); return false; }
 
-            var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
-            foreach (var bp in branchPaths)
+            if (SlotSystem.Instance.HasEmptySlot)
             {
-                if (!bp.IsFullyMerged)
-                {
-                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' not fully merged yet → skip");
-                    return false;
-                }
+                Debug.Log($"[FAIL] IsDeadlocked: slots not full ({SlotSystem.Instance.GetSlottedBlocks().Count}/{SlotSystem.Instance.MaxSlots})");
+                return false;
             }
 
             var mainColors = ConveyorController.Instance.GetLiveColorSet();
             if (mainColors.Count == 0) { Debug.Log("[FAIL] IsDeadlocked: main conveyor empty → win path"); return false; }
 
             var slottedBlocks = SlotSystem.Instance.GetSlottedBlocks();
-            var slotColors    = new System.Text.StringBuilder();
-            var convColors    = new System.Text.StringBuilder();
-            foreach (var b in slottedBlocks) { slotColors.Append(b.IsDepleted ? $"{b.ColorType}(dep) " : $"{b.ColorType} "); }
-            foreach (var c in mainColors)    { convColors.Append($"{c} "); }
+            var activeSlotColors = new HashSet<BlockColorType>();
+            foreach (var b in slottedBlocks)
+                if (!b.IsDepleted) activeSlotColors.Add(b.ColorType);
 
-            foreach (var block in slottedBlocks)
+            // 1. Check main conveyor for a match
+            foreach (var color in activeSlotColors)
             {
-                if (!block.IsDepleted && mainColors.Contains(block.ColorType))
+                if (mainColors.Contains(color))
                 {
-                    Debug.Log($"[FAIL] IsDeadlocked: MATCH FOUND — slot={block.ColorType} in conveyor. Slots:[{slotColors}] Conveyor:[{convColors}]");
+                    Debug.Log($"[FAIL] IsDeadlocked: match on main conveyor ({color}) → not deadlocked");
                     return false;
                 }
             }
 
-            Debug.LogWarning($"[FAIL] DEADLOCK DETECTED — Slots:[{slotColors}] Conveyor:[{convColors}]");
+            // 2. No match on main conveyor.
+            //    Check each branch: if it is NOT blocked (can still merge into gaps) AND has a
+            //    matching color in its pending rows, the deadlock may be resolved once it merges.
+            //    If it IS blocked (conveyor full, can't move), its colors are irrelevant.
+            var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
+            foreach (var bp in branchPaths)
+            {
+                if (bp.IsFullyMerged) continue;
+                if (bp.IsBlockedByFullConveyor) { Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' blocked by full conveyor → ignored"); continue; }
+                if (bp.HasPendingMatchingColor(activeSlotColors))
+                {
+                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' can still merge and has matching color → not deadlocked yet");
+                    return false;
+                }
+            }
+
+            var slotDesc = new System.Text.StringBuilder();
+            var convDesc = new System.Text.StringBuilder();
+            foreach (var b in slottedBlocks) slotDesc.Append(b.IsDepleted ? $"{b.ColorType}(dep) " : $"{b.ColorType} ");
+            foreach (var c in mainColors)    convDesc.Append($"{c} ");
+            Debug.LogWarning($"[FAIL] DEADLOCK DETECTED — Slots:[{slotDesc}] Conveyor:[{convDesc}]");
             return true;
         }
 

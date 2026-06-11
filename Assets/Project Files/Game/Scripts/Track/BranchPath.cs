@@ -13,9 +13,35 @@ namespace BlockShooter
 
         public bool IsFullyMerged => _rows.Count == 0;
 
+        /// <summary>
+        /// True when the front row has reached the merge stop point but cannot merge because
+        /// the main conveyor is full. The entire branch is effectively stuck.
+        /// </summary>
+        public bool IsBlockedByFullConveyor
+        {
+            get
+            {
+                if (_rows.Count == 0) return false;
+                var row = _rows[0];
+                return row.MergedGroup == null && row.CurrentT >= _mergeStopT - 0.001f;
+            }
+        }
+
+        /// <summary>
+        /// Returns true if any unmerged branch row has a color contained in the given set.
+        /// Only relevant when the branch is NOT blocked (can still merge into gaps).
+        /// </summary>
+        public bool HasPendingMatchingColor(HashSet<BlockColorType> slotColors)
+        {
+            foreach (var row in _rows)
+                if (slotColors.Contains(row.ColorType)) return true;
+            return false;
+        }
+
         private SplineContainer _splineContainer;
         private float _splineLength;
         private float _mergeStopT = 0.95f; // T value where blocks stop (outer wall of main conveyor)
+        private bool _wasBlockedLastFrame;
         private readonly List<BranchRowEntry> _rows = new();
 
         public struct BranchRowEntry
@@ -188,7 +214,19 @@ namespace BlockShooter
             if (rowsBefore > 0 && _rows.Count == 0)
             {
                 Debug.Log($"[FAIL] BranchPath '{name}' fully merged → CheckFailCondition");
+                _wasBlockedLastFrame = false;
                 GameManager.Instance?.CheckFailCondition();
+            }
+            else
+            {
+                // Detect transition into blocked state (front row stuck at merge point)
+                bool blockedNow = IsBlockedByFullConveyor;
+                if (blockedNow && !_wasBlockedLastFrame)
+                {
+                    Debug.Log($"[FAIL] BranchPath '{name}' blocked by full conveyor → CheckFailCondition");
+                    GameManager.Instance?.CheckFailCondition();
+                }
+                _wasBlockedLastFrame = blockedNow;
             }
         }
 
