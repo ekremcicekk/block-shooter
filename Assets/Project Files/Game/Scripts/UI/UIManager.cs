@@ -121,7 +121,14 @@ namespace BlockShooter
                 levelText.text = SaveManager.CurrentLevel.ToString();
 
             // Reset panel active states
-            settingsPanel?.SetActive(false);
+            if (settingsPanel != null)
+            {
+                if (!settingsPanel.TryGetComponent<EKStudio.SettingsManager>(out var settingsMgr))
+                {
+                    settingsPanel.AddComponent<EKStudio.SettingsManager>();
+                }
+                settingsPanel.SetActive(false);
+            }
             winPanel?.SetActive(false);
             failPanel?.SetActive(false);
             keepPlayingPanel?.SetActive(false);

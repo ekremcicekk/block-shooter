@@ -357,53 +357,56 @@ namespace BlockShooter
                 : 0.15f;
             const float rowTimeout = 15f;
 
-            int startRow = FindStartRow(group);
+            BlockGroup currentGroup = group;
 
-            for (int row = startRow; row < group.RowCount && !IsDepleted; row++)
+            while (currentGroup != null && !IsDepleted)
             {
-                // If there are no live blocks left in this row, skip it immediately to prevent freezing
-                if (!RowHasLiveBlocks(group, row)) continue;
+                int startRow = FindStartRow(currentGroup);
 
-                // If the row has already passed/exited the fire range, skip it
-                if (RowIsPastFireRange(group, row)) continue;
-
-                // Wait until at least one live block from this row is in FireRange.
-                float waited = 0f;
-                while (!RowHasBlockInRange(group, row) && RowHasLiveBlocks(group, row) && !RowIsPastFireRange(group, row) && waited < rowTimeout && !IsDepleted)
+                for (int row = startRow; row < currentGroup.RowCount && !IsDepleted; row++)
                 {
-                    yield return null;
-                    waited += Time.deltaTime;
-                }
+                    // If there are no live blocks left in this row, skip it immediately to prevent freezing
+                    if (!RowHasLiveBlocks(currentGroup, row)) continue;
 
-                if (!RowHasBlockInRange(group, row)) continue;
+                    // If the row has already passed/exited the fire range, skip it
+                    if (RowIsPastFireRange(currentGroup, row)) continue;
 
-                // Fire all lanes in the row — highest index first.
-                bool firedAny = false;
-                for (int lane = group.LaneCount - 1; lane >= 0 && !IsDepleted; lane--)
-                {
-                    var block = group.GetBlock(row, lane);
-                    if (block == null || block.IsDestroyed || block.IsTargeted) continue;
-
-                    if (firedAny)
+                    // Wait until at least one live block from this row is in FireRange.
+                    float waited = 0f;
+                    while (!RowHasBlockInRange(currentGroup, row) && RowHasLiveBlocks(currentGroup, row) && !RowIsPastFireRange(currentGroup, row) && waited < rowTimeout && !IsDepleted)
                     {
-                        yield return new WaitForSeconds(laneDelay / UIManager.SpeedMultiplier);
-                        // Re-check after yield — another shooter may have claimed this block during the delay
-                        if (block == null || block.IsDestroyed || block.IsTargeted) continue;
+                        yield return null;
+                        waited += Time.deltaTime;
                     }
 
-                    firedAny = true;
-                    FireAt(block);
+                    if (!RowHasBlockInRange(currentGroup, row)) continue;
+
+                    // Fire all lanes in the row — highest index first.
+                    bool firedAny = false;
+                    for (int lane = currentGroup.LaneCount - 1; lane >= 0 && !IsDepleted; lane--)
+                    {
+                        var block = currentGroup.GetBlock(row, lane);
+                        if (block == null || block.IsDestroyed || block.IsTargeted) continue;
+
+                        if (firedAny)
+                        {
+                            yield return new WaitForSeconds(laneDelay / UIManager.SpeedMultiplier);
+                            // Re-check after yield — another shooter may have claimed this block during the delay
+                            if (block == null || block.IsDestroyed || block.IsTargeted) continue;
+                        }
+
+                        firedAny = true;
+                        FireAt(block);
+                    }
                 }
+
+                // Wait 1 frame before finding the next group to prevent lockups and let physics settle
+                yield return null;
+                currentGroup = FindMatchingGroup();
             }
 
             _isShooting = false;
             _shootCoroutine = null;
-
-            if (!IsDepleted)
-            {
-                yield return null;
-                TryStartGroupRoutine();
-            }
         }
 
         private bool RowHasBlockInRange(BlockGroup group, int row)
