@@ -172,6 +172,7 @@ namespace BlockShooter
             }
 
             // Remove fully merged rows from the front
+            int rowsBefore = _rows.Count;
             while (_rows.Count > 0 && AllLanesMerged(_rows[0]))
             {
                 var firstRow = _rows[0];
@@ -180,6 +181,12 @@ namespace BlockShooter
                     ConveyorController.Instance.RemoveGroup(firstRow.MergedGroup);
                 }
                 _rows.RemoveAt(0);
+            }
+
+            // All branch rows merged — conveyor is now fully loaded, check for deadlock
+            if (rowsBefore > 0 && _rows.Count == 0)
+            {
+                GameManager.Instance?.CheckFailCondition($"BranchFullyMerged({gameObject.name})");
             }
         }
 
