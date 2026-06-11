@@ -213,7 +213,7 @@ Camera:
   far clip plane: 100
   field of view: 45
   orthographic: 1
-  orthographic size: 9.6
+  orthographic size: 9
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -519,7 +519,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &790444179
 Transform:
   m_ObjectHideFlags: 0
@@ -553,8 +553,8 @@ MonoBehaviour:
     _showOnce: 0
     _tutorialRoot: {fileID: 2568637850377272839}
     _useSteps: 0
-    _targetId: 
-    _handOffset: {x: 0, y: 0, z: 0}
+    _targetId: firstclick
+    _handOffset: {x: 0.8, y: 0, z: 0}
     _steps: []
   - _level: 2
     _showOnce: 0

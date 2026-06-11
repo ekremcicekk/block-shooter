@@ -17,6 +17,9 @@ namespace BlockShooter
         [Header("Optional Hand UI (screen-space)")]
         [SerializeField] private RectTransform _handRect;
 
+        [Header("Spotlight Overlay")]
+        [SerializeField] private TutorialSpotlightOverlay _spotlightOverlay;
+
         private Transform _trackedWorldTarget;
         private Vector3 _trackedWorldOffset;
 
@@ -42,6 +45,11 @@ namespace BlockShooter
                 _tutorialRoot.SetActive(true);
             }
 
+            if (_spotlightOverlay != null)
+            {
+                _spotlightOverlay.gameObject.SetActive(true);
+            }
+
             if (_canvasGroup != null)
             {
                 _canvasGroup.alpha = 1f;
@@ -62,6 +70,11 @@ namespace BlockShooter
             if (_tutorialRoot != null)
             {
                 _tutorialRoot.SetActive(false);
+            }
+
+            if (_spotlightOverlay != null)
+            {
+                _spotlightOverlay.gameObject.SetActive(false);
             }
             HideHand();
         }

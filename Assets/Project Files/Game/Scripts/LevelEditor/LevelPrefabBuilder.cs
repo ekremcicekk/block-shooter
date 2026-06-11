@@ -205,7 +205,83 @@ namespace EKStudio.Editor
                 sg.shooterBlockPrefab = cfg.shooterBlockPrefab.GetComponent<ShooterBlock>();
             lr.shooterGrid = sg;
 
-            // Blocks/Doors are spawned at runtime/preview to minimize prefab size.
+            float hw = (lr.gridCols - 1) * cs * .5f;
+
+            for (int r = 0; r < lr.gridRows; r++)
+            for (int c = 0; c < lr.gridCols; c++)
+            {
+                var pos = new Vector3(-hw + c * cs, 0f, (r - lr.gridRows + 0.5f) * cs);
+                string nm = $"Cell_r{r}_c{c}";
+
+                var cell = lr.cells.Find(x => x.col == c && x.row == r);
+                if (cell == null) continue;
+
+                switch (cell.type)
+                {
+                    case GridCellType.ShooterBlock when cfg.shooterBlockPrefab != null:
+                        {
+                            var go = (GameObject)PrefabUtility.InstantiatePrefab(cfg.shooterBlockPrefab, sgGo.transform);
+                            go.name = nm; go.transform.localPosition = pos;
+                            PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
+                            int sh = Mathf.Max(1, cell.shotCount);
+                            var sb = go.GetComponent<ShooterBlock>();
+                            sb?.EditorSetup(cell.color, sh, c, r, isMystery: false);
+                            if (sb?.blockRenderer != null && gameCfg != null)
+                            {
+                                var mat = gameCfg.GetMaterial(cell.color);
+                                if (mat != null) sb.blockRenderer.sharedMaterial = mat;
+                            }
+                            break;
+                        }
+                    case GridCellType.MysteryShooter:
+                        {
+                            var prefab = cfg.shooterBlockPrefab;
+                            if (prefab != null)
+                            {
+                                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
+                                go.name = nm; go.transform.localPosition = pos;
+                                PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
+                                int sh = Mathf.Max(1, cell.shotCount);
+                                var sb = go.GetComponent<ShooterBlock>();
+                                sb?.EditorSetup(cell.color, sh, c, r, isMystery: true);
+                            }
+                            break;
+                        }
+                    case GridCellType.FreezeShooter:
+                        {
+                            var prefab = cfg.shooterBlockPrefab;
+                            if (prefab != null)
+                            {
+                                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
+                                go.name = nm; go.transform.localPosition = pos;
+                                PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
+                                int sh = Mathf.Max(1, cell.shotCount);
+                                var sb = go.GetComponent<ShooterBlock>();
+                                sb?.EditorSetup(cell.color, sh, c, r, isMystery: false);
+                                if (sb?.blockRenderer != null && gameCfg != null)
+                                {
+                                    var mat = gameCfg.GetMaterial(cell.color);
+                                    if (mat != null) sb.blockRenderer.sharedMaterial = mat;
+                                }
+
+                                var f = go.GetComponent<FreezeBlockFeature>();
+                                if (f == null) f = go.AddComponent<FreezeBlockFeature>();
+                                f.isFrozen = true;
+                                f.freezeCount = cell.freezeCount;
+                                f.SyncVisualsEditor();
+                            }
+                            break;
+                        }
+                    case GridCellType.Door:
+                        {
+                            var go = Go(sgGo.transform, nm); go.transform.localPosition = pos;
+                            var d = go.AddComponent<BlockDoor>();
+                            d.blockCount = cell.doorCount;
+                            d.spawnColors = new List<BlockColorType> { cell.color };
+                            break;
+                        }
+                }
+            }
 
             // ── Shooter Deck Mesh ──
             var isEmpty = new bool[lr.gridCols, lr.gridRows];

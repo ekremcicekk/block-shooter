@@ -61,6 +61,7 @@ namespace BlockShooter
         private bool _isRunning;
 
         public bool IsRunning => _isRunning;
+        public TutorialTarget ActiveTarget => _activeTarget;
 
         private void Awake()
         {

@@ -944,12 +944,6 @@ namespace BlockShooter.Editor
             if (_levelPreviewGo == null) return;
             _levelPreviewGo.name = "[LevelPreview]";
 
-            var lr = _levelPreviewGo.GetComponent<LevelRoot>();
-            if (lr != null)
-            {
-                lr.SpawnBlocksRuntime();
-            }
-
             _levelPreviewGo.hideFlags = HideFlags.DontSave | HideFlags.NotEditable;
             foreach (Transform t in _levelPreviewGo.GetComponentsInChildren<Transform>(true))
                 t.gameObject.hideFlags = HideFlags.DontSave | HideFlags.NotEditable;
