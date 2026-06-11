@@ -301,51 +301,20 @@ namespace BlockShooter
 
         private void CheckAllDepleted()
         {
-            if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
+            if (GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
 
-            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0)
-            {
-                Debug.Log($"[FAIL] CheckAllDepleted — projectiles still in flight ({ProjectilePool.Instance.ActiveCount}), deferring");
-                return;
-            }
+            // Defer until all in-flight projectiles land to avoid a race where
+            // Deplete() fires before the last projectile reaches its target.
+            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return;
 
-            int slottedCount = SlotSystem.Instance != null ? SlotSystem.Instance.GetSlottedBlocks().Count : 0;
-            Debug.Log($"[FAIL] CheckAllDepleted — activeBlocks={_activeBlocks.Count} slotted={slottedCount}");
-
-            bool anyLeft = _activeBlocks.Count > 0;
-            if (!anyLeft && slottedCount == 0)
-            {
-                bool maxSlotsUnchanged = SlotSystem.Instance != null &&
-                                         SlotSystem.Instance.MaxSlots <= SlotSystem.Instance.InitialSlotsCount;
-                bool notRevived        = UIManager.Instance != null && !UIManager.Instance.HasRevivedThisLevel;
-                bool eligibleForRevive = maxSlotsUnchanged && notRevived;
-
-                Debug.LogWarning($"[FAIL] CheckAllDepleted — no shooter blocks left! eligibleForRevive={eligibleForRevive}");
-
-                if (eligibleForRevive)
-                {
-                    if (ConveyorController.Instance != null)
-                        ConveyorController.Instance.IsFrozen = true;
-                    UIManager.Instance.ShowKeepPlayingPanel();
-                    Debug.Log("[FAIL] CheckAllDepleted → showing KeepPlaying panel");
-                }
-                else
-                {
-                    Debug.Log("[FAIL] CheckAllDepleted → calling TriggerFail");
-                    GameManager.Instance?.TriggerFail();
-                }
-            }
+            GameManager.Instance.CheckFailCondition();
         }
 
-        /// <summary>
-        /// Called by ProjectilePool when all in-flight projectiles have landed.
-        /// This is the deferred re-check for the depletion state, resolving the race condition
-        /// where Deplete() fires before the last projectile reaches its target.
-        /// </summary>
+        // Called by ProjectilePool when all in-flight projectiles have landed.
         public void NotifyAllProjectilesLanded()
         {
-            if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
-            CheckAllDepleted();
+            if (GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
+            GameManager.Instance.CheckFailCondition();
         }
     }
 }

@@ -183,10 +183,10 @@ namespace BlockShooter
                 _rows.RemoveAt(0);
             }
 
-            // All branch rows merged — conveyor is now fully loaded, check for deadlock
             if (rowsBefore > 0 && _rows.Count == 0)
             {
-                GameManager.Instance?.CheckFailCondition($"BranchFullyMerged({gameObject.name})");
+                // Branch fully merged — new blocks now on conveyor, check for potential deadlock
+                GameManager.Instance?.CheckFailCondition();
             }
         }
 

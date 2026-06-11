@@ -280,10 +280,7 @@ namespace BlockShooter
             }
             TryStartGroupRoutine();
 
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.CheckFailCondition($"SlotFilled({_colorType})");
-            }
+            GameManager.Instance?.CheckFailCondition();
         }
 
         // ── Shooting (only active while InSlot) ───────────────────────────────
