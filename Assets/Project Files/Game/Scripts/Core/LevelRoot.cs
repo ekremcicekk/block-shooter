@@ -52,6 +52,7 @@ namespace BlockShooter
         public bool isHardLevel = false;
         [Header("Camera Config")]
         public float cameraSize = 9f;
+        public float cameraZ = -10f;
         [HideInInspector] public int   gridCols     = 4;
         [HideInInspector] public int   gridRows     = 2;
         [HideInInspector] public float splineWidth  = 6f;

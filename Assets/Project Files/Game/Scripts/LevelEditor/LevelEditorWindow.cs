@@ -49,6 +49,7 @@ namespace BlockShooter.Editor
         private int           _levelIndex  = 1;
         private bool          _isHardLevel = false;
         private float         _cameraSize  = 9f;
+        private float         _cameraZ     = 0f;
 
         private int   _gridCols = 4, _gridRows = 2;
         private GridCellType[,]   _type;
@@ -2224,9 +2225,17 @@ namespace BlockShooter.Editor
             _isHardLevel = EditorGUILayout.Toggle("Is Hard Level", _isHardLevel);
             _cameraSize = EditorGUILayout.FloatField("Camera Size", _cameraSize);
             _cameraSize = Mathf.Max(1f, _cameraSize); // clamp to positive
+            _cameraZ = EditorGUILayout.FloatField("Camera Z Position", _cameraZ);
             if (EditorGUI.EndChangeCheck())
             {
                 _isDirty = true;
+                if (Camera.main != null)
+                {
+                    Camera.main.orthographicSize = _cameraSize;
+                    Vector3 pos = Camera.main.transform.position;
+                    pos.z = _cameraZ;
+                    Camera.main.transform.position = pos;
+                }
                 Repaint();
             }
 
@@ -2629,6 +2638,7 @@ namespace BlockShooter.Editor
             _levelIndex = maxIdx + 1;
             _isHardLevel = false;
             _cameraSize  = 9f;
+            _cameraZ     = -10f;
             _gridCols   = 4; _gridRows = 2;
             _splinePreset = 0; _splineWidth = 3.5f; _splineDepth = 5f;
             _selC = -1; _selR = -1; _selKnot = -1;
@@ -2681,6 +2691,14 @@ namespace BlockShooter.Editor
             _levelIndex   = idx + 1;
             _isHardLevel  = lr.isHardLevel;
             _cameraSize   = lr.cameraSize > 0f ? lr.cameraSize : 9f;
+            _cameraZ      = lr.cameraZ != 0f ? lr.cameraZ : -10f;
+            if (Camera.main != null)
+            {
+                Camera.main.orthographicSize = _cameraSize;
+                Vector3 pos = Camera.main.transform.position;
+                pos.z = _cameraZ;
+                Camera.main.transform.position = pos;
+            }
             // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
             _gridCols     = lr.gridCols  > 0 ? Mathf.Clamp(lr.gridCols,  1, MaxCols) : 4;
             _gridRows     = lr.gridRows  > 0 ? Mathf.Clamp(lr.gridRows,  1, MaxRows) : 2;
@@ -2907,6 +2925,7 @@ namespace BlockShooter.Editor
             lr.openZoneHalfT = _openZoneHalfT;
             lr.isHardLevel   = _isHardLevel;
             lr.cameraSize    = _cameraSize;
+            lr.cameraZ       = _cameraZ;
             lr.splineKnots   = new List<Vector3>(_knots);
             EnsureTangentLists();
             lr.splineTangentsIn   = new List<Vector3>(_tangentsIn);

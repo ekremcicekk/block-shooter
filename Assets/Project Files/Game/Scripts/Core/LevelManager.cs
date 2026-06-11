@@ -61,6 +61,9 @@ namespace BlockShooter
             if (Camera.main != null)
             {
                 Camera.main.orthographicSize = _activeLevelRoot.cameraSize;
+                Vector3 pos = Camera.main.transform.position;
+                pos.z = _activeLevelRoot.cameraZ;
+                Camera.main.transform.position = pos;
             }
 
             _activeLevelRoot.Initialize();
