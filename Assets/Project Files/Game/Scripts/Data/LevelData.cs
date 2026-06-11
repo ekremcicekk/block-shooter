@@ -13,10 +13,6 @@ namespace BlockShooter
         public int            levelIndex;
         public string         levelName;
         public LevelDifficulty difficulty = LevelDifficulty.Normal;
-
-        [Header("Level Goal")]
-        public LevelGoalType goalType   = LevelGoalType.ClearAllBlocks;
-        public int           goalAmount = 0;
     }
 
     public enum LevelDifficulty
@@ -24,12 +20,5 @@ namespace BlockShooter
         Easy,
         Normal,
         Hard
-    }
-
-    public enum LevelGoalType
-    {
-        ClearAllBlocks,
-        ClearCount,
-        SurviveTime
     }
 }

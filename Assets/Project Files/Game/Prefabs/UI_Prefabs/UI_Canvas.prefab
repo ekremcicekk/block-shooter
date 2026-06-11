@@ -2566,6 +2566,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   boosterType: 0
+  tutorialTarget: {fileID: 0}
   mainButton: {fileID: 8637503110213271231}
   lockGroup: {fileID: 8323870563663513394}
   lockLvlText: {fileID: 5615149149442565037}
@@ -12919,14 +12920,14 @@ MonoBehaviour:
 '
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: df96c813817dcbd41adb51a3c38dde6d, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: a969d2f3480e12340a48cb907289acfe, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: 647ef7e4fc0a210438c8f05870913bdc, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4287258679
-  m_fontColor: {r: 0.21649018, g: 0.3761961, b: 0.543, a: 1}
+    rgba: 4288955448
+  m_fontColor: {r: 0.21960786, g: 0.26666668, b: 0.6431373, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -29011,6 +29012,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   boosterType: 2
+  tutorialTarget: {fileID: 0}
   mainButton: {fileID: 4292329611987837398}
   lockGroup: {fileID: 1113418311182733565}
   lockLvlText: {fileID: 2218731722193645694}
@@ -44922,6 +44924,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   boosterType: 1
+  tutorialTarget: {fileID: 0}
   mainButton: {fileID: 7725020694711187570}
   lockGroup: {fileID: 8971493748270189430}
   lockLvlText: {fileID: 1551961266167916188}

@@ -772,7 +772,7 @@ namespace BlockShooter
                 // Kill any active tweens on bodyMesh to avoid conflicts
                 bodyMesh.DOKill();
                 // 1. Smoothly reset BodyMesh rotation to 0
-                bodyMesh.DOLocalRotate(Vector3.zero, 0.25f).SetEase(Ease.OutQuad).OnComplete(() =>
+                bodyMesh.DOLocalRotate(Vector3.zero, 0.1f).SetEase(Ease.OutQuad).OnComplete(() =>
                 {
                     ExecuteDepleteSequence();
                 });
@@ -791,7 +791,7 @@ namespace BlockShooter
                 bodyAnimator.enabled = true;
                 bodyAnimator.SetTrigger("ShooterDeplete");
                 
-                DOVirtual.DelayedCall(1f, () => gameObject.SetActive(false));
+                DOVirtual.DelayedCall(1.3f, () => gameObject.SetActive(false));
             }
             else
             {

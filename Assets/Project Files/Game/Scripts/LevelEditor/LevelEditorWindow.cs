@@ -32,10 +32,10 @@ namespace BlockShooter.Editor
         private SerializedObject _windowSerialized;
         private UnityEditorInternal.ReorderableList _groupsList;
         private Dictionary<BranchPathData, UnityEditorInternal.ReorderableList> _branchGroupsLists = new();
-        private int _groupIndexToRemoveDeferred = -1;
-        private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
-        private int _branchIndexToRemoveDeferred = -1;
-        private int _branchMirrorIndexDeferred   = -1;
+        [System.NonSerialized] private int _groupIndexToRemoveDeferred = -1;
+        [System.NonSerialized] private (BranchPathData branch, int index) _branchGroupIndexToRemoveDeferred = (null, -1);
+        [System.NonSerialized] private int _branchIndexToRemoveDeferred = -1;
+        [System.NonSerialized] private BranchPathData _branchToMirrorDeferred = null;
         private List<int> _selectedKnots = new();
         [SerializeField] private bool _snapToGrid = false;
         [SerializeField] private float _snapSize = 0.5f;
@@ -49,8 +49,7 @@ namespace BlockShooter.Editor
         private int           _levelIndex  = 1;
         private string        _levelName   = "Level 1";
         private bool          _isHardLevel = false;
-        private LevelGoalType _goalType    = LevelGoalType.ClearAllBlocks;
-        private int           _goalAmount  = 0;
+        private float         _cameraSize  = 9f;
 
         private int   _gridCols = 4, _gridRows = 2;
         private GridCellType[,]   _type;
@@ -800,17 +799,36 @@ namespace BlockShooter.Editor
 
             if (_editingBranchIndex >= 0)
             {
-                // Editor preview: leave mainTrackSpline null so Sweep() uses the simple
-                // distance-based fallback trim instead of IsRingFullyInsideConveyor().
-                // The spline-tangent-based "right" direction is unreliable in the editor
-                // (e.g. at mergeT=0.5 the track tangent points sideways, making
-                // worldMergeRight face forward/backward instead of left/right — this
-                // causes all branch rings to be classified as "inside" and removed,
-                // producing an empty mesh). The distance fallback is accurate enough
-                // for interactive editing; the final saved prefab uses full trimming.
-                meshBuilder.trimBranchEnd    = true;
-                meshBuilder.openZoneEnabled  = false;
-                // mainTrackSpline intentionally NOT set → distance-check fallback active
+                var branch = _branches[_editingBranchIndex];
+                meshBuilder.trimBranchEnd = true;
+                meshBuilder.openZoneEnabled = false;
+
+                if (_levelPreviewGo != null)
+                {
+                    var mainTrack = _levelPreviewGo.transform.Find("ConveyorSystem/Track");
+                    if (mainTrack != null)
+                    {
+                        var mainSc = mainTrack.GetComponent<SplineContainer>();
+                        meshBuilder.mainTrackSpline = mainSc;
+
+                        if (mainSc != null && _knots != null && _knots.Count >= 2)
+                        {
+                            mainSc.Spline.Evaluate(branch.mergeT, out var mPos, out var mTan, out var mUp);
+                            Vector3 worldMergePos = mainTrack.TransformPoint(mPos);
+                            Vector3 worldMergeTan = mainTrack.TransformDirection((Vector3)mTan).normalized;
+                            Vector3 worldMergeUp  = mainTrack.TransformDirection((Vector3)mUp).normalized;
+                            if (worldMergeUp.sqrMagnitude < 0.001f) worldMergeUp = Vector3.up;
+                            Vector3 worldMergeRight = Vector3.Cross(worldMergeUp, worldMergeTan).normalized;
+
+                            Vector3 branchLast = _knots[_knots.Count - 1];
+                            Vector3 branchSecondLast = _knots[_knots.Count - 2];
+                            Vector3 toBranch = (branchSecondLast - branchLast).normalized;
+                            float dot = Vector3.Dot(toBranch, worldMergeRight);
+
+                            meshBuilder.branchOnRightSide = (dot >= 0f);
+                        }
+                    }
+                }
             }
             else
             {
@@ -1676,15 +1694,38 @@ namespace BlockShooter.Editor
             EnsureTangentLists();
 
             int N = _knots.Count;
-            for (int i = 0; i <= N / 2; i++)
-            {
-                int opp = N - 1 - i;
-                if (opp == i) continue;
+            
+            // Index 0 is always a center point (locked at the fire zone, x = 0)
+            _knots[0] = new Vector3(0f, _knots[0].y, _knots[0].z);
 
-                _knots[opp] = new Vector3(-_knots[i].x, 0f, _knots[i].z);
-                _tangentsIn[opp] = new Vector3(-_tangentsOut[i].x, 0f, _tangentsOut[i].z);
-                _tangentsOut[opp] = new Vector3(-_tangentsIn[i].x, 0f, _tangentsIn[i].z);
-                _tangentModes[opp] = _tangentModes[i];
+            if (N % 2 == 0)
+            {
+                int mid = N / 2;
+                // Middle knot is also on the axis of symmetry (x = 0)
+                _knots[mid] = new Vector3(0f, _knots[mid].y, _knots[mid].z);
+
+                // Mirror left-side knots (indices N - i) to right-side knots (indices i)
+                for (int i = 1; i < mid; i++)
+                {
+                    int opp = N - i;
+                    _knots[i] = new Vector3(-_knots[opp].x, _knots[opp].y, _knots[opp].z);
+                    _tangentsIn[i] = new Vector3(-_tangentsOut[opp].x, _tangentsOut[opp].y, _tangentsOut[opp].z);
+                    _tangentsOut[i] = new Vector3(-_tangentsIn[opp].x, _tangentsIn[opp].y, _tangentsIn[opp].z);
+                    _tangentModes[i] = _tangentModes[opp];
+                }
+            }
+            else
+            {
+                // Odd number of knots: index 0 is center, pair the rest symmetrically
+                int limit = (N - 1) / 2;
+                for (int i = 1; i <= limit; i++)
+                {
+                    int opp = N - i;
+                    _knots[i] = new Vector3(-_knots[opp].x, _knots[opp].y, _knots[opp].z);
+                    _tangentsIn[i] = new Vector3(-_tangentsOut[opp].x, _tangentsOut[opp].y, _tangentsOut[opp].z);
+                    _tangentsOut[i] = new Vector3(-_tangentsIn[opp].x, _tangentsIn[opp].y, _tangentsIn[opp].z);
+                    _tangentModes[i] = _tangentModes[opp];
+                }
             }
 
             SyncPreviewSpline();
@@ -2035,9 +2076,16 @@ namespace BlockShooter.Editor
             Event e = Event.current;
             if (e.type == EventType.MouseDown && cell.Contains(e.mousePosition))
             {
-                if (e.button == 0) // Left-click = select
+                if (e.button == 0) // Left-click = select / deselect
                 {
-                    _selC = c; _selR = r; _selKnot = -1;
+                    if (_selC == c && _selR == r)
+                    {
+                        _selC = -1; _selR = -1;
+                    }
+                    else
+                    {
+                        _selC = c; _selR = r; _selKnot = -1;
+                    }
                     e.Use(); Repaint();
                 }
                 else if (e.button == 1) // Right-click = context menu
@@ -2450,11 +2498,16 @@ namespace BlockShooter.Editor
             Hdr("LEVEL CONFIG");
             EditorGUI.BeginChangeCheck();
             _isHardLevel = EditorGUILayout.Toggle("Is Hard Level", _isHardLevel);
+            _cameraSize = EditorGUILayout.FloatField("Camera Size", _cameraSize);
+            _cameraSize = Mathf.Max(1f, _cameraSize); // clamp to positive
             if (EditorGUI.EndChangeCheck())
             {
                 _isDirty = true;
                 Repaint();
             }
+
+            GUILayout.Space(15);
+            DrawLevelValidationSection();
 
             GUILayout.Space(20);
             EditorGUILayout.HelpBox(
@@ -2462,11 +2515,140 @@ namespace BlockShooter.Editor
             EditorGUILayout.EndVertical();
         }
 
+        private void DrawLevelValidationSection()
+        {
+            Hdr("COLOR MATCH VALIDATION");
+
+            var pal = GetActiveColors();
+            var gridShots = new Dictionary<BlockColorType, int>();
+            var conveyorTargets = new Dictionary<BlockColorType, int>();
+
+            foreach (var entry in pal)
+            {
+                gridShots[entry.t] = 0;
+                conveyorTargets[entry.t] = 0;
+            }
+
+            // 1. Calculate Grid Shots
+            if (_type != null)
+            {
+                for (int c = 0; c < _gridCols; c++)
+                {
+                    for (int r = 0; r < _gridRows; r++)
+                    {
+                        if (c >= _type.GetLength(0) || r >= _type.GetLength(1)) continue;
+                        if (_type[c, r] == GridCellType.Empty) continue;
+
+                        BlockColorType color = _color[c, r];
+                        if (!gridShots.ContainsKey(color)) continue;
+
+                        if (_type[c, r] == GridCellType.ShooterBlock ||
+                            _type[c, r] == GridCellType.MysteryShooter ||
+                            _type[c, r] == GridCellType.FreezeShooter)
+                        {
+                            gridShots[color] += Mathf.Max(0, _shots[c, r]);
+                        }
+                        else if (_type[c, r] == GridCellType.Door)
+                        {
+                            gridShots[color] += Mathf.Max(0, _doors[c, r]) * 100; // Doors spawn 100-shot blocks
+                        }
+                    }
+                }
+            }
+
+            // 2. Calculate Conveyor Targets
+            if (_groups != null)
+            {
+                foreach (var g in _groups)
+                {
+                    if (g != null && conveyorTargets.ContainsKey(g.color))
+                    {
+                        conveyorTargets[g.color] += g.rowCount * g.laneCount;
+                    }
+                }
+            }
+
+            if (_branches != null)
+            {
+                foreach (var b in _branches)
+                {
+                    if (b == null || b.groups == null) continue;
+                    foreach (var g in b.groups)
+                    {
+                        if (g != null && conveyorTargets.ContainsKey(g.color))
+                        {
+                            conveyorTargets[g.color] += g.rowCount * 5; // Branch lanes default to 5 in hierarchy
+                        }
+                    }
+                }
+            }
+
+            // 3. Render Validation Info
+            bool hasAnyData = false;
+            foreach (var entry in pal)
+            {
+                int shots = gridShots[entry.t];
+                int targets = conveyorTargets[entry.t];
+
+                if (shots == 0 && targets == 0) continue;
+                hasAnyData = true;
+
+                EditorGUILayout.BeginHorizontal();
+                
+                // Color indicator square
+                Rect colorRect = GUILayoutUtility.GetRect(12, 12, GUILayout.Width(12));
+                colorRect.y += 2;
+                EditorGUI.DrawRect(colorRect, entry.c);
+                GUILayout.Space(5);
+
+                string labelText = $"{entry.n}: Shots {shots} / Blocks {targets}";
+                
+                // Validation State label
+                string statusText = "OK";
+                Color statusColor = new Color(0.2f, 0.7f, 0.2f); // Green
+                
+                if (targets > shots)
+                {
+                    statusText = $"-{targets - shots} (SHORTAGE!)";
+                    statusColor = new Color(0.9f, 0.2f, 0.2f); // Red
+                }
+                else if (shots > targets)
+                {
+                    if (targets == 0)
+                    {
+                        statusText = "UNUSED";
+                        statusColor = new Color(0.9f, 0.7f, 0.1f); // Yellow/Orange
+                    }
+                    else
+                    {
+                        statusText = $"+{shots - targets} (SURPLUS)";
+                        statusColor = new Color(0.1f, 0.6f, 0.9f); // Soft Blue
+                    }
+                }
+
+                GUIStyle labelStyle = new GUIStyle(EditorStyles.label);
+                GUILayout.Label(labelText, labelStyle);
+
+                GUILayout.FlexibleSpace();
+
+                GUIStyle statusStyle = new GUIStyle(EditorStyles.boldLabel);
+                statusStyle.normal.textColor = statusColor;
+                GUILayout.Label(statusText, statusStyle);
+
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (!hasAnyData)
+            {
+                EditorGUILayout.HelpBox("No Shooter Blocks or Conveyor Groups defined.", MessageType.Info);
+            }
+        }
+
         // ── Knot inspector ────────────────────────────────────────────────────
         private void DrawKnotInspector()
         {
             int  i    = _selKnot;
-            bool anch = (i == 0);
+            bool anch = (i == 0 && _editingBranchIndex < 0);
             Hdr($"KNOT #{i}{(anch ? "  🔒" : "")}");
 
             EnsureTangentLists();
@@ -2773,9 +2955,8 @@ namespace BlockShooter.Editor
             }
             _levelIndex = maxIdx + 1;
             _levelName  = $"Level {_levelIndex}";
-            _goalType   = LevelGoalType.ClearAllBlocks;
-            _goalAmount = 0;
             _isHardLevel = false;
+            _cameraSize  = 9f;
             _gridCols   = 4; _gridRows = 2;
             _splinePreset = 0; _splineWidth = 3.5f; _splineDepth = 5f;
             _selC = -1; _selR = -1; _selKnot = -1;
@@ -2828,9 +3009,8 @@ namespace BlockShooter.Editor
 
             _levelIndex   = idx + 1;
             _levelName    = $"Level {_levelIndex}";
-            _goalType     = LevelGoalType.ClearAllBlocks;
-            _goalAmount   = 0;
             _isHardLevel  = lr.isHardLevel;
+            _cameraSize   = lr.cameraSize > 0f ? lr.cameraSize : 9f;
             // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
             _gridCols     = lr.gridCols  > 0 ? Mathf.Clamp(lr.gridCols,  1, MaxCols) : 4;
             _gridRows     = lr.gridRows  > 0 ? Mathf.Clamp(lr.gridRows,  1, MaxRows) : 2;
@@ -3059,6 +3239,7 @@ namespace BlockShooter.Editor
             lr.splinePreset  = _splinePreset;
             lr.openZoneHalfT = _openZoneHalfT;
             lr.isHardLevel   = _isHardLevel;
+            lr.cameraSize    = _cameraSize;
             lr.splineKnots   = new List<Vector3>(_knots);
             EnsureTangentLists();
             lr.splineTangentsIn   = new List<Vector3>(_tangentsIn);
@@ -3324,7 +3505,7 @@ namespace BlockShooter.Editor
                 fc.size = new Vector3(1.8f, 2f, 0.8f);
                 frGo.AddComponent<FireRange>();
             }
-            frGo.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+            frGo.transform.localPosition = new Vector3(0f, 0f, 0f);
             if (PrefabUtility.IsPartOfPrefabInstance(frGo))
                 PrefabUtility.RecordPrefabInstancePropertyModifications(frGo.transform);
             lr.fireRange = frGo.GetComponent<FireRange>();
@@ -3648,6 +3829,36 @@ namespace BlockShooter.Editor
                 new Color(.22f,.22f,.22f));
         }
 
+        private void MirrorBranch(BranchPathData source)
+        {
+            _windowSerialized.ApplyModifiedProperties();
+            
+            var mirroredBranch = new BranchPathData
+            {
+                branchName = $"{source.branchName}_Mirrored",
+                mergeT = 1.0f - source.mergeT,
+                connectFromLeft = !source.connectFromLeft,
+                
+                splineKnots = source.splineKnots.Select(k => new Vector3(-k.x, k.y, k.z)).ToList(),
+                splineTangentsIn = source.splineTangentsIn.Select(t => new Vector3(-t.x, t.y, t.z)).ToList(),
+                splineTangentsOut = source.splineTangentsOut.Select(t => new Vector3(-t.x, t.y, t.z)).ToList(),
+                splineTangentModes = new List<int>(source.splineTangentModes),
+                
+                groups = source.groups.Select(g => new LevelConveyorGroup
+                {
+                    color = g.color,
+                    rowCount = g.rowCount,
+                    laneCount = g.laneCount
+                }).ToList()
+            };
+
+            _branches.Add(mirroredBranch);
+            _branchGroupsLists.Clear();
+            _windowSerialized.Update();
+            _isDirty = true;
+            Repaint();
+        }
+
         private void DrawBranchesSection()
         {
             EditorGUI.BeginChangeCheck();
@@ -3665,23 +3876,28 @@ namespace BlockShooter.Editor
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label("Branch Name:", GUILayout.Width(80));
                 b.branchName = EditorGUILayout.TextField(b.branchName);
-                
-                // Mirror / Remove buttons — disabled while editing any spline
-                EditorGUI.BeginDisabledGroup(_editingSpline);
-                GUI.backgroundColor = new Color(.35f, .75f, 1f);
-                if (GUILayout.Button("⇆ Mirror", GUILayout.Width(62)))
-                    _branchMirrorIndexDeferred = i;
-                GUI.backgroundColor = new Color(.9f, .3f, .3f);
-                if (GUILayout.Button("✕ Remove", GUILayout.Width(68)))
-                    _branchIndexToRemoveDeferred = i;
-                GUI.backgroundColor = Color.white;
-                EditorGUI.EndDisabledGroup(); // end inner disabled group
                 EditorGUILayout.EndHorizontal();
 
                 // Connections
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label("Merge T (0-1):", GUILayout.Width(90));
+                GUILayout.Label("Merge T (0-1):", GUILayout.Width(80));
                 b.mergeT = EditorGUILayout.Slider(b.mergeT, 0f, 1f);
+                EditorGUILayout.EndHorizontal();
+
+                // Action buttons
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginDisabledGroup(_editingSpline);
+                
+                GUI.backgroundColor = new Color(.4f, .8f, 1f);
+                if (GUILayout.Button("↟ Mirror Branch", GUILayout.Height(18)))
+                    _branchToMirrorDeferred = b;
+                
+                GUI.backgroundColor = new Color(.9f, .3f, .3f);
+                if (GUILayout.Button("✕ Remove Branch", GUILayout.Height(18)))
+                    _branchIndexToRemoveDeferred = i;
+                
+                GUI.backgroundColor = Color.white;
+                EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
 
                 float branchLen = GetBranchSplineLength(b);
@@ -3782,32 +3998,10 @@ namespace BlockShooter.Editor
                 Repaint();
             }
 
-            // Execute deferred branch mirror — creates a new branch with all X-coordinates negated.
-            if (_branchMirrorIndexDeferred >= 0)
+            if (_branchToMirrorDeferred != null)
             {
-                _windowSerialized.ApplyModifiedProperties();
-                var src = _branches[_branchMirrorIndexDeferred];
-                var mirrored = new BranchPathData
-                {
-                    branchName        = src.branchName + "_mirror",
-                    mergeT            = src.mergeT,
-                    connectFromLeft   = !src.connectFromLeft,
-                    splineKnots       = src.splineKnots.Select(k  => new Vector3(-k.x,  k.y,  k.z)).ToList(),
-                    splineTangentsIn  = src.splineTangentsIn.Select(t  => new Vector3(-t.x,  t.y,  t.z)).ToList(),
-                    splineTangentsOut = src.splineTangentsOut.Select(t => new Vector3(-t.x,  t.y,  t.z)).ToList(),
-                    splineTangentModes = new List<int>(src.splineTangentModes),
-                    groups = src.groups.Select(g => new LevelConveyorGroup
-                    {
-                        color     = g.color,
-                        rowCount  = g.rowCount,
-                        laneCount = g.laneCount
-                    }).ToList()
-                };
-                _branches.Add(mirrored);
-                _branchMirrorIndexDeferred = -1;
-                _windowSerialized.Update();
-                _isDirty = true;
-                Repaint();
+                MirrorBranch(_branchToMirrorDeferred);
+                _branchToMirrorDeferred = null;
             }
 
             EditorGUI.BeginDisabledGroup(_editingSpline);

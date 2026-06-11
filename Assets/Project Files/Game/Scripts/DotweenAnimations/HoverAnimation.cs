@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
 
@@ -52,5 +52,9 @@ namespace EKStudio
             .SetLoops(-1, LoopType);
     }
 
+    private void OnDisable()
+    {
+        transform.DOKill();
+    }
     }
 }
