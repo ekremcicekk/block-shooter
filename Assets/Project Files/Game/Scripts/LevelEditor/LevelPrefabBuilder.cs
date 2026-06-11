@@ -14,6 +14,15 @@ namespace EKStudio.Editor
     {
         public static void BuildHierarchy(Transform root, LevelRoot lr, LevelEditorConfig cfg, GameConfig gameCfg)
         {
+            // Assign config references to LevelRoot for runtime spawning
+            lr.conveyorBlockPrefab = cfg.conveyorBlockPrefab;
+            lr.shooterBlockPrefab = cfg.shooterBlockPrefab;
+            lr.gridCellSize = cfg.gridCellSize;
+            lr.laneSpacing = cfg.laneSpacing;
+            lr.rowSpacing = cfg.rowSpacing;
+            lr.beltHalfWidth = cfg.beltHalfWidth;
+            lr.railWidth = cfg.railWidth;
+
             float cs = cfg.gridCellSize;
             float slotZ = -1.5f;
             float gridZ = -2.5f;
@@ -64,31 +73,7 @@ namespace EKStudio.Editor
 
             // Block groups
             var groupsGo = Go(trackGo.transform, "Groups");
-            foreach (var gd in lr.groups)
-            {
-                var gGo = Go(groupsGo.transform, $"Group_{gd.color}");
-                var bg = gGo.AddComponent<BlockGroup>();
-                bg.colorType = gd.color;
-                bg.rowCount = gd.rowCount;
-                bg.laneCount = gd.laneCount;
-                bg.laneSpacing = cfg.laneSpacing;
-                bg.rowSpacing = cfg.rowSpacing;
-
-                if (cfg.conveyorBlockPrefab != null)
-                    for (int row = 0; row < gd.rowCount; row++)
-                    {
-                        var rowGo = Go(gGo.transform, $"Row_{row}");
-                        for (int lane = 0; lane < gd.laneCount; lane++)
-                        {
-                            var bGo = (GameObject)PrefabUtility.InstantiatePrefab(
-                                cfg.conveyorBlockPrefab, rowGo.transform);
-                            bGo.name = $"Block_{lane}";
-                            bGo.transform.localPosition = Vector3.zero;
-                            PrefabUtility.RecordPrefabInstancePropertyModifications(bGo.transform);
-                            bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
-                        }
-                    }
-            }
+            // Blocks are spawned at runtime/preview to minimize prefab size.
 
             // ── Branch Paths ──
             if (lr.branches != null && lr.branches.Count > 0)
@@ -161,54 +146,7 @@ namespace EKStudio.Editor
                         : 0.95f;
 
                     var bGroupsGo = Go(branchGo.transform, "Groups");
-                    int globalRowIdx = 0;
-                    foreach (var gd in b.groups)
-                    {
-                        var gGo = Go(bGroupsGo.transform, $"Group_{gd.color}");
-                        var bg = gGo.AddComponent<BlockGroup>();
-                        bg.colorType = gd.color;
-                        bg.rowCount = gd.rowCount;
-                        bg.laneCount = 5;
-                        bg.laneSpacing = cfg.laneSpacing;
-                        bg.rowSpacing = cfg.rowSpacing;
-
-                        if (cfg.conveyorBlockPrefab != null)
-                            for (int row = 0; row < gd.rowCount; row++)
-                            {
-                                float rowT = mergeStopT - (globalRowIdx * cfg.rowSpacing) / branchSplineLen;
-                                rowT = Mathf.Clamp01(rowT);
-
-                                bSc.Spline.Evaluate(rowT, out var spPos, out var spTan, out var spUp);
-                                Vector3 worldPos = branchGo.transform.TransformPoint(spPos);
-                                Vector3 fwd = branchGo.transform.TransformDirection((Vector3)spTan).normalized;
-                                Vector3 upDir = branchGo.transform.TransformDirection((Vector3)spUp).normalized;
-                                if (upDir == Vector3.zero) upDir = Vector3.up;
-                                Vector3 right = Vector3.Cross(upDir, fwd).normalized;
-                                Quaternion rot = fwd != Vector3.zero ? Quaternion.LookRotation(fwd, upDir) : Quaternion.identity;
-
-                                var rowGo = Go(gGo.transform, $"Row_{row}");
-                                for (int lane = 0; lane < 5; lane++)
-                                {
-                                    var bGo = (GameObject)PrefabUtility.InstantiatePrefab(
-                                        cfg.conveyorBlockPrefab, rowGo.transform);
-                                    bGo.name = $"Block_{lane}";
-                                    float xOff = (lane - 2f) * cfg.laneSpacing;
-                                    bGo.transform.position = worldPos + right * xOff;
-                                    bGo.transform.rotation = rot;
-
-                                    PrefabUtility.RecordPrefabInstancePropertyModifications(bGo.transform);
-                                    bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
-
-                                    var cb = bGo.GetComponent<ConveyorBlock3D>();
-                                    if (cb != null && cb.blockRenderer != null && gameCfg != null)
-                                    {
-                                        var mat = gameCfg.GetMaterial(gd.color);
-                                        if (mat != null) cb.blockRenderer.sharedMaterial = mat;
-                                    }
-                                }
-                                globalRowIdx++;
-                            }
-                    }
+                    // Blocks are spawned at runtime/preview to minimize prefab size.
                     branchIdx++;
                 }
             }
@@ -267,83 +205,7 @@ namespace EKStudio.Editor
                 sg.shooterBlockPrefab = cfg.shooterBlockPrefab.GetComponent<ShooterBlock>();
             lr.shooterGrid = sg;
 
-            float hw = (lr.gridCols - 1) * cs * .5f;
-
-            for (int r = 0; r < lr.gridRows; r++)
-            for (int c = 0; c < lr.gridCols; c++)
-            {
-                var pos = new Vector3(-hw + c * cs, 0f, (r - lr.gridRows + 0.5f) * cs);
-                string nm = $"Cell_r{r}_c{c}";
-
-                var cell = lr.cells.Find(x => x.col == c && x.row == r);
-                if (cell == null) continue;
-
-                switch (cell.type)
-                {
-                    case GridCellType.ShooterBlock when cfg.shooterBlockPrefab != null:
-                        {
-                            var go = (GameObject)PrefabUtility.InstantiatePrefab(cfg.shooterBlockPrefab, sgGo.transform);
-                            go.name = nm; go.transform.localPosition = pos;
-                            PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
-                            int sh = Mathf.Max(1, cell.shotCount);
-                            var sb = go.GetComponent<ShooterBlock>();
-                            sb?.EditorSetup(cell.color, sh, c, r, isMystery: false);
-                            if (sb?.blockRenderer != null && gameCfg != null)
-                            {
-                                var mat = gameCfg.GetMaterial(cell.color);
-                                if (mat != null) sb.blockRenderer.sharedMaterial = mat;
-                            }
-                            break;
-                        }
-                    case GridCellType.MysteryShooter:
-                        {
-                            var prefab = cfg.shooterBlockPrefab;
-                            if (prefab != null)
-                            {
-                                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
-                                go.name = nm; go.transform.localPosition = pos;
-                                PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
-                                int sh = Mathf.Max(1, cell.shotCount);
-                                var sb = go.GetComponent<ShooterBlock>();
-                                sb?.EditorSetup(cell.color, sh, c, r, isMystery: true);
-                            }
-                            break;
-                        }
-                    case GridCellType.FreezeShooter:
-                        {
-                            var prefab = cfg.shooterBlockPrefab;
-                            if (prefab != null)
-                            {
-                                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
-                                go.name = nm; go.transform.localPosition = pos;
-                                PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
-                                int sh = Mathf.Max(1, cell.shotCount);
-                                var sb = go.GetComponent<ShooterBlock>();
-                                sb?.EditorSetup(cell.color, sh, c, r, isMystery: false);
-                                if (sb?.blockRenderer != null && gameCfg != null)
-                                {
-                                    var mat = gameCfg.GetMaterial(cell.color);
-                                    if (mat != null) sb.blockRenderer.sharedMaterial = mat;
-                                }
-
-                                var f = go.GetComponent<FreezeBlockFeature>();
-                                if (f == null) f = go.AddComponent<FreezeBlockFeature>();
-                                f.isFrozen = true;
-                                f.freezeCount = cell.freezeCount;
-                                f.SyncVisualsEditor();
-                            }
-                            break;
-                        }
-                    case GridCellType.Door:
-                        {
-                            var go = Go(sgGo.transform, nm); go.transform.localPosition = pos;
-                            var d = go.AddComponent<BlockDoor>();
-                            d.blockCount = cell.doorCount;
-                            d.spawnColors = new List<BlockColorType> { cell.color };
-                            break;
-                        }
-                }
-            }
+            // Blocks/Doors are spawned at runtime/preview to minimize prefab size.
 
             // ── Shooter Deck Mesh ──
             var isEmpty = new bool[lr.gridCols, lr.gridRows];

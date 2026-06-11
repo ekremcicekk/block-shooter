@@ -481,12 +481,20 @@ namespace BlockShooter.Editor
             if (GUILayout.Button("Refresh", GUILayout.Height(28))) { LoadCfg(); RefreshList(); }
         }
 
-        // ── Toolbar ───────────────────────────────────────────────────────────
         private void DrawToolbar()
         {
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             GUILayout.Label("  BLOCK SHOOTER — LEVEL EDITOR", EditorStyles.boldLabel);
             GUILayout.FlexibleSpace();
+            
+            GUI.backgroundColor = new Color(.85f, .55f, .3f);
+            if (GUILayout.Button("⚡ Rebuild All Prefabs", EditorStyles.toolbarButton, GUILayout.Width(130)))
+            {
+                RebuildAllPrefabs();
+            }
+            GUI.backgroundColor = Color.white;
+            GUILayout.Space(10);
+
             if (GUILayout.Button("Config",  EditorStyles.toolbarButton, GUILayout.Width(50)))
                 Selection.activeObject = _cfg;
             if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(55)))
@@ -935,6 +943,13 @@ namespace BlockShooter.Editor
             _levelPreviewGo = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             if (_levelPreviewGo == null) return;
             _levelPreviewGo.name = "[LevelPreview]";
+
+            var lr = _levelPreviewGo.GetComponent<LevelRoot>();
+            if (lr != null)
+            {
+                lr.SpawnBlocksRuntime();
+            }
+
             _levelPreviewGo.hideFlags = HideFlags.DontSave | HideFlags.NotEditable;
             foreach (Transform t in _levelPreviewGo.GetComponentsInChildren<Transform>(true))
                 t.gameObject.hideFlags = HideFlags.DontSave | HideFlags.NotEditable;
@@ -2849,6 +2864,103 @@ namespace BlockShooter.Editor
             if (_levelList != null) _levelList.index = _activeIdx;
             if (_activeIdx >= 0) LoadLevel(_activeIdx);
             Repaint();
+        }
+
+        private void RebuildAllPrefabs()
+        {
+            if (_cfg == null || _gameCfg == null || _gameCfg.levelSequence == null) return;
+            
+            if (!EditorUtility.DisplayDialog("Rebuild All Prefabs", 
+                $"This will load, rebuild, and shrink all {_paths.Count} level prefabs.\nAre you sure you want to do this?", 
+                "Yes, Rebuild All", "Cancel")) return;
+
+            try
+            {
+                int count = 0;
+                _gameCfg.levelSequence.levelPrefabs.RemoveAll(x => x == null);
+
+                for (int i = 0; i < _paths.Count; i++)
+                {
+                    EditorUtility.DisplayProgressBar("Rebuild Prefabs", $"Rebuilding {_labels[i]}...", (float)i / _paths.Count);
+                    
+                    var go = AssetDatabase.LoadAssetAtPath<GameObject>(_paths[i]);
+                    if (go == null) continue;
+                    var lrSrc = go.GetComponent<LevelRoot>();
+                    if (lrSrc == null) continue;
+
+                    string name = go.name;
+                    string path = _paths[i];
+
+                    // 1. Create new clean object
+                    var root = new GameObject(name);
+                    var animator = root.AddComponent<Animator>();
+                    var controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Project Files/Game/Animations/Levels.controller");
+                    if (controller != null) animator.runtimeAnimatorController = controller;
+
+                    var lrDest = root.AddComponent<LevelRoot>();
+                    
+                    // 2. Copy design data
+                    lrDest.gridCols = lrSrc.gridCols;
+                    lrDest.gridRows = lrSrc.gridRows;
+                    lrDest.splineWidth = lrSrc.splineWidth;
+                    lrDest.splineDepth = lrSrc.splineDepth;
+                    lrDest.splinePreset = lrSrc.splinePreset;
+                    lrDest.openZoneHalfT = lrSrc.openZoneHalfT;
+                    lrDest.isHardLevel = lrSrc.isHardLevel;
+                    lrDest.cameraSize = lrSrc.cameraSize;
+                    lrDest.cameraZ = lrSrc.cameraZ;
+                    lrDest.splineKnots = new List<Vector3>(lrSrc.splineKnots);
+                    lrDest.splineTangentsIn = new List<Vector3>(lrSrc.splineTangentsIn);
+                    lrDest.splineTangentsOut = new List<Vector3>(lrSrc.splineTangentsOut);
+                    lrDest.splineTangentModes = new List<int>(lrSrc.splineTangentModes);
+
+                    lrDest.cells = lrSrc.cells.Select(c => new LevelGridCell
+                    {
+                        col = c.col, row = c.row, type = c.type, color = c.color,
+                        shotCount = c.shotCount, doorCount = c.doorCount, freezeCount = c.freezeCount
+                    }).ToList();
+
+                    lrDest.groups = lrSrc.groups.Select(g => new LevelConveyorGroup 
+                    { 
+                        color = g.color, rowCount = g.rowCount, laneCount = g.laneCount 
+                    }).ToList();
+
+                    lrDest.branches = lrSrc.branches.Select(b => new BranchPathData
+                    {
+                        branchName = b.branchName,
+                        mergeT = b.mergeT,
+                        connectFromLeft = b.connectFromLeft,
+                        splineKnots = new List<Vector3>(b.splineKnots),
+                        splineTangentsIn = new List<Vector3>(b.splineTangentsIn),
+                        splineTangentsOut = new List<Vector3>(b.splineTangentsOut),
+                        splineTangentModes = new List<int>(b.splineTangentModes),
+                        groups = b.groups.Select(g => new LevelConveyorGroup { color = g.color, rowCount = g.rowCount, laneCount = g.laneCount }).ToList()
+                    }).ToList();
+
+                    // 3. Build geometry hierarchy without physical blocks
+                    EKStudio.Editor.LevelPrefabBuilder.BuildHierarchy(root.transform, lrDest, _cfg, _gameCfg);
+
+                    // 4. Save generated meshes
+                    var builder = new EKStudio.Editor.LevelPrefabBuilder();
+                    builder.SaveTrackMeshAsset(root.transform, lrDest, name, _gameCfg.levelSequence.levelPrefabs);
+                    builder.SaveDeckMeshAsset(root.transform, lrDest, name, _gameCfg.levelSequence.levelPrefabs);
+                    builder.SaveBranchMeshAssets(root.transform, lrDest, name, _gameCfg.levelSequence.levelPrefabs);
+
+                    PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
+                    DestroyImmediate(root);
+                    if (ok) count++;
+                }
+
+                AssetDatabase.SaveAssets();
+                RefreshList();
+                if (_activeIdx >= 0 && _activeIdx < _paths.Count) LoadLevel(_activeIdx);
+
+                EditorUtility.DisplayDialog("Success", $"Successfully rebuilt and optimized {count} level prefabs!", "OK");
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
         }
 
         // ═════════════════════════════════════════════════════════════════════
