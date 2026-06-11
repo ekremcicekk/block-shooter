@@ -21,6 +21,11 @@ namespace BlockShooter
         public static event Action OnLevelFail;
         public static event Action OnLevelStart;
 
+        private Coroutine _failCoroutine;
+        private float _failCheckTimer = 0f;
+        private const float FailCheckInterval = 0.1f;
+        private bool _isDeadlockActive = false;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -31,6 +36,36 @@ namespace BlockShooter
         {
             SetState(GameState.Playing);
             OnLevelStart?.Invoke();
+        }
+
+        private void Update()
+        {
+            if (State != GameState.Playing)
+            {
+                CancelFailSequence();
+                return;
+            }
+
+            _failCheckTimer += Time.deltaTime;
+            if (_failCheckTimer >= FailCheckInterval)
+            {
+                _failCheckTimer = 0f;
+                CheckFailCondition();
+            }
+        }
+
+        private void CancelFailSequence()
+        {
+            if (_failCoroutine != null)
+            {
+                StopCoroutine(_failCoroutine);
+                _failCoroutine = null;
+            }
+            if (_isDeadlockActive)
+            {
+                _isDeadlockActive = false;
+                Debug.Log("[FailCheck] Deadlock or fail state resolved. Fail timer canceled.");
+            }
         }
 
         public void SetState(GameState newState)
@@ -88,8 +123,44 @@ namespace BlockShooter
         {
             if (State != GameState.Playing) return;
 
-            if (IsDeadlocked() || AreAllShootersDepleted())
+            bool isDeadlocked = IsDeadlocked();
+            bool isAllDepleted = AreAllShootersDepleted();
+
+            if (isDeadlocked || isAllDepleted)
+            {
+                if (_failCoroutine == null)
+                {
+                    if (isDeadlocked && !_isDeadlockActive)
+                    {
+                        _isDeadlockActive = true;
+                        Debug.Log("[FailCheck] Deadlock confirmed. Firing fail sequence with 1.5s delay.");
+                    }
+                    else if (isAllDepleted && !_isDeadlockActive)
+                    {
+                        _isDeadlockActive = true;
+                        Debug.Log("[FailCheck] All shooters depleted. Firing fail sequence with 1.5s delay.");
+                    }
+                    _failCoroutine = StartCoroutine(TriggerFailDelayedRoutine());
+                }
+            }
+            else
+            {
+                CancelFailSequence();
+            }
+        }
+
+        private IEnumerator TriggerFailDelayedRoutine()
+        {
+            yield return new WaitForSeconds(1.5f);
+
+            // Re-verify after delay to ensure status didn't change (e.g. from a booster)
+            if (State == GameState.Playing && (IsDeadlocked() || AreAllShootersDepleted()))
+            {
+                Debug.Log("[FailCheck] Fail sequence completed. Triggering fail state.");
                 HandleFailState();
+            }
+            _failCoroutine = null;
+            _isDeadlockActive = false;
         }
 
         // ── Fail detection ────────────────────────────────────────────────────
@@ -98,33 +169,91 @@ namespace BlockShooter
         {
             if (SlotSystem.Instance == null || ConveyorController.Instance == null) return false;
 
-            // While projectiles are still in flight, conveyor state is changing.
-            // NotifyAllProjectilesLanded will call us again once all have landed.
+            // While projectiles are still in flight, the conveyor state is changing.
             if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return false;
 
-            // Deadlock requires every slot to be occupied
-            if (SlotSystem.Instance.HasEmptySlot) return false;
+            // Step 1: Check if player can shoot from slots
+            var slotColors = new HashSet<BlockColorType>();
+            foreach (var b in SlotSystem.Instance.GetSlottedBlocks())
+            {
+                if (b != null && !b.IsDepleted)
+                    slotColors.Add(b.ColorType);
+            }
 
             var mainColors = ConveyorController.Instance.GetLiveColorSet();
 
-            // Empty conveyor is a win condition, not a deadlock
+            // Empty main conveyor is a win state, not a deadlock
             if (mainColors.Count == 0) return false;
 
-            // Collect colors of non-depleted slotted shooters
-            var slotColors = new HashSet<BlockColorType>();
-            foreach (var b in SlotSystem.Instance.GetSlottedBlocks())
-                if (!b.IsDepleted) slotColors.Add(b.ColorType);
-
-            // Match found on main conveyor → not deadlocked
+            bool canShoot = false;
             foreach (var color in slotColors)
-                if (mainColors.Contains(color)) return false;
+            {
+                if (mainColors.Contains(color))
+                {
+                    canShoot = true;
+                    break;
+                }
+            }
 
-            // Branch can resolve the deadlock if it still has a matching color queued.
-            // The looping conveyor always creates a mergeT gap as groups pass, so gap
-            // availability is irrelevant — only the color matters.
-            foreach (var bp in FindObjectsByType<BranchPath>(FindObjectsSortMode.None))
-                if (!bp.IsFullyMerged && bp.HasMatchingColorInQueue(slotColors)) return false;
+            // Step 2: Check if player can pull new blocks from grid
+            bool hasEmptySlot = SlotSystem.Instance.HasEmptySlot;
+            bool hasAccessibleShooter = false;
+            if (ShooterGrid.Instance != null)
+            {
+                foreach (var b in ShooterGrid.Instance.GetActiveBlocks())
+                {
+                    if (b != null && b.State == ShooterBlock.BlockState.InGrid && b.IsAccessible && !b.IsFrozen)
+                    {
+                        hasAccessibleShooter = true;
+                        break;
+                    }
+                }
+            }
 
+            bool canPull = hasEmptySlot && hasAccessibleShooter;
+
+            // If we can shoot from slots, or pull from the grid, we are not deadlocked
+            if (canShoot || canPull) return false;
+
+            // Step 3: Check branch merge potential
+            // If the player cannot shoot or pull, but there are unmerged branches,
+            // we are only safe if those branch blocks can actually merge into the conveyor.
+            // If the conveyor is completely full, branches are blocked and cannot merge.
+            bool hasUnmergedBranches = false;
+            var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
+            foreach (var bp in branchPaths)
+            {
+                if (!bp.IsFullyMerged)
+                {
+                    hasUnmergedBranches = true;
+                    break;
+                }
+            }
+
+            if (hasUnmergedBranches)
+            {
+                float requiredSpacing = 0.2f;
+                foreach (var bp in branchPaths)
+                {
+                    if (!bp.IsFullyMerged)
+                    {
+                        var groups = bp.GetComponentsInChildren<BlockGroup>(true);
+                        if (groups != null && groups.Length > 0)
+                        {
+                            requiredSpacing = groups[0].rowSpacing;
+                            break;
+                        }
+                    }
+                }
+
+                // If the conveyor is not full, branch blocks will eventually merge, so we are not deadlocked yet
+                if (!ConveyorController.Instance.IsConveyorFull(requiredSpacing))
+                {
+                    return false;
+                }
+            }
+
+            // No possible moves, and no new blocks can merge -> Deadlock
             return true;
         }
 

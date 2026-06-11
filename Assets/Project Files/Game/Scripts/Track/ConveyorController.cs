@@ -416,6 +416,74 @@ namespace BlockShooter
             return colors;
         }
 
+        /// <summary>
+        /// Returns the sum of spline lengths of all active block groups currently on the main conveyor.
+        /// </summary>
+        public float GetTotalOccupiedLength()
+        {
+            float occupied = 0f;
+            foreach (var entry in _groups)
+            {
+                if (entry.Group != null && !entry.Group.IsEmpty)
+                {
+                    occupied += entry.Group.SplineLength;
+                }
+            }
+            return occupied;
+        }
+
+        /// <summary>
+        /// Returns true if the conveyor does not have a single continuous gap wide enough to accommodate requiredSpacing.
+        /// </summary>
+        public bool IsConveyorFull(float requiredSpacing = 0.2f)
+        {
+            if (_splineWorldLength <= 0f) return false;
+            if (_groups.Count == 0) return false;
+
+            float requiredT = requiredSpacing / _splineWorldLength;
+
+            // Collect active non-empty groups
+            var sorted = new List<GroupEntry>();
+            foreach (var entry in _groups)
+            {
+                if (entry.Group != null && !entry.Group.IsEmpty)
+                {
+                    sorted.Add(entry);
+                }
+            }
+
+            if (sorted.Count == 0) return false;
+
+            // Sort by HeadT to inspect contiguous gaps
+            sorted.Sort((a, b) => a.HeadT.CompareTo(b.HeadT));
+
+            // Check gaps between consecutive groups (including wrap-around)
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                float currentTail = sorted[i].TailT;
+                float nextHead = sorted[(i + 1) % sorted.Count].HeadT;
+
+                float gap;
+                if (nextHead >= currentTail)
+                {
+                    gap = nextHead - currentTail;
+                }
+                else
+                {
+                    // Gap wraps around the end and start of the spline loop
+                    gap = (1f - currentTail) + nextHead;
+                }
+
+                if (gap >= requiredT)
+                {
+                    return false; // Found at least one contiguous gap large enough to fit the merging group
+                }
+            }
+
+            return true; // No single gap is large enough to merge the block
+        }
+
+
         private bool Overlays(float s1, float e1, float s2, float e2)
         {
             if (s1 <= e1)
