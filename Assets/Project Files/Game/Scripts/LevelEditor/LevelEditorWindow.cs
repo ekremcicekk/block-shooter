@@ -47,7 +47,6 @@ namespace BlockShooter.Editor
 
         // ── Design data ───────────────────────────────────────────────────────
         private int           _levelIndex  = 1;
-        private string        _levelName   = "Level 1";
         private bool          _isHardLevel = false;
         private float         _cameraSize  = 9f;
 
@@ -76,7 +75,6 @@ namespace BlockShooter.Editor
         // Spline edit state
         private bool         _editingSpline = false;
         private bool         _isDraggingSpline = false;
-        private bool         _addKnotMode   = false;
         private int          _selKnot       = -1;
         private GameObject   _previewGo     = null; // lightweight spline preview only
         private GameObject   _levelPreviewGo = null; // scene preview of selected level prefab
@@ -119,60 +117,10 @@ namespace BlockShooter.Editor
         private bool _foldAdvancedSpline = false;
 
         // ── Color palette ─────────────────────────────────────────────────────
-        private Color PC(BlockColorType t)
-        {
-            if (_gameCfg != null)
-            {
-                return _gameCfg.GetColor(t);
-            }
-            return Color.white;
-        }
-
-        private (BlockColorType t, Color c, string n)[] GetActiveColors()
-        {
-            if (_gameCfg != null && _gameCfg.colors != null && _gameCfg.colors.Count > 0)
-            {
-                var list = new List<(BlockColorType, Color, string)>();
-                foreach (var def in _gameCfg.colors)
-                {
-                    if (def == null) continue;
-                    list.Add((def.colorType, _gameCfg.GetColor(def.colorType), def.displayName));
-                }
-                return list.ToArray();
-            }
-
-            return new[]
-            {
-                (BlockColorType.Red,    new Color(.90f,.20f,.20f), "Red"   ),
-                (BlockColorType.Blue,   new Color(.20f,.50f,.90f), "Blue"  ),
-                (BlockColorType.Green,  new Color(.20f,.80f,.30f), "Green" ),
-                (BlockColorType.Yellow, new Color(1.00f,.85f,.10f),"Yellow"),
-                (BlockColorType.Purple, new Color(.60f,.20f,.90f), "Purple"),
-                (BlockColorType.Orange, new Color(1.00f,.55f,.10f),"Orange"),
-            };
-        }
-
-        private BlockColorType DrawColorPopup(BlockColorType selected, GUILayoutOption option)
-        {
-            var pal = GetActiveColors();
-            string[] names = pal.Select(x => x.n).ToArray();
-            int index = System.Array.FindIndex(pal, x => x.t == selected);
-            if (index < 0) index = 0;
-
-            int newIndex = EditorGUILayout.Popup(index, names, option);
-            return pal[newIndex].t;
-        }
-
-        private BlockColorType DrawColorPopup(Rect rect, BlockColorType selected)
-        {
-            var pal = GetActiveColors();
-            string[] names = pal.Select(x => x.n).ToArray();
-            int index = System.Array.FindIndex(pal, x => x.t == selected);
-            if (index < 0) index = 0;
-
-            int newIndex = EditorGUI.Popup(rect, index, names);
-            return pal[newIndex].t;
-        }
+        private Color PC(BlockColorType t) => LevelEditorColorUtility.GetColor(_gameCfg, t);
+        private (BlockColorType t, Color c, string n)[] GetActiveColors() => LevelEditorColorUtility.GetActiveColors(_gameCfg);
+        private BlockColorType DrawColorPopup(BlockColorType selected, GUILayoutOption option) => LevelEditorColorUtility.DrawColorPopup(_gameCfg, selected, option);
+        private BlockColorType DrawColorPopup(Rect rect, BlockColorType selected) => LevelEditorColorUtility.DrawColorPopup(_gameCfg, rect, selected);
 
         // ── Menu ──────────────────────────────────────────────────────────────
         [MenuItem("BlockShooter/Level Editor", false, 10)]
@@ -751,7 +699,6 @@ namespace BlockShooter.Editor
 
             _editingSpline = true;
             _selKnot       = -1;
-            _addKnotMode   = false;
 
             if (_editingBranchIndex < 0 && _levelPreviewGo != null)
             {
@@ -857,7 +804,6 @@ namespace BlockShooter.Editor
         private void StopSplineEdit(bool save)
         {
             _editingSpline = false;
-            _addKnotMode   = false;
 
             if (!save && _splineEditBackupKnots != null)
             {
@@ -1423,124 +1369,7 @@ namespace BlockShooter.Editor
             float d  = _splineDepth;
 
             _selectedKnots.Clear();
-            _knots.Clear();
-            _tangentsIn.Clear();
-            _tangentsOut.Clear();
-            _tangentModes.Clear();
-
-            switch (_splinePreset)
-            {
-                case 0: // Oval (Perfect Ellipse)
-                    {
-                        float b = d * 0.5f;
-                        float k = 0.5522847f; // Bezier curve constant for circle/ellipse
-                        
-                        _knots.Add(new Vector3(0f, 0f, fz));
-                        _knots.Add(new Vector3(+hw, 0f, fz + b));
-                        _knots.Add(new Vector3(0f, 0f, fz + d));
-                        _knots.Add(new Vector3(-hw, 0f, fz + b));
-
-                        // Knot 0 (Bottom Center)
-                        _tangentsIn.Add(new Vector3(-hw * k, 0f, 0f));
-                        _tangentsOut.Add(new Vector3(hw * k, 0f, 0f));
-                        _tangentModes.Add(TangentMode.Mirrored);
-
-                        // Knot 1 (Right Side)
-                        _tangentsIn.Add(new Vector3(0f, 0f, -b * k));
-                        _tangentsOut.Add(new Vector3(0f, 0f, b * k));
-                        _tangentModes.Add(TangentMode.Mirrored);
-
-                        // Knot 2 (Top Center)
-                        _tangentsIn.Add(new Vector3(hw * k, 0f, 0f));
-                        _tangentsOut.Add(new Vector3(-hw * k, 0f, 0f));
-                        _tangentModes.Add(TangentMode.Mirrored);
-
-                        // Knot 3 (Left Side)
-                        _tangentsIn.Add(new Vector3(0f, 0f, b * k));
-                        _tangentsOut.Add(new Vector3(0f, 0f, -b * k));
-                        _tangentModes.Add(TangentMode.Mirrored);
-                    }
-                    break;
-
-                case 1: // Wide Capsule / Stadium (Straight parallel sides + perfect circular caps)
-                    {
-                        float r = Mathf.Min(hw, d * 0.5f);
-                        float k = 0.5522847f;
-                        float straightHeight = d - 2 * r;
-
-                        _knots.Add(new Vector3(0f, 0f, fz)); // 0: Bottom Center
-                        _knots.Add(new Vector3(+hw, 0f, fz + r)); // 1: Bottom Right Cap End / Straight Start
-                        _knots.Add(new Vector3(+hw, 0f, fz + d - r)); // 2: Straight End / Top Right Cap Start
-                        _knots.Add(new Vector3(0f, 0f, fz + d)); // 3: Top Center
-                        _knots.Add(new Vector3(-hw, 0f, fz + d - r)); // 4: Top Left Cap End / Straight Start
-                        _knots.Add(new Vector3(-hw, 0f, fz + r)); // 5: Straight End / Bottom Left Cap Start
-
-                        // Knot 0 (Bottom Center)
-                        _tangentsIn.Add(new Vector3(-hw * k, 0f, 0f));
-                        _tangentsOut.Add(new Vector3(hw * k, 0f, 0f));
-                        _tangentModes.Add(TangentMode.Mirrored);
-
-                        // Knot 1 (Bottom Right)
-                        _tangentsIn.Add(new Vector3(0f, 0f, -r * k));
-                        _tangentsOut.Add(new Vector3(0f, 0f, straightHeight * 0.33f)); // Points straight up
-                        _tangentModes.Add(TangentMode.Broken);
-
-                        // Knot 2 (Top Right)
-                        _tangentsIn.Add(new Vector3(0f, 0f, -straightHeight * 0.33f)); // Points straight down
-                        _tangentsOut.Add(new Vector3(0f, 0f, r * k));
-                        _tangentModes.Add(TangentMode.Broken);
-
-                        // Knot 3 (Top Center)
-                        _tangentsIn.Add(new Vector3(hw * k, 0f, 0f));
-                        _tangentsOut.Add(new Vector3(-hw * k, 0f, 0f));
-                        _tangentModes.Add(TangentMode.Mirrored);
-
-                        // Knot 4 (Top Left)
-                        _tangentsIn.Add(new Vector3(0f, 0f, r * k));
-                        _tangentsOut.Add(new Vector3(0f, 0f, -straightHeight * 0.33f)); // Points straight down
-                        _tangentModes.Add(TangentMode.Broken);
-
-                        // Knot 5 (Bottom Left)
-                        _tangentsIn.Add(new Vector3(0f, 0f, straightHeight * 0.33f)); // Points straight up
-                        _tangentsOut.Add(new Vector3(0f, 0f, -r * k));
-                        _tangentModes.Add(TangentMode.Broken);
-                    }
-                    break;
-
-                case 2: // Wavy Loop (Capsule loop with elegant waves on parallel sides)
-                    _knots.Add(new Vector3(0f, 0f, fz));
-                    _knots.Add(new Vector3(+hw * 0.8f, 0f, fz + d * 0.2f));
-                    _knots.Add(new Vector3(+hw * 1.2f, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(+hw * 0.8f, 0f, fz + d * 0.8f));
-                    _knots.Add(new Vector3(0f, 0f, fz + d));
-                    _knots.Add(new Vector3(-hw * 0.8f, 0f, fz + d * 0.8f));
-                    _knots.Add(new Vector3(-hw * 1.2f, 0f, fz + d * 0.5f));
-                    _knots.Add(new Vector3(-hw * 0.8f, 0f, fz + d * 0.2f));
-
-                    for (int i = 0; i < 8; i++)
-                    {
-                        _tangentsIn.Add(Vector3.zero);
-                        _tangentsOut.Add(Vector3.zero);
-                        _tangentModes.Add(TangentMode.AutoSmooth);
-                    }
-                    break;
-
-                case 3: // Heart Loop
-                    _knots.Add(new Vector3(0f, 0f, fz));
-                    _knots.Add(new Vector3(+hw * 0.9f, 0f, fz + d * 0.35f));
-                    _knots.Add(new Vector3(+hw * 0.7f, 0f, fz + d * 0.85f));
-                    _knots.Add(new Vector3(0f, 0f, fz + d * 0.65f));
-                    _knots.Add(new Vector3(-hw * 0.7f, 0f, fz + d * 0.85f));
-                    _knots.Add(new Vector3(-hw * 0.9f, 0f, fz + d * 0.35f));
-
-                    for (int i = 0; i < 6; i++)
-                    {
-                        _tangentsIn.Add(Vector3.zero);
-                        _tangentsOut.Add(Vector3.zero);
-                        _tangentModes.Add(TangentMode.AutoSmooth);
-                    }
-                    break;
-            }
+            LevelSplinePresets.GeneratePreset(_splinePreset, hw, fz, d, out _knots, out _tangentsIn, out _tangentsOut, out _tangentModes);
 
             EnsureTangentLists();
             SyncPreviewSpline();
@@ -1693,40 +1522,7 @@ namespace BlockShooter.Editor
             Undo.RegisterCompleteObjectUndo(this, "Make Spline Symmetric");
             EnsureTangentLists();
 
-            int N = _knots.Count;
-            
-            // Index 0 is always a center point (locked at the fire zone, x = 0)
-            _knots[0] = new Vector3(0f, _knots[0].y, _knots[0].z);
-
-            if (N % 2 == 0)
-            {
-                int mid = N / 2;
-                // Middle knot is also on the axis of symmetry (x = 0)
-                _knots[mid] = new Vector3(0f, _knots[mid].y, _knots[mid].z);
-
-                // Mirror left-side knots (indices N - i) to right-side knots (indices i)
-                for (int i = 1; i < mid; i++)
-                {
-                    int opp = N - i;
-                    _knots[i] = new Vector3(-_knots[opp].x, _knots[opp].y, _knots[opp].z);
-                    _tangentsIn[i] = new Vector3(-_tangentsOut[opp].x, _tangentsOut[opp].y, _tangentsOut[opp].z);
-                    _tangentsOut[i] = new Vector3(-_tangentsIn[opp].x, _tangentsIn[opp].y, _tangentsIn[opp].z);
-                    _tangentModes[i] = _tangentModes[opp];
-                }
-            }
-            else
-            {
-                // Odd number of knots: index 0 is center, pair the rest symmetrically
-                int limit = (N - 1) / 2;
-                for (int i = 1; i <= limit; i++)
-                {
-                    int opp = N - i;
-                    _knots[i] = new Vector3(-_knots[opp].x, _knots[opp].y, _knots[opp].z);
-                    _tangentsIn[i] = new Vector3(-_tangentsOut[opp].x, _tangentsOut[opp].y, _tangentsOut[opp].z);
-                    _tangentsOut[i] = new Vector3(-_tangentsIn[opp].x, _tangentsIn[opp].y, _tangentsIn[opp].z);
-                    _tangentModes[i] = _tangentModes[opp];
-                }
-            }
+            LevelSplineUtils.MakeSymmetric(_knots, _tangentsIn, _tangentsOut, _tangentModes);
 
             SyncPreviewSpline();
             SceneView.RepaintAll();
@@ -1740,12 +1536,7 @@ namespace BlockShooter.Editor
             Undo.RegisterCompleteObjectUndo(this, "Flip Spline Horizontally");
             EnsureTangentLists();
 
-            for (int i = 0; i < _knots.Count; i++)
-            {
-                _knots[i] = new Vector3(-_knots[i].x, 0f, _knots[i].z);
-                _tangentsIn[i] = new Vector3(-_tangentsIn[i].x, 0f, _tangentsIn[i].z);
-                _tangentsOut[i] = new Vector3(-_tangentsOut[i].x, 0f, _tangentsOut[i].z);
-            }
+            LevelSplineUtils.FlipHorizontally(_knots, _tangentsIn, _tangentsOut);
 
             SyncPreviewSpline();
             SceneView.RepaintAll();
@@ -1755,21 +1546,7 @@ namespace BlockShooter.Editor
 
         private void WriteKnotsToContainer(SplineContainer sc, List<Vector3> knots, List<Vector3> tangentsIn, List<Vector3> tangentsOut, List<int> tangentModes, float yOffset = 0f, float zOffset = 0f)
         {
-            var spline = sc.Spline;
-            spline.Clear();
-            for (int i = 0; i < knots.Count; i++)
-            {
-                var k = knots[i];
-                var tanIn  = i < tangentsIn.Count ? (Unity.Mathematics.float3)(Vector3)tangentsIn[i] : Unity.Mathematics.float3.zero;
-                var tanOut = i < tangentsOut.Count ? (Unity.Mathematics.float3)(Vector3)tangentsOut[i] : Unity.Mathematics.float3.zero;
-                spline.Add(new BezierKnot(new Unity.Mathematics.float3(k.x, k.y + yOffset, k.z + zOffset), tanIn, tanOut));
-            }
-            spline.Closed = false;
-            for (int i = 0; i < spline.Count; i++)
-            {
-                var mode = i < tangentModes.Count ? (TangentMode)tangentModes[i] : TangentMode.AutoSmooth;
-                spline.SetTangentMode(i, mode);
-            }
+            EKStudio.Editor.LevelPrefabBuilder.WriteKnotsToContainer(sc, knots, tangentsIn, tangentsOut, tangentModes, yOffset, zOffset);
         }
 
         private void WriteKnotsToContainer(SplineContainer sc, float yOffset = 0f, float zOffset = 0f)
@@ -1817,14 +1594,7 @@ namespace BlockShooter.Editor
         }
 
         // ── Mouse-to-ground ray ───────────────────────────────────────────────
-        private static Vector3 GetMouseGroundHit(Vector2 mousePos)
-        {
-            Ray ray = HandleUtility.GUIPointToWorldRay(mousePos);
-            if (Mathf.Abs(ray.direction.y) < 0.0001f) return Vector3.positiveInfinity;
-            float t = -ray.origin.y / ray.direction.y;
-            if (t < 0f) return Vector3.positiveInfinity;
-            return ray.origin + ray.direction * t;
-        }
+        private static Vector3 GetMouseGroundHit(Vector2 mousePos) => LevelSplineUtils.GetMouseGroundHit(mousePos);
 
         private Vector3 SnapToMainSpline(Vector3 position, bool isConnectionKnot = false)
         {
@@ -1878,68 +1648,22 @@ namespace BlockShooter.Editor
 
         private float GetMainSplineLength()
         {
-            if (_knots.Count < 2) return 0f;
-            var tempSpline = new Spline();
-            for (int i = 0; i < _knots.Count; i++)
-            {
-                var k = _knots[i];
-                var tanIn  = i < _tangentsIn.Count ? (float3)(Vector3)_tangentsIn[i] : float3.zero;
-                var tanOut = i < _tangentsOut.Count ? (float3)(Vector3)_tangentsOut[i] : float3.zero;
-                tempSpline.Add(new BezierKnot((float3)k, tanIn, tanOut));
-            }
-            tempSpline.Closed = true;
-            for (int i = 0; i < tempSpline.Count; i++)
-            {
-                var mode = i < _tangentModes.Count ? _tangentModes[i] : TangentMode.AutoSmooth;
-                tempSpline.SetTangentMode(i, mode);
-            }
-            return SplineUtility.CalculateLength(tempSpline, Matrix4x4.identity);
+            return LevelSplineUtils.CalculateSplineLength(_knots, _tangentsIn, _tangentsOut, _tangentModes, isClosed: true);
         }
 
         private float GetBranchSplineLength(BranchPathData b)
         {
-            if (b.splineKnots.Count < 2) return 0f;
-            var tempSpline = new Spline();
-            for (int i = 0; i < b.splineKnots.Count; i++)
-            {
-                var k = b.splineKnots[i];
-                var tanIn  = i < b.splineTangentsIn.Count ? (float3)(Vector3)b.splineTangentsIn[i] : float3.zero;
-                var tanOut = i < b.splineTangentsOut.Count ? (float3)(Vector3)b.splineTangentsOut[i] : float3.zero;
-                tempSpline.Add(new BezierKnot((float3)k, tanIn, tanOut));
-            }
-            tempSpline.Closed = false;
-            for (int i = 0; i < tempSpline.Count; i++)
-            {
-                var mode = i < b.splineTangentModes.Count ? (TangentMode)b.splineTangentModes[i] : TangentMode.AutoSmooth;
-                tempSpline.SetTangentMode(i, mode);
-            }
-            return SplineUtility.CalculateLength(tempSpline, Matrix4x4.identity);
+            return LevelSplineUtils.CalculateSplineLength(b.splineKnots, b.splineTangentsIn, b.splineTangentsOut, b.splineTangentModes.Select(m => (TangentMode)m).ToList(), isClosed: false);
         }
 
         private int FindInsertIndex(Vector3 pos)
         {
-            int best = 0;
-            float bestDist = float.MaxValue;
-            for (int i = 0; i < _knots.Count; i++)
-            {
-                int nxt = (i + 1) % _knots.Count;
-                Vector3 mid = (_knots[i] + _knots[nxt]) * .5f;
-                float d = Vector3.Distance(pos, mid);
-                if (d < bestDist) { bestDist = d; best = nxt; }
-            }
-            return best;
+            return LevelSplineUtils.FindInsertIndex(pos, _knots);
         }
 
         private static Vector3[] GetWireCubeVerts(Vector3 center, Vector3 size)
         {
-            float hx = size.x * .5f, hz = size.z * .5f;
-            return new[]
-            {
-                center + new Vector3(-hx, 0, -hz),
-                center + new Vector3(+hx, 0, -hz),
-                center + new Vector3(+hx, 0, +hz),
-                center + new Vector3(-hx, 0, +hz),
-            };
+            return LevelSplineUtils.GetWireCubeVerts(center, size);
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -2520,75 +2244,24 @@ namespace BlockShooter.Editor
             Hdr("COLOR MATCH VALIDATION");
 
             var pal = GetActiveColors();
-            var gridShots = new Dictionary<BlockColorType, int>();
-            var conveyorTargets = new Dictionary<BlockColorType, int>();
-
-            foreach (var entry in pal)
-            {
-                gridShots[entry.t] = 0;
-                conveyorTargets[entry.t] = 0;
-            }
-
-            // 1. Calculate Grid Shots
-            if (_type != null)
-            {
-                for (int c = 0; c < _gridCols; c++)
-                {
-                    for (int r = 0; r < _gridRows; r++)
-                    {
-                        if (c >= _type.GetLength(0) || r >= _type.GetLength(1)) continue;
-                        if (_type[c, r] == GridCellType.Empty) continue;
-
-                        BlockColorType color = _color[c, r];
-                        if (!gridShots.ContainsKey(color)) continue;
-
-                        if (_type[c, r] == GridCellType.ShooterBlock ||
-                            _type[c, r] == GridCellType.MysteryShooter ||
-                            _type[c, r] == GridCellType.FreezeShooter)
-                        {
-                            gridShots[color] += Mathf.Max(0, _shots[c, r]);
-                        }
-                        else if (_type[c, r] == GridCellType.Door)
-                        {
-                            gridShots[color] += Mathf.Max(0, _doors[c, r]) * 100; // Doors spawn 100-shot blocks
-                        }
-                    }
-                }
-            }
-
-            // 2. Calculate Conveyor Targets
-            if (_groups != null)
-            {
-                foreach (var g in _groups)
-                {
-                    if (g != null && conveyorTargets.ContainsKey(g.color))
-                    {
-                        conveyorTargets[g.color] += g.rowCount * g.laneCount;
-                    }
-                }
-            }
-
-            if (_branches != null)
-            {
-                foreach (var b in _branches)
-                {
-                    if (b == null || b.groups == null) continue;
-                    foreach (var g in b.groups)
-                    {
-                        if (g != null && conveyorTargets.ContainsKey(g.color))
-                        {
-                            conveyorTargets[g.color] += g.rowCount * 5; // Branch lanes default to 5 in hierarchy
-                        }
-                    }
-                }
-            }
+            var validation = LevelEditorValidation.Validate(
+                _gridCols,
+                _gridRows,
+                _type,
+                _color,
+                _shots,
+                _doors,
+                _groups,
+                _branches,
+                pal
+            );
 
             // 3. Render Validation Info
             bool hasAnyData = false;
             foreach (var entry in pal)
             {
-                int shots = gridShots[entry.t];
-                int targets = conveyorTargets[entry.t];
+                int shots = validation.gridShots[entry.t];
+                int targets = validation.conveyorTargets[entry.t];
 
                 if (shots == 0 && targets == 0) continue;
                 hasAnyData = true;
@@ -2954,7 +2627,6 @@ namespace BlockShooter.Editor
                 if (p.Length > 1 && int.TryParse(p[p.Length-1], out int n)) maxIdx = Mathf.Max(maxIdx, n);
             }
             _levelIndex = maxIdx + 1;
-            _levelName  = $"Level {_levelIndex}";
             _isHardLevel = false;
             _cameraSize  = 9f;
             _gridCols   = 4; _gridRows = 2;
@@ -3006,9 +2678,7 @@ namespace BlockShooter.Editor
             _branchGroupsLists.Clear();
             _selectedKnots.Clear();
             _windowSerialized = new SerializedObject(this);
-
             _levelIndex   = idx + 1;
-            _levelName    = $"Level {_levelIndex}";
             _isHardLevel  = lr.isHardLevel;
             _cameraSize   = lr.cameraSize > 0f ? lr.cameraSize : 9f;
             // Default to 4×2 when loading a stub prefab that has gridCols/Rows = 0
@@ -3110,7 +2780,6 @@ namespace BlockShooter.Editor
                     _activeIdx = -1;
                     if (_levelList != null) _levelList.index = -1;
                     DestroyLevelPreview();
-                    _levelName = "";
                     _levelIndex = 1;
                 }
             }
@@ -3198,20 +2867,19 @@ namespace BlockShooter.Editor
 
             var lr   = root.AddComponent<LevelRoot>();
             WriteDesignData(lr);
-            BuildHierarchy(root.transform, lr);
+            
+            // Build geometry hierarchy using the builder helper
+            EKStudio.Editor.LevelPrefabBuilder.BuildHierarchy(root.transform, lr, _cfg, _gameCfg);
 
-            // Save generated meshes as persistent assets so prefab can reference them
-            SaveTrackMeshAsset(root.transform, lr, name);
-            SaveDeckMeshAsset(root.transform, lr, name);
-            SaveBranchMeshAssets(root.transform, lr, name);
+            // Save generated meshes or reuse matching ones
+            var builder = new EKStudio.Editor.LevelPrefabBuilder();
+            builder.SaveTrackMeshAsset(root.transform, lr, name, _gameCfg.levelSequence.levelPrefabs);
+            builder.SaveDeckMeshAsset(root.transform, lr, name, _gameCfg.levelSequence.levelPrefabs);
+            builder.SaveBranchMeshAssets(root.transform, lr, name, _gameCfg.levelSequence.levelPrefabs);
 
             PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
             DestroyImmediate(root);
             AssetDatabase.SaveAssets();
-            // Do NOT call AssetDatabase.Refresh() here — it reimports all assets and can
-            // invalidate the MonoBehaviour references in levelPrefabs, causing IndexOf to
-            // return -1 and clearing the active selection. SaveAsPrefabAsset already
-            // registers the asset; SaveAssets flushes all pending dirty marks.
             RefreshList();
 
             if (ok)
@@ -3222,7 +2890,6 @@ namespace BlockShooter.Editor
                     _activeIdx = found;
                     if (_levelList != null) _levelList.index = _activeIdx;
                 }
-                // else: keep the selection that RefreshList() already restored
                 _isDirty = false;
                 Debug.Log($"[LevelEditor] Saved: {path}");
                 ShowLevelPreview(path);
@@ -3278,617 +2945,6 @@ namespace BlockShooter.Editor
             }
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        //  BUILD HIERARCHY
-        // ═════════════════════════════════════════════════════════════════════
-        private void BuildHierarchy(Transform root, LevelRoot lr)
-        {
-            float cs   = _cfg.gridCellSize;
-            float slotZ = -1.5f;
-            float gridZ = -2.5f;
-
-            // Create ConveyorSystem parent group
-            var conveyorSys = Go(root, "ConveyorSystem");
-
-            // ── Track ──
-            var trackGo = Go(conveyorSys.transform, "Track");
-            trackGo.transform.localPosition = new Vector3(0f, 0f, 0f);
-            var sc = trackGo.AddComponent<SplineContainer>();
-            float trackRailHeight = _cfg.railHeight;
-            WriteKnotsToContainer(sc, trackRailHeight, 0f);
-            var cc = trackGo.AddComponent<ConveyorController>();
-            cc.speed = 1.5f; // Default fallback speed
-            lr.conveyorController = cc;
-
-            // Track mesh — ConveyorTrackMeshBuilder (RequireComponent auto-adds MeshFilter + MeshRenderer)
-            var meshBuilder = trackGo.AddComponent<ConveyorTrackMeshBuilder>();
-            meshBuilder.resolution    = _cfg.trackResolution;
-            meshBuilder.openZoneHalfT = _openZoneHalfT;
-            meshBuilder.beltHalfWidth = _cfg.beltHalfWidth;
-            meshBuilder.wallAboveBelt = _cfg.wallAboveBelt;
-            meshBuilder.railHeight    = trackRailHeight;
-            meshBuilder.railWidth     = _cfg.railWidth;
-            meshBuilder.bevelSize     = _cfg.trackBevelSize;
-            meshBuilder.BuildMesh();
-
-            var mr = trackGo.GetComponent<MeshRenderer>();
-            if (mr != null)
-            {
-                mr.sharedMaterials = new Material[]
-                {
-                    _cfg.trackSideMaterial,
-                    _cfg.trackBeltMaterial,
-                };
-            }
-
-            if (_cfg.arrowPrefab != null)
-            {
-                cc.arrowPrefab  = _cfg.arrowPrefab;
-                cc.arrowSpacing = _cfg.arrowSpacing;
-            }
-
-            // Block groups
-            var groupsGo = Go(trackGo.transform, "Groups");
-            foreach (var gd in _groups)
-            {
-                var gGo = Go(groupsGo.transform, $"Group_{gd.color}");
-                var bg  = gGo.AddComponent<BlockGroup>();
-                bg.colorType   = gd.color;
-                bg.rowCount    = gd.rowCount;
-                bg.laneCount   = gd.laneCount;
-                bg.laneSpacing = _cfg.laneSpacing;
-                bg.rowSpacing  = _cfg.rowSpacing;
-
-                if (_cfg.conveyorBlockPrefab != null)
-                    for (int row = 0; row < gd.rowCount; row++)
-                    {
-                        var rowGo = Go(gGo.transform, $"Row_{row}");
-                        for (int lane = 0; lane < gd.laneCount; lane++)
-                        {
-                            var bGo = (GameObject)PrefabUtility.InstantiatePrefab(
-                                _cfg.conveyorBlockPrefab, rowGo.transform);
-                            bGo.name = $"Block_{lane}";
-                            bGo.transform.localPosition = Vector3.zero;
-                            PrefabUtility.RecordPrefabInstancePropertyModifications(bGo.transform);
-                            bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
-                        }
-                    }
-            }
-
-            // ── Branch Paths ──
-            if (_branches != null && _branches.Count > 0)
-            {
-                var branchesGroupGo = Go(conveyorSys.transform, "Branches");
-                int branchIdx = 0;
-                foreach (var b in _branches)
-                {
-                    var branchGo = Go(branchesGroupGo.transform, b.branchName);
-                    branchGo.transform.localPosition = new Vector3(0f, 0f, 0f);
-                    
-                    var bSc = branchGo.AddComponent<SplineContainer>();
-                    WriteKnotsToContainer(bSc, b.splineKnots, b.splineTangentsIn, b.splineTangentsOut, b.splineTangentModes, trackRailHeight, 0f);
-
-                    var bp = branchGo.AddComponent<BranchPath>();
-                    bp.mergeT = b.mergeT;
-                    bp.data = b;
-
-                    var bMeshBuilder = branchGo.AddComponent<ConveyorTrackMeshBuilder>();
-                    bMeshBuilder.resolution    = _cfg.trackResolution;
-                    bMeshBuilder.openZoneEnabled = false;
-                    bMeshBuilder.beltHalfWidth = _cfg.beltHalfWidth;
-                    bMeshBuilder.wallAboveBelt = _cfg.wallAboveBelt;
-                    bMeshBuilder.railHeight    = trackRailHeight;
-                    bMeshBuilder.railWidth     = _cfg.railWidth;
-                    bMeshBuilder.bevelSize     = _cfg.trackBevelSize;
-
-                    // Calculate the main conveyor wall plane at the merge point for flush trimming
-                    if (sc != null && b.splineKnots != null && b.splineKnots.Count >= 2)
-                    {
-                        sc.Spline.Evaluate(b.mergeT, out var mPos, out var mTan, out var mUp);
-                        Vector3 worldMergePos = trackGo.transform.TransformPoint(mPos);
-                        Vector3 worldMergeTan = trackGo.transform.TransformDirection((Vector3)mTan).normalized;
-                        Vector3 worldMergeUp  = trackGo.transform.TransformDirection((Vector3)mUp).normalized;
-                        if (worldMergeUp.sqrMagnitude < 0.001f) worldMergeUp = Vector3.up;
-                        Vector3 worldMergeRight = Vector3.Cross(worldMergeUp, worldMergeTan).normalized;
-
-                        // Determine which side the branch approaches from
-                        Vector3 branchLast = b.splineKnots[b.splineKnots.Count - 1];
-                        Vector3 branchSecondLast = b.splineKnots[b.splineKnots.Count - 2];
-                        Vector3 toBranch = (branchSecondLast - branchLast).normalized;
-                        float dot = Vector3.Dot(toBranch, worldMergeRight);
-
-                        // Wall normal points outward toward the branch
-                        Vector3 wallNormal = dot < 0f ? -worldMergeRight : worldMergeRight;
-                        float wallOffset = _cfg.beltHalfWidth + _cfg.railWidth;
-                        Vector3 wallPoint = worldMergePos + wallNormal * wallOffset;
-
-                        bMeshBuilder.trimBranchEnd = true;
-                        bMeshBuilder.mainTrackSpline = sc;
-                        bMeshBuilder.branchOnRightSide = (dot >= 0f);
-                    }
-
-                    bMeshBuilder.BuildMesh();
-
-                    var bMr = branchGo.GetComponent<MeshRenderer>();
-                    if (bMr != null)
-                    {
-                        bMr.sharedMaterials = new Material[]
-                        {
-                            _cfg.trackSideMaterial,
-                            _cfg.trackBeltMaterial,
-                        };
-                    }
-
-                    // Calculate branch spline length for block placement
-                    float branchSplineLen = SplineUtility.CalculateLength(bSc.Spline, branchGo.transform.localToWorldMatrix);
-                    float mainTrackHalfWidth = _cfg.beltHalfWidth + _cfg.railWidth;
-                    float safetyOffset = mainTrackHalfWidth + _cfg.rowSpacing + 0.1f;
-                    float mergeStopT = branchSplineLen > 0f
-                        ? Mathf.Clamp01(1.0f - (safetyOffset / branchSplineLen))
-                        : 0.95f;
-
-                    // Place block groups along the branch spline
-                    var bGroupsGo = Go(branchGo.transform, "Groups");
-                    int globalRowIdx = 0;
-                    foreach (var gd in b.groups)
-                    {
-                        var gGo = Go(bGroupsGo.transform, $"Group_{gd.color}");
-                        var bg  = gGo.AddComponent<BlockGroup>();
-                        bg.colorType   = gd.color;
-                        bg.rowCount    = gd.rowCount;
-                        bg.laneCount   = 5;
-                        bg.laneSpacing = _cfg.laneSpacing;
-                        bg.rowSpacing  = _cfg.rowSpacing;
-
-                        if (_cfg.conveyorBlockPrefab != null)
-                            for (int row = 0; row < gd.rowCount; row++)
-                            {
-                                // Calculate T position for this row on the branch spline
-                                float rowT = mergeStopT - (globalRowIdx * _cfg.rowSpacing) / branchSplineLen;
-                                rowT = Mathf.Clamp01(rowT);
-
-                                // Evaluate spline at this T to get world position and orientation
-                                bSc.Spline.Evaluate(rowT, out var spPos, out var spTan, out var spUp);
-                                Vector3 worldPos = branchGo.transform.TransformPoint(spPos);
-                                Vector3 fwd = branchGo.transform.TransformDirection((Vector3)spTan).normalized;
-                                Vector3 upDir = branchGo.transform.TransformDirection((Vector3)spUp).normalized;
-                                if (upDir == Vector3.zero) upDir = Vector3.up;
-                                Vector3 right = Vector3.Cross(upDir, fwd).normalized;
-                                Quaternion rot = fwd != Vector3.zero ? Quaternion.LookRotation(fwd, upDir) : Quaternion.identity;
-
-                                var rowGo = Go(gGo.transform, $"Row_{row}");
-                                for (int lane = 0; lane < 5; lane++)
-                                {
-                                    var bGo = (GameObject)PrefabUtility.InstantiatePrefab(
-                                        _cfg.conveyorBlockPrefab, rowGo.transform);
-                                    bGo.name = $"Block_{lane}";
-
-                                    // Position block at the correct lane offset along the spline
-                                    float xOff = (lane - 2f) * _cfg.laneSpacing;
-                                    bGo.transform.position = worldPos + right * xOff;
-                                    bGo.transform.rotation = rot;
-
-                                    PrefabUtility.RecordPrefabInstancePropertyModifications(bGo.transform);
-                                    bGo.GetComponent<ConveyorBlock3D>()?.SetGroupIndex(row, lane);
-
-                                    // Apply color material
-                                    var cb = bGo.GetComponent<ConveyorBlock3D>();
-                                    if (cb != null && cb.blockRenderer != null && _gameCfg != null)
-                                    {
-                                        var mat = _gameCfg.GetMaterial(gd.color);
-                                        if (mat != null) cb.blockRenderer.sharedMaterial = mat;
-                                    }
-                                }
-                                globalRowIdx++;
-                            }
-                    }
-                    branchIdx++;
-                }
-            }
-
-            // Create logical parent groups
-            var gameplayLogic = Go(root, "GameplayLogic");
-            var boardPlatform = Go(root, "BoardPlatform");
-
-            // ── FireRange ── (inside Track object)
-            GameObject frGo;
-            if (_cfg.fireRangePrefab != null)
-            {
-                frGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.fireRangePrefab, trackGo.transform);
-                frGo.name = "FireRange";
-            }
-            else
-            {
-                frGo = Go(trackGo.transform, "FireRange");
-                var fc = frGo.AddComponent<BoxCollider>();
-                fc.isTrigger = true;
-                fc.size = new Vector3(1.8f, 2f, 0.8f);
-                frGo.AddComponent<FireRange>();
-            }
-            frGo.transform.localPosition = new Vector3(0f, 0f, 0f);
-            if (PrefabUtility.IsPartOfPrefabInstance(frGo))
-                PrefabUtility.RecordPrefabInstancePropertyModifications(frGo.transform);
-            lr.fireRange = frGo.GetComponent<FireRange>();
-
-            // ── SlotDeck ──
-            var deckGo = Go(boardPlatform.transform, "SlotDeck");
-            deckGo.transform.localPosition = new Vector3(0f, 0f, slotZ);
-            var ss = deckGo.AddComponent<SlotSystem>();
-            if (_cfg.slotIndicatorPrefab != null) ss.slotIndicatorPrefab = _cfg.slotIndicatorPrefab;
-            lr.slotSystem = ss;
-
-            int   slots = _cfg.slotCount;
-            float tw    = (slots - 1) * _cfg.slotSpacing;
-            for (int i = 0; i < slots; i++)
-            {
-                var slotGo = Go(deckGo.transform, $"Slot_{i}");
-                slotGo.transform.localPosition = new Vector3(-tw * .5f + i * _cfg.slotSpacing, 0f, 0f);
-
-                if (_cfg.slotIndicatorPrefab != null)
-                {
-                    var indGo = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.slotIndicatorPrefab, slotGo.transform);
-                    indGo.name = "SlotIndicator";
-                    indGo.transform.localPosition = Vector3.zero;
-                    indGo.transform.localRotation = Quaternion.identity;
-                }
-            }
-
-            // ── ShooterGrid ──
-            var sgGo = Go(boardPlatform.transform, "ShooterGrid");
-            sgGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
-            var sg = sgGo.AddComponent<ShooterGrid>();
-            if (_cfg.shooterBlockPrefab != null)
-                sg.shooterBlockPrefab = _cfg.shooterBlockPrefab.GetComponent<ShooterBlock>();
-            lr.shooterGrid = sg;
-
-            float hw = (_gridCols - 1) * cs * .5f;
-
-            for (int r = 0; r < _gridRows; r++)
-            for (int c = 0; c < _gridCols; c++)
-            {
-                var pos = new Vector3(-hw + c*cs, 0f, (r - _gridRows + 0.5f) * cs);
-                string nm = $"Cell_r{r}_c{c}";
-
-                switch (_type[c, r])
-                {
-                    case GridCellType.ShooterBlock when _cfg.shooterBlockPrefab != null:
-                    {
-                        var go = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.shooterBlockPrefab, sgGo.transform);
-                        go.name = nm; go.transform.localPosition = pos;
-                        PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
-                        int sh = Mathf.Max(1, _shots[c,r]);
-                        var sb = go.GetComponent<ShooterBlock>();
-                        sb?.EditorSetup(_color[c,r], sh, c, r, isMystery: false);
-                        // Apply material directly so prefab shows colors in editor
-                        if (sb?.blockRenderer != null && _gameCfg != null)
-                        {
-                            var mat = _gameCfg.GetMaterial(_color[c,r]);
-                            if (mat != null) sb.blockRenderer.sharedMaterial = mat;
-                        }
-                        break;
-                    }
-                    case GridCellType.MysteryShooter:
-                    {
-                        var prefab = _cfg.shooterBlockPrefab;
-                        if (prefab != null)
-                        {
-                            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
-                            go.name = nm; go.transform.localPosition = pos;
-                            PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
-                            int sh = Mathf.Max(1, _shots[c,r]);
-                            var sb = go.GetComponent<ShooterBlock>();
-                            sb?.EditorSetup(_color[c,r], sh, c, r, isMystery: true);
-                        }
-                        break;
-                    }
-                    case GridCellType.FreezeShooter:
-                    {
-                        var prefab = _cfg.shooterBlockPrefab;
-                        if (prefab != null)
-                        {
-                            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, sgGo.transform);
-                            go.name = nm; go.transform.localPosition = pos;
-                            PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
-                            int sh = Mathf.Max(1, _shots[c,r]);
-                            var sb = go.GetComponent<ShooterBlock>();
-                            sb?.EditorSetup(_color[c,r], sh, c, r, isMystery: false);
-                            if (sb?.blockRenderer != null && _gameCfg != null)
-                            {
-                                var mat = _gameCfg.GetMaterial(_color[c,r]);
-                                if (mat != null) sb.blockRenderer.sharedMaterial = mat;
-                            }
-                            
-                            var f = go.GetComponent<FreezeBlockFeature>();
-                            if (f == null) f = go.AddComponent<FreezeBlockFeature>();
-                            f.isFrozen = true;
-                            f.freezeCount = _freezeCount[c, r];
-                            f.SyncVisualsEditor();
-                        }
-                        break;
-                    }
-                    case GridCellType.Door:
-                    {
-                        var go = Go(sgGo.transform, nm); go.transform.localPosition = pos;
-                        var d = go.AddComponent<BlockDoor>();
-                        d.blockCount = _doors[c,r];
-                        d.spawnColors = new List<BlockColorType> { _color[c,r] };
-                        break;
-                    }
-                }
-            }
-
-            // ── Shooter Deck Mesh ──
-            var isEmpty = new bool[_gridCols, _gridRows];
-            for (int c = 0; c < _gridCols; c++)
-            for (int r = 0; r < _gridRows; r++)
-                isEmpty[c, r] = _type[c, r] == GridCellType.Empty;
-
-            var deckMeshGo = Go(boardPlatform.transform, "ShooterDeck");
-            deckMeshGo.transform.localPosition = new Vector3(0f, 0f, gridZ);
-            var deckBuilder = deckMeshGo.AddComponent<ShooterDeckMeshBuilder>();
-            deckBuilder.gridCols      = _gridCols;
-            deckBuilder.gridRows      = _gridRows;
-            deckBuilder.cellSize      = cs;
-            deckBuilder.tileHeight    = _cfg.deckTileHeight;
-            deckBuilder.sideWingWidth = _cfg.sideWingWidth;
-            deckBuilder.backDepth     = _cfg.backDepth;
-            deckBuilder.bevelSize     = _cfg.bevelSize;
-            deckBuilder.bevelSegments = _cfg.bevelSegments;
-            deckBuilder.BuildMesh(isEmpty);
-            var deckMr = deckMeshGo.GetComponent<MeshRenderer>();
-            deckMr.sharedMaterials = new Material[]
-            {
-                _cfg.deckTopMaterial,
-                _cfg.deckWallMaterial,
-            };
-
-            // ── Ground (optional, only if prefab explicitly assigned) ──
-            if (_cfg.groundPrefab != null)
-            {
-                var envGo = Go(root, "Environment");
-                var gnd = (GameObject)PrefabUtility.InstantiatePrefab(_cfg.groundPrefab, envGo.transform);
-                gnd.name = "Ground";
-                gnd.transform.localPosition = Vector3.zero;
-                PrefabUtility.RecordPrefabInstancePropertyModifications(gnd.transform);
-            }
-        }
-
-        // ── Track mesh asset ──────────────────────────────────────────────────
-        private void SaveTrackMeshAsset(Transform root, LevelRoot lr, string name)
-        {
-            var track = FindDeepChild(root, "Track");
-            if (track == null) return;
-            var mf = track.GetComponent<MeshFilter>();
-            if (mf == null || mf.sharedMesh == null) return;
-
-            // Check if there is an existing level prefab with the exact same track shape
-            if (_gameCfg != null && _gameCfg.levelSequence != null && _gameCfg.levelSequence.levelPrefabs != null)
-            {
-                foreach (var prefab in _gameCfg.levelSequence.levelPrefabs)
-                {
-                    if (prefab == null) continue;
-                    if (prefab.gameObject.name == name) continue;
-
-                    var otherLr = prefab.GetComponent<LevelRoot>();
-                    if (otherLr != null && IsSplineEqual(lr, otherLr))
-                    {
-                        var otherTrack = FindDeepChild(prefab.transform, "Track");
-                        if (otherTrack != null)
-                        {
-                            var otherMf = otherTrack.GetComponent<MeshFilter>();
-                            if (otherMf != null && otherMf.sharedMesh != null)
-                            {
-                                mf.sharedMesh = otherMf.sharedMesh;
-                                return; // Reuse existing asset, skip saving new
-                            }
-                        }
-                    }
-                }
-            }
-
-            const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
-            EnsureDir(meshDir);
-            string meshPath = $"{meshDir}/{name}_TrackMesh.asset";
-            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
-            if (existing != null)
-            {
-                // Reuse existing asset to keep prefab references stable
-                existing.Clear();
-                EditorUtility.CopySerialized(mf.sharedMesh, existing);
-                mf.sharedMesh = existing;
-            }
-            else
-            {
-                AssetDatabase.CreateAsset(mf.sharedMesh, meshPath);
-            }
-        }
-
-        private void SaveDeckMeshAsset(Transform root, LevelRoot lr, string name)
-        {
-            var deck = FindDeepChild(root, "ShooterDeck");
-            if (deck == null) return;
-            var mf = deck.GetComponent<MeshFilter>();
-            if (mf == null || mf.sharedMesh == null) return;
-
-            // Check if there is an existing level prefab with the exact same deck shape
-            if (_gameCfg != null && _gameCfg.levelSequence != null && _gameCfg.levelSequence.levelPrefabs != null)
-            {
-                foreach (var prefab in _gameCfg.levelSequence.levelPrefabs)
-                {
-                    if (prefab == null) continue;
-                    if (prefab.gameObject.name == name) continue;
-
-                    var otherLr = prefab.GetComponent<LevelRoot>();
-                    if (otherLr != null && AreDecksEqual(lr, otherLr))
-                    {
-                        var otherDeck = FindDeepChild(prefab.transform, "ShooterDeck");
-                        if (otherDeck != null)
-                        {
-                            var otherMf = otherDeck.GetComponent<MeshFilter>();
-                            if (otherMf != null && otherMf.sharedMesh != null)
-                            {
-                                mf.sharedMesh = otherMf.sharedMesh;
-                                return; // Reuse existing asset, skip saving new
-                            }
-                        }
-                    }
-                }
-            }
-
-            const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
-            EnsureDir(meshDir);
-            string meshPath = $"{meshDir}/{name}_DeckMesh.asset";
-            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
-            if (existing != null)
-            {
-                existing.Clear();
-                EditorUtility.CopySerialized(mf.sharedMesh, existing);
-                mf.sharedMesh = existing;
-            }
-            else
-            {
-                AssetDatabase.CreateAsset(mf.sharedMesh, meshPath);
-            }
-        }
-
-        private void SaveBranchMeshAssets(Transform root, LevelRoot lr, string name)
-        {
-            var branches = FindDeepChild(root, "Branches");
-            if (branches == null) return;
-
-            // Check if there is an existing level prefab with the exact same branches shape
-            if (_gameCfg != null && _gameCfg.levelSequence != null && _gameCfg.levelSequence.levelPrefabs != null)
-            {
-                foreach (var prefab in _gameCfg.levelSequence.levelPrefabs)
-                {
-                    if (prefab == null) continue;
-                    if (prefab.gameObject.name == name) continue;
-
-                    var otherLr = prefab.GetComponent<LevelRoot>();
-                    if (otherLr != null && AreBranchesEqual(lr, otherLr))
-                    {
-                        var otherBranches = FindDeepChild(prefab.transform, "Branches");
-                        if (otherBranches != null && otherBranches.childCount == branches.childCount)
-                        {
-                            bool allAssigned = true;
-                            for (int i = 0; i < branches.childCount; i++)
-                            {
-                                var mf = branches.GetChild(i).GetComponent<MeshFilter>();
-                                var otherMf = otherBranches.GetChild(i).GetComponent<MeshFilter>();
-                                if (mf != null && otherMf != null && otherMf.sharedMesh != null)
-                                {
-                                    mf.sharedMesh = otherMf.sharedMesh;
-                                }
-                                else
-                                {
-                                    allAssigned = false;
-                                }
-                            }
-                            if (allAssigned)
-                            {
-                                return; // Reuse existing assets, skip saving new
-                            }
-                        }
-                    }
-                }
-            }
-
-            const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
-            EnsureDir(meshDir);
-
-            int idx = 0;
-            foreach (Transform branchChild in branches)
-            {
-                var mf = branchChild.GetComponent<MeshFilter>();
-                if (mf == null || mf.sharedMesh == null) { idx++; continue; }
-
-                string meshPath = $"{meshDir}/{name}_BranchMesh_{idx}.asset";
-                var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
-                if (existing != null)
-                {
-                    existing.Clear();
-                    EditorUtility.CopySerialized(mf.sharedMesh, existing);
-                    mf.sharedMesh = existing;
-                }
-                else
-                {
-                    AssetDatabase.CreateAsset(mf.sharedMesh, meshPath);
-                }
-                idx++;
-            }
-        }
-
-        private static bool IsSplineEqual(LevelRoot a, LevelRoot b)
-        {
-            if (a == null || b == null) return false;
-            
-            if (a.splineKnots.Count != b.splineKnots.Count) return false;
-            if (a.splineTangentsIn.Count != b.splineTangentsIn.Count) return false;
-            if (a.splineTangentsOut.Count != b.splineTangentsOut.Count) return false;
-            if (a.splineTangentModes.Count != b.splineTangentModes.Count) return false;
-
-            for (int i = 0; i < a.splineKnots.Count; i++)
-            {
-                if (Vector3.Distance(a.splineKnots[i], b.splineKnots[i]) > 0.001f) return false;
-                if (Vector3.Distance(a.splineTangentsIn[i], b.splineTangentsIn[i]) > 0.001f) return false;
-                if (Vector3.Distance(a.splineTangentsOut[i], b.splineTangentsOut[i]) > 0.001f) return false;
-                if (a.splineTangentModes[i] != b.splineTangentModes[i]) return false;
-            }
-
-            if (Mathf.Abs(a.splineWidth - b.splineWidth) > 0.001f) return false;
-            if (Mathf.Abs(a.splineDepth - b.splineDepth) > 0.001f) return false;
-            if (a.splinePreset != b.splinePreset) return false;
-            if (Mathf.Abs(a.openZoneHalfT - b.openZoneHalfT) > 0.001f) return false;
-
-            return true;
-        }
-
-        private static bool AreDecksEqual(LevelRoot a, LevelRoot b)
-        {
-            if (a == null || b == null) return false;
-            if (a.gridCols != b.gridCols || a.gridRows != b.gridRows) return false;
-            if (a.cells.Count != b.cells.Count) return false;
-            
-            for (int i = 0; i < a.cells.Count; i++)
-            {
-                var cellA = a.cells[i];
-                var cellB = b.cells.Find(c => c.col == cellA.col && c.row == cellA.row);
-                if (cellB == null) return false;
-
-                bool isEmptyA = (cellA.type == GridCellType.Empty);
-                bool isEmptyB = (cellB.type == GridCellType.Empty);
-                if (isEmptyA != isEmptyB) return false;
-            }
-
-            return true;
-        }
-
-        private static bool AreBranchesEqual(LevelRoot a, LevelRoot b)
-        {
-            if (a == null || b == null) return false;
-            if (a.branches.Count != b.branches.Count) return false;
-
-            for (int i = 0; i < a.branches.Count; i++)
-            {
-                var brA = a.branches[i];
-                var brB = b.branches[i];
-
-                if (brA.branchName != brB.branchName) return false;
-                if (Mathf.Abs(brA.mergeT - brB.mergeT) > 0.001f) return false;
-                if (brA.connectFromLeft != brB.connectFromLeft) return false;
-
-                if (brA.splineKnots.Count != brB.splineKnots.Count) return false;
-                for (int j = 0; j < brA.splineKnots.Count; j++)
-                {
-                    if (Vector3.Distance(brA.splineKnots[j], brB.splineKnots[j]) > 0.001f) return false;
-                    if (Vector3.Distance(brA.splineTangentsIn[j], brB.splineTangentsIn[j]) > 0.001f) return false;
-                    if (Vector3.Distance(brA.splineTangentsOut[j], brB.splineTangentsOut[j]) > 0.001f) return false;
-                    if (brA.splineTangentModes[j] != brB.splineTangentModes[j]) return false;
-                }
-            }
-
-            return true;
-        }
 
         private static Transform FindDeepChild(Transform parent, string name)
         {
@@ -3992,24 +3048,7 @@ namespace BlockShooter.Editor
         {
             _windowSerialized.ApplyModifiedProperties();
             
-            var mirroredBranch = new BranchPathData
-            {
-                branchName = $"{source.branchName}_Mirrored",
-                mergeT = 1.0f - source.mergeT,
-                connectFromLeft = !source.connectFromLeft,
-                
-                splineKnots = source.splineKnots.Select(k => new Vector3(-k.x, k.y, k.z)).ToList(),
-                splineTangentsIn = source.splineTangentsIn.Select(t => new Vector3(-t.x, t.y, t.z)).ToList(),
-                splineTangentsOut = source.splineTangentsOut.Select(t => new Vector3(-t.x, t.y, t.z)).ToList(),
-                splineTangentModes = new List<int>(source.splineTangentModes),
-                
-                groups = source.groups.Select(g => new LevelConveyorGroup
-                {
-                    color = g.color,
-                    rowCount = g.rowCount,
-                    laneCount = g.laneCount
-                }).ToList()
-            };
+            var mirroredBranch = LevelSplineUtils.CreateMirroredBranch(source);
 
             _branches.Add(mirroredBranch);
             _branchGroupsLists.Clear();
