@@ -455,6 +455,11 @@ namespace BlockShooter
                         {
                             ConveyorController.Instance.IsFrozen = false;
                         }
+
+                        if (GameManager.Instance != null)
+                        {
+                            GameManager.Instance.SetState(GameState.Playing);
+                        }
                     });
             }
             else
