@@ -21,8 +21,6 @@ namespace BlockShooter
         public static event Action OnLevelFail;
         public static event Action OnLevelStart;
 
-        private float _failCheckTimer = 0f;
-
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -33,68 +31,6 @@ namespace BlockShooter
         {
             SetState(GameState.Playing);
             OnLevelStart?.Invoke();
-        }
-
-        private float _noFireTimer = 0f;
-
-        private void Update()
-        {
-            if (State != GameState.Playing) return;
-
-            // 1. Regular 0.5s check (color mismatch deadlock)
-            _failCheckTimer += Time.deltaTime;
-            if (_failCheckTimer >= 0.5f)
-            {
-                _failCheckTimer = 0f;
-                CheckFailCondition();
-            }
-
-            // 2. Safety timeout check: if slots are full and no shooter is actively firing or projectiles in-flight,
-            // we start a timeout. If it reaches 2 seconds, we force deadlock detection.
-            if (SlotSystem.Instance != null)
-            {
-                var slottedBlocks = SlotSystem.Instance.GetSlottedBlocks();
-                if (slottedBlocks.Count >= SlotSystem.Instance.MaxSlots)
-                {
-                    bool isAnyShooting = false;
-                    foreach (var sb in slottedBlocks)
-                    {
-                        if (sb != null && sb.IsShooting)
-                        {
-                            isAnyShooting = true;
-                            break;
-                        }
-                    }
-
-                    if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0)
-                    {
-                        isAnyShooting = true;
-                    }
-
-                    if (!isAnyShooting)
-                    {
-                        _noFireTimer += Time.deltaTime;
-                        if (_noFireTimer >= 2.0f)
-                        {
-                            _noFireTimer = 0f;
-                            Debug.LogWarning("[GameManager] No-Fire safety timeout triggered. Deadlock assumed.");
-                            HandleDeadlockState();
-                        }
-                    }
-                    else
-                    {
-                        _noFireTimer = 0f;
-                    }
-                }
-                else
-                {
-                    _noFireTimer = 0f;
-                }
-            }
-            else
-            {
-                _noFireTimer = 0f;
-            }
         }
 
         public void SetState(GameState newState)
@@ -144,6 +80,7 @@ namespace BlockShooter
         {
             // Allow triggering fail if state is Paused (due to active revival popup check)
             if (State != GameState.Playing && State != GameState.Paused) return;
+            Debug.Log("[FAIL] *** TriggerFail called — game over ***");
             SetState(GameState.Fail);
             OnLevelFail?.Invoke();
         }
@@ -173,80 +110,84 @@ namespace BlockShooter
         /// Checks if all slots are occupied and none of the slotted shooter blocks
         /// can target any remaining blocks on the conveyor (deadlock).
         /// </summary>
-        public void CheckFailCondition()
+        public void CheckFailCondition(string trigger = "unknown")
         {
             if (State != GameState.Playing) return;
-
             if (SlotSystem.Instance == null) return;
 
             var slottedBlocks = SlotSystem.Instance.GetSlottedBlocks();
+            int slotCount  = slottedBlocks.Count;
+            int maxSlots   = SlotSystem.Instance.MaxSlots;
 
-            // 1. Slots must be completely full
-            if (slottedBlocks.Count < SlotSystem.Instance.MaxSlots) return;
-
-            // 2. Find all live blocks on the conveyor
-            var conveyorBlocks = FindObjectsByType<ConveyorBlock3D>(FindObjectsSortMode.None);
-            bool hasConveyorBlocks = false;
-            var availableColors = new HashSet<BlockColorType>();
-
-            foreach (var cb in conveyorBlocks)
+            // Slots not full yet — nothing to check
+            if (slotCount < maxSlots)
             {
-                if (cb != null && !cb.IsDestroyed && cb.gameObject.activeInHierarchy)
-                {
-                    hasConveyorBlocks = true;
-                    availableColors.Add(cb.ColorType);
-                }
+                Debug.Log($"[FAIL] Check [{trigger}] — slots {slotCount}/{maxSlots} not full → skip");
+                return;
             }
 
-            // If there are no conveyor blocks left, it's a win, not a fail.
-            if (!hasConveyorBlocks) return;
+            // Build conveyor color set
+            var conveyorBlocks = FindObjectsByType<ConveyorBlock3D>(FindObjectsSortMode.None);
+            var conveyorColors = new HashSet<BlockColorType>();
+            foreach (var cb in conveyorBlocks)
+                if (cb != null && !cb.IsDestroyed && cb.gameObject.activeInHierarchy)
+                    conveyorColors.Add(cb.ColorType);
 
-            // 3. Check if ANY slotted block can target ANY available color
+            if (conveyorColors.Count == 0)
+            {
+                Debug.Log($"[FAIL] Check [{trigger}] — slots {slotCount}/{maxSlots} FULL | no conveyor blocks → skip (win path)");
+                return;
+            }
+
+            // Build slotted color list and check match
+            var slotDesc    = new System.Text.StringBuilder();
             bool canShootAny = false;
             foreach (var sb in slottedBlocks)
             {
-                if (sb == null || sb.IsDepleted) continue;
-
-                // A block can shoot if its color matches any block currently on the conveyor
-                if (availableColors.Contains(sb.ColorType))
-                {
+                if (sb == null) { slotDesc.Append("null "); continue; }
+                slotDesc.Append(sb.ColorType);
+                if (sb.IsDepleted) { slotDesc.Append("(dep) "); continue; }
+                slotDesc.Append(' ');
+                if (conveyorColors.Contains(sb.ColorType))
                     canShootAny = true;
-                    break;
-                }
             }
 
-            // If none of the slotted blocks can shoot any block on the conveyor, it is a deadlock -> Fail/Revive!
-            if (!canShootAny)
+            var conveyorDesc = new System.Text.StringBuilder();
+            foreach (var c in conveyorColors) { conveyorDesc.Append(c); conveyorDesc.Append(' '); }
+
+            if (canShootAny)
             {
-                Debug.LogWarning("[GameManager] Color mismatch deadlock detected.");
-                HandleDeadlockState();
+                Debug.Log($"[FAIL] Check [{trigger}] — slots FULL ({slotDesc}) | conveyor ({conveyorDesc}) → match found, OK");
+                return;
             }
+
+            Debug.LogWarning($"[FAIL] Check [{trigger}] — slots FULL ({slotDesc}) | conveyor ({conveyorDesc}) → NO MATCH → DEADLOCK");
+            HandleDeadlockState();
         }
 
         private void HandleDeadlockState()
         {
             if (State != GameState.Playing) return;
 
-            // Check for keep playing (revive) eligibility
-            bool eligibleForRevive = SlotSystem.Instance != null &&
-                                     SlotSystem.Instance.MaxSlots <= SlotSystem.Instance.InitialSlotsCount && 
-                                     UIManager.Instance != null && 
-                                     !UIManager.Instance.HasRevivedThisLevel;
+            bool maxSlotsUnchanged = SlotSystem.Instance != null &&
+                                     SlotSystem.Instance.MaxSlots <= SlotSystem.Instance.InitialSlotsCount;
+            bool notRevived        = UIManager.Instance != null && !UIManager.Instance.HasRevivedThisLevel;
+            bool eligibleForRevive = maxSlotsUnchanged && notRevived;
+
+            Debug.LogWarning($"[FAIL] HandleDeadlock — maxSlotsUnchanged={maxSlotsUnchanged} notRevived={notRevived} → eligibleForRevive={eligibleForRevive}");
 
             if (eligibleForRevive)
             {
-                // Freeze conveyor while revival popup is shown
                 if (ConveyorController.Instance != null)
-                {
                     ConveyorController.Instance.IsFrozen = true;
-                }
 
-                // Pause the state so we do not trigger checks repeatedly during UI presentation
                 SetState(GameState.Paused);
                 UIManager.Instance.ShowKeepPlayingPanel();
+                Debug.Log("[FAIL] HandleDeadlock → showing KeepPlaying panel, conveyor frozen");
             }
             else
             {
+                Debug.Log("[FAIL] HandleDeadlock → calling TriggerFail");
                 TriggerFail();
             }
         }

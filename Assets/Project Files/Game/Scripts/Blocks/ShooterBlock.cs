@@ -282,7 +282,7 @@ namespace BlockShooter
 
             if (GameManager.Instance != null)
             {
-                GameManager.Instance.CheckFailCondition();
+                GameManager.Instance.CheckFailCondition($"SlotFilled({_colorType})");
             }
         }
 

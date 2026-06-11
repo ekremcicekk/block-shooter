@@ -303,30 +303,35 @@ namespace BlockShooter
         {
             if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
 
-            // If there are projectiles still in flight, defer this check.
-            // When the last projectile lands (ReturnToPool), NotifyAllProjectilesLanded will be called,
-            // which will re-trigger this check — resolving the race condition.
-            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return;
+            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0)
+            {
+                Debug.Log($"[FAIL] CheckAllDepleted — projectiles still in flight ({ProjectilePool.Instance.ActiveCount}), deferring");
+                return;
+            }
+
+            int slottedCount = SlotSystem.Instance != null ? SlotSystem.Instance.GetSlottedBlocks().Count : 0;
+            Debug.Log($"[FAIL] CheckAllDepleted — activeBlocks={_activeBlocks.Count} slotted={slottedCount}");
 
             bool anyLeft = _activeBlocks.Count > 0;
-            if (!anyLeft && (SlotSystem.Instance == null || SlotSystem.Instance.GetSlottedBlocks().Count == 0))
+            if (!anyLeft && slottedCount == 0)
             {
-                bool eligibleForRevive = SlotSystem.Instance != null && 
-                                         SlotSystem.Instance.MaxSlots <= SlotSystem.Instance.InitialSlotsCount && 
-                                         UIManager.Instance != null && 
-                                         !UIManager.Instance.HasRevivedThisLevel;
+                bool maxSlotsUnchanged = SlotSystem.Instance != null &&
+                                         SlotSystem.Instance.MaxSlots <= SlotSystem.Instance.InitialSlotsCount;
+                bool notRevived        = UIManager.Instance != null && !UIManager.Instance.HasRevivedThisLevel;
+                bool eligibleForRevive = maxSlotsUnchanged && notRevived;
+
+                Debug.LogWarning($"[FAIL] CheckAllDepleted — no shooter blocks left! eligibleForRevive={eligibleForRevive}");
 
                 if (eligibleForRevive)
                 {
-                    // Freeze conveyor while revival popup is shown
                     if (ConveyorController.Instance != null)
-                    {
                         ConveyorController.Instance.IsFrozen = true;
-                    }
                     UIManager.Instance.ShowKeepPlayingPanel();
+                    Debug.Log("[FAIL] CheckAllDepleted → showing KeepPlaying panel");
                 }
                 else
                 {
+                    Debug.Log("[FAIL] CheckAllDepleted → calling TriggerFail");
                     GameManager.Instance?.TriggerFail();
                 }
             }

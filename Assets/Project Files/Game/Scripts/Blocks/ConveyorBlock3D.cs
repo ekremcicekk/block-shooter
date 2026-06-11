@@ -117,7 +117,7 @@ namespace BlockShooter
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.CheckWinCondition();
-                GameManager.Instance.CheckFailCondition();
+                GameManager.Instance.CheckFailCondition($"BlockDestroyed({_colorType})");
             }
 
             transform.DOScale(Vector3.zero, 0.15f).SetEase(Ease.InBack)
