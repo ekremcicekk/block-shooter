@@ -14,34 +14,44 @@ namespace BlockShooter
         public bool IsFullyMerged => _rows.Count == 0;
 
         /// <summary>
-        /// True when the front row has reached the merge stop point but cannot merge because
-        /// the main conveyor is full. The entire branch is effectively stuck.
+        /// Returns true if this branch has pending rows with a color in slotColors AND
+        /// the main conveyor currently has a gap at this branch's merge point.
+        /// Both conditions must be true — matching color means nothing if there is no gap to fill.
         /// </summary>
-        public bool IsBlockedByFullConveyor
+        public bool CanBringMatchingColor(HashSet<BlockColorType> slotColors)
         {
-            get
-            {
-                if (_rows.Count == 0) return false;
-                var row = _rows[0];
-                return row.MergedGroup == null && row.CurrentT >= _mergeStopT - 0.001f;
-            }
-        }
+            if (_rows.Count == 0 || ConveyorController.Instance == null) return false;
 
-        /// <summary>
-        /// Returns true if any unmerged branch row has a color contained in the given set.
-        /// Only relevant when the branch is NOT blocked (can still merge into gaps).
-        /// </summary>
-        public bool HasPendingMatchingColor(HashSet<BlockColorType> slotColors)
-        {
+            // Check whether the front row has a gap available at the merge point right now
+            var frontRow = _rows[0];
+            // Skip rows already in the middle of merging — their slot on the conveyor is occupied
+            if (frontRow.MergedGroup != null) return false;
+
+            float checkHalfSize = frontRow.RowSpacing / ConveyorController.Instance.SplineWorldLength;
+            bool gapExists = false;
+            foreach (var block in frontRow.Blocks)
+            {
+                if (block == null || block.IsDestroyed) continue;
+                if (ConveyorController.Instance.IsRangeEmptyForLane(
+                    mergeT - checkHalfSize, mergeT + checkHalfSize, block.LaneIndex))
+                {
+                    gapExists = true;
+                    break;
+                }
+            }
+            if (!gapExists) return false;
+
+            // Gap exists — check if any pending row has a matching color
             foreach (var row in _rows)
                 if (slotColors.Contains(row.ColorType)) return true;
+
             return false;
         }
 
         private SplineContainer _splineContainer;
         private float _splineLength;
         private float _mergeStopT = 0.95f; // T value where blocks stop (outer wall of main conveyor)
-        private bool _wasBlockedLastFrame;
+        private bool _frontRowAtMergePoint;
         private readonly List<BranchRowEntry> _rows = new();
 
         public struct BranchRowEntry
@@ -214,19 +224,21 @@ namespace BlockShooter
             if (rowsBefore > 0 && _rows.Count == 0)
             {
                 Debug.Log($"[FAIL] BranchPath '{name}' fully merged → CheckFailCondition");
-                _wasBlockedLastFrame = false;
+                _frontRowAtMergePoint = false;
                 GameManager.Instance?.CheckFailCondition();
             }
-            else
+            else if (_rows.Count > 0)
             {
-                // Detect transition into blocked state (front row stuck at merge point)
-                bool blockedNow = IsBlockedByFullConveyor;
-                if (blockedNow && !_wasBlockedLastFrame)
+                // Fire once when the front row first reaches the merge stop point.
+                // At that moment the conveyor gap state is settled and we can reliably
+                // determine whether the branch can actually help resolve a deadlock.
+                bool atMergePoint = _rows[0].CurrentT >= _mergeStopT - 0.001f;
+                if (atMergePoint && !_frontRowAtMergePoint)
                 {
-                    Debug.Log($"[FAIL] BranchPath '{name}' blocked by full conveyor → CheckFailCondition");
+                    Debug.Log($"[FAIL] BranchPath '{name}' front row reached merge point → CheckFailCondition");
                     GameManager.Instance?.CheckFailCondition();
                 }
-                _wasBlockedLastFrame = blockedNow;
+                _frontRowAtMergePoint = atMergePoint;
             }
         }
 

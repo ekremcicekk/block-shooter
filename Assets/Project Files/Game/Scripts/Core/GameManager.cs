@@ -144,17 +144,15 @@ namespace BlockShooter
             }
 
             // 2. No match on main conveyor.
-            //    Check each branch: if it is NOT blocked (can still merge into gaps) AND has a
-            //    matching color in its pending rows, the deadlock may be resolved once it merges.
-            //    If it IS blocked (conveyor full, can't move), its colors are irrelevant.
+            //    A branch can prevent deadlock only when it both has a matching color AND
+            //    the conveyor has a real gap available at its merge point right now.
             var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
             foreach (var bp in branchPaths)
             {
                 if (bp.IsFullyMerged) continue;
-                if (bp.IsBlockedByFullConveyor) { Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' blocked by full conveyor → ignored"); continue; }
-                if (bp.HasPendingMatchingColor(activeSlotColors))
+                if (bp.CanBringMatchingColor(activeSlotColors))
                 {
-                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' can still merge and has matching color → not deadlocked yet");
+                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' has matching color AND gap available → not deadlocked yet");
                     return false;
                 }
             }
