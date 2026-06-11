@@ -106,10 +106,6 @@ namespace BlockShooter
             TriggerWin();
         }
 
-        /// <summary>
-        /// Evaluates both fail conditions and acts accordingly.
-        /// Call this whenever game state changes in a way that could produce a deadlock or depletion.
-        /// </summary>
         public void CheckFailCondition()
         {
             if (State != GameState.Playing) return;
@@ -118,45 +114,70 @@ namespace BlockShooter
                 HandleFailState();
         }
 
-        // Returns true when:
-        // - all shooter slots are full
-        // - all branch paths have finished merging (main conveyor is stable)
-        // - no slotted shooter color matches any live block on the main conveyor
         private bool IsDeadlocked()
         {
-            if (SlotSystem.Instance == null || SlotSystem.Instance.HasEmptySlot) return false;
-            if (ConveyorController.Instance == null) return false;
+            if (SlotSystem.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: SlotSystem null"); return false; }
+            if (SlotSystem.Instance.HasEmptySlot)
+            {
+                var slotted = SlotSystem.Instance.GetSlottedBlocks();
+                Debug.Log($"[FAIL] IsDeadlocked: slots not full ({slotted.Count}/{SlotSystem.Instance.MaxSlots})");
+                return false;
+            }
+            if (ConveyorController.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: ConveyorController null"); return false; }
 
-            // Branch blocks not yet merged could later bring matching colors — wait until all branches are done
             var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
             foreach (var bp in branchPaths)
-                if (!bp.IsFullyMerged) return false;
-
-            var mainColors = ConveyorController.Instance.GetLiveColorSet();
-            if (mainColors.Count == 0) return false; // win path
-
-            foreach (var block in SlotSystem.Instance.GetSlottedBlocks())
             {
-                if (!block.IsDepleted && mainColors.Contains(block.ColorType))
+                if (!bp.IsFullyMerged)
+                {
+                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' not fully merged yet → skip");
                     return false;
+                }
             }
 
+            var mainColors = ConveyorController.Instance.GetLiveColorSet();
+            if (mainColors.Count == 0) { Debug.Log("[FAIL] IsDeadlocked: main conveyor empty → win path"); return false; }
+
+            var slottedBlocks = SlotSystem.Instance.GetSlottedBlocks();
+            var slotColors    = new System.Text.StringBuilder();
+            var convColors    = new System.Text.StringBuilder();
+            foreach (var b in slottedBlocks) { slotColors.Append(b.IsDepleted ? $"{b.ColorType}(dep) " : $"{b.ColorType} "); }
+            foreach (var c in mainColors)    { convColors.Append($"{c} "); }
+
+            foreach (var block in slottedBlocks)
+            {
+                if (!block.IsDepleted && mainColors.Contains(block.ColorType))
+                {
+                    Debug.Log($"[FAIL] IsDeadlocked: MATCH FOUND — slot={block.ColorType} in conveyor. Slots:[{slotColors}] Conveyor:[{convColors}]");
+                    return false;
+                }
+            }
+
+            Debug.LogWarning($"[FAIL] DEADLOCK DETECTED — Slots:[{slotColors}] Conveyor:[{convColors}]");
             return true;
         }
 
-        // Returns true when there are no shooter blocks left (grid + slots) but any track block remains.
         private bool AreAllShootersDepleted()
         {
             if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return false;
             if (ShooterGrid.Instance != null && ShooterGrid.Instance.GetActiveBlocks().Count > 0) return false;
             if (SlotSystem.Instance != null && SlotSystem.Instance.GetSlottedBlocks().Count > 0) return false;
 
-            // Check main conveyor AND branch blocks — if anything is left, it's a fail
-            if (ConveyorController.Instance != null && ConveyorController.Instance.GetLiveColorSet().Count > 0) return true;
+            if (ConveyorController.Instance != null && ConveyorController.Instance.GetLiveColorSet().Count > 0)
+            {
+                Debug.LogWarning("[FAIL] ALL SHOOTERS DEPLETED — main conveyor still has blocks");
+                return true;
+            }
 
             var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
             foreach (var bp in branchPaths)
-                if (!bp.IsFullyMerged) return true;
+            {
+                if (!bp.IsFullyMerged)
+                {
+                    Debug.LogWarning("[FAIL] ALL SHOOTERS DEPLETED — branch still has blocks");
+                    return true;
+                }
+            }
 
             return false;
         }

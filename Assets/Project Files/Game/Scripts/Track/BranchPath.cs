@@ -187,7 +187,7 @@ namespace BlockShooter
 
             if (rowsBefore > 0 && _rows.Count == 0)
             {
-                // Branch fully merged — new blocks now on conveyor, check for potential deadlock
+                Debug.Log($"[FAIL] BranchPath '{name}' fully merged → CheckFailCondition");
                 GameManager.Instance?.CheckFailCondition();
             }
         }
@@ -255,7 +255,6 @@ namespace BlockShooter
 
                 if (!canMerge) return; // wait until the conveyor is clear
 
-                Debug.Log($"[BranchPath] Merge STARTING on {gameObject.name}: Conveyor is clear. Creating MergedGroup at mergeT {mergeT:F3} for color {row.ColorType}.");
 
                 // Create the MergedGroup immediately to start the merging state
                 GameObject tempGo = new GameObject("MergedRowGroup");
@@ -411,7 +410,6 @@ namespace BlockShooter
                 block.transitionRotOffset = Quaternion.Slerp(initialRotOffset, Quaternion.identity, tVal);
             }, 0f, 1f, duration).SetEase(Ease.OutQuad).SetId(block);
 
-            Debug.Log($"[BranchPath] Merged block {block.name} (lane {lane}) on {gameObject.name} onto conveyor. Jump initiated.");
         }
 
         private float GetMainTrackLaneSpacing()
