@@ -3201,9 +3201,9 @@ namespace BlockShooter.Editor
             BuildHierarchy(root.transform, lr);
 
             // Save generated meshes as persistent assets so prefab can reference them
-            SaveTrackMeshAsset(root.transform, dir, name);
-            SaveDeckMeshAsset(root.transform, dir, name);
-            SaveBranchMeshAssets(root.transform, dir, name);
+            SaveTrackMeshAsset(root.transform, lr, name);
+            SaveDeckMeshAsset(root.transform, lr, name);
+            SaveBranchMeshAssets(root.transform, lr, name);
 
             PrefabUtility.SaveAsPrefabAsset(root, path, out bool ok);
             DestroyImmediate(root);
@@ -3654,12 +3654,37 @@ namespace BlockShooter.Editor
         }
 
         // ── Track mesh asset ──────────────────────────────────────────────────
-        private static void SaveTrackMeshAsset(Transform root, string dir, string name)
+        private void SaveTrackMeshAsset(Transform root, LevelRoot lr, string name)
         {
             var track = FindDeepChild(root, "Track");
             if (track == null) return;
             var mf = track.GetComponent<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return;
+
+            // Check if there is an existing level prefab with the exact same track shape
+            if (_gameCfg != null && _gameCfg.levelSequence != null && _gameCfg.levelSequence.levelPrefabs != null)
+            {
+                foreach (var prefab in _gameCfg.levelSequence.levelPrefabs)
+                {
+                    if (prefab == null) continue;
+                    if (prefab.gameObject.name == name) continue;
+
+                    var otherLr = prefab.GetComponent<LevelRoot>();
+                    if (otherLr != null && IsSplineEqual(lr, otherLr))
+                    {
+                        var otherTrack = FindDeepChild(prefab.transform, "Track");
+                        if (otherTrack != null)
+                        {
+                            var otherMf = otherTrack.GetComponent<MeshFilter>();
+                            if (otherMf != null && otherMf.sharedMesh != null)
+                            {
+                                mf.sharedMesh = otherMf.sharedMesh;
+                                return; // Reuse existing asset, skip saving new
+                            }
+                        }
+                    }
+                }
+            }
 
             const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
             EnsureDir(meshDir);
@@ -3678,12 +3703,37 @@ namespace BlockShooter.Editor
             }
         }
 
-        private static void SaveDeckMeshAsset(Transform root, string dir, string name)
+        private void SaveDeckMeshAsset(Transform root, LevelRoot lr, string name)
         {
             var deck = FindDeepChild(root, "ShooterDeck");
             if (deck == null) return;
             var mf = deck.GetComponent<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return;
+
+            // Check if there is an existing level prefab with the exact same deck shape
+            if (_gameCfg != null && _gameCfg.levelSequence != null && _gameCfg.levelSequence.levelPrefabs != null)
+            {
+                foreach (var prefab in _gameCfg.levelSequence.levelPrefabs)
+                {
+                    if (prefab == null) continue;
+                    if (prefab.gameObject.name == name) continue;
+
+                    var otherLr = prefab.GetComponent<LevelRoot>();
+                    if (otherLr != null && AreDecksEqual(lr, otherLr))
+                    {
+                        var otherDeck = FindDeepChild(prefab.transform, "ShooterDeck");
+                        if (otherDeck != null)
+                        {
+                            var otherMf = otherDeck.GetComponent<MeshFilter>();
+                            if (otherMf != null && otherMf.sharedMesh != null)
+                            {
+                                mf.sharedMesh = otherMf.sharedMesh;
+                                return; // Reuse existing asset, skip saving new
+                            }
+                        }
+                    }
+                }
+            }
 
             const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
             EnsureDir(meshDir);
@@ -3701,10 +3751,47 @@ namespace BlockShooter.Editor
             }
         }
 
-        private static void SaveBranchMeshAssets(Transform root, string dir, string name)
+        private void SaveBranchMeshAssets(Transform root, LevelRoot lr, string name)
         {
             var branches = FindDeepChild(root, "Branches");
             if (branches == null) return;
+
+            // Check if there is an existing level prefab with the exact same branches shape
+            if (_gameCfg != null && _gameCfg.levelSequence != null && _gameCfg.levelSequence.levelPrefabs != null)
+            {
+                foreach (var prefab in _gameCfg.levelSequence.levelPrefabs)
+                {
+                    if (prefab == null) continue;
+                    if (prefab.gameObject.name == name) continue;
+
+                    var otherLr = prefab.GetComponent<LevelRoot>();
+                    if (otherLr != null && AreBranchesEqual(lr, otherLr))
+                    {
+                        var otherBranches = FindDeepChild(prefab.transform, "Branches");
+                        if (otherBranches != null && otherBranches.childCount == branches.childCount)
+                        {
+                            bool allAssigned = true;
+                            for (int i = 0; i < branches.childCount; i++)
+                            {
+                                var mf = branches.GetChild(i).GetComponent<MeshFilter>();
+                                var otherMf = otherBranches.GetChild(i).GetComponent<MeshFilter>();
+                                if (mf != null && otherMf != null && otherMf.sharedMesh != null)
+                                {
+                                    mf.sharedMesh = otherMf.sharedMesh;
+                                }
+                                else
+                                {
+                                    allAssigned = false;
+                                }
+                            }
+                            if (allAssigned)
+                            {
+                                return; // Reuse existing assets, skip saving new
+                            }
+                        }
+                    }
+                }
+            }
 
             const string meshDir = "Assets/Project Files/Game/Models/LevelMesh";
             EnsureDir(meshDir);
@@ -3729,6 +3816,78 @@ namespace BlockShooter.Editor
                 }
                 idx++;
             }
+        }
+
+        private static bool IsSplineEqual(LevelRoot a, LevelRoot b)
+        {
+            if (a == null || b == null) return false;
+            
+            if (a.splineKnots.Count != b.splineKnots.Count) return false;
+            if (a.splineTangentsIn.Count != b.splineTangentsIn.Count) return false;
+            if (a.splineTangentsOut.Count != b.splineTangentsOut.Count) return false;
+            if (a.splineTangentModes.Count != b.splineTangentModes.Count) return false;
+
+            for (int i = 0; i < a.splineKnots.Count; i++)
+            {
+                if (Vector3.Distance(a.splineKnots[i], b.splineKnots[i]) > 0.001f) return false;
+                if (Vector3.Distance(a.splineTangentsIn[i], b.splineTangentsIn[i]) > 0.001f) return false;
+                if (Vector3.Distance(a.splineTangentsOut[i], b.splineTangentsOut[i]) > 0.001f) return false;
+                if (a.splineTangentModes[i] != b.splineTangentModes[i]) return false;
+            }
+
+            if (Mathf.Abs(a.splineWidth - b.splineWidth) > 0.001f) return false;
+            if (Mathf.Abs(a.splineDepth - b.splineDepth) > 0.001f) return false;
+            if (a.splinePreset != b.splinePreset) return false;
+            if (Mathf.Abs(a.openZoneHalfT - b.openZoneHalfT) > 0.001f) return false;
+
+            return true;
+        }
+
+        private static bool AreDecksEqual(LevelRoot a, LevelRoot b)
+        {
+            if (a == null || b == null) return false;
+            if (a.gridCols != b.gridCols || a.gridRows != b.gridRows) return false;
+            if (a.cells.Count != b.cells.Count) return false;
+            
+            for (int i = 0; i < a.cells.Count; i++)
+            {
+                var cellA = a.cells[i];
+                var cellB = b.cells.Find(c => c.col == cellA.col && c.row == cellA.row);
+                if (cellB == null) return false;
+
+                bool isEmptyA = (cellA.type == GridCellType.Empty);
+                bool isEmptyB = (cellB.type == GridCellType.Empty);
+                if (isEmptyA != isEmptyB) return false;
+            }
+
+            return true;
+        }
+
+        private static bool AreBranchesEqual(LevelRoot a, LevelRoot b)
+        {
+            if (a == null || b == null) return false;
+            if (a.branches.Count != b.branches.Count) return false;
+
+            for (int i = 0; i < a.branches.Count; i++)
+            {
+                var brA = a.branches[i];
+                var brB = b.branches[i];
+
+                if (brA.branchName != brB.branchName) return false;
+                if (Mathf.Abs(brA.mergeT - brB.mergeT) > 0.001f) return false;
+                if (brA.connectFromLeft != brB.connectFromLeft) return false;
+
+                if (brA.splineKnots.Count != brB.splineKnots.Count) return false;
+                for (int j = 0; j < brA.splineKnots.Count; j++)
+                {
+                    if (Vector3.Distance(brA.splineKnots[j], brB.splineKnots[j]) > 0.001f) return false;
+                    if (Vector3.Distance(brA.splineTangentsIn[j], brB.splineTangentsIn[j]) > 0.001f) return false;
+                    if (Vector3.Distance(brA.splineTangentsOut[j], brB.splineTangentsOut[j]) > 0.001f) return false;
+                    if (brA.splineTangentModes[j] != brB.splineTangentModes[j]) return false;
+                }
+            }
+
+            return true;
         }
 
         private static Transform FindDeepChild(Transform parent, string name)
