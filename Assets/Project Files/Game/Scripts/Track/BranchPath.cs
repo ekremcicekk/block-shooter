@@ -15,35 +15,42 @@ namespace BlockShooter
 
         /// <summary>
         /// Returns true if this branch has pending rows with a color in slotColors AND
-        /// the main conveyor currently has a gap at this branch's merge point.
-        /// Both conditions must be true — matching color means nothing if there is no gap to fill.
+        /// the main conveyor has at least one gap the branch can eventually fill.
+        /// A gap is: (a) empty T-range right now at mergeT, OR (b) a destroyed block slot
+        /// anywhere in the lane — on a looping conveyor every such slot cycles back to mergeT.
         /// </summary>
         public bool CanBringMatchingColor(HashSet<BlockColorType> slotColors)
         {
             if (_rows.Count == 0 || ConveyorController.Instance == null) return false;
 
-            // Check whether the front row has a gap available at the merge point right now
             var frontRow = _rows[0];
-            // Skip rows already in the middle of merging — their slot on the conveyor is occupied
-            if (frontRow.MergedGroup != null) return false;
+            if (frontRow.MergedGroup != null) return false; // already mid-merge
 
+            // Check if any pending row has a matching color first (cheap check)
+            bool hasMatchingColor = false;
+            foreach (var row in _rows)
+            {
+                if (slotColors.Contains(row.ColorType)) { hasMatchingColor = true; break; }
+            }
+            if (!hasMatchingColor) return false;
+
+            // Check if the conveyor has any gap the branch can eventually use.
+            // Gap = empty right now at mergeT  OR  destroyed slot anywhere in that lane
+            // (the latter will cycle to mergeT on the looping conveyor).
             float checkHalfSize = frontRow.RowSpacing / ConveyorController.Instance.SplineWorldLength;
-            bool gapExists = false;
             foreach (var block in frontRow.Blocks)
             {
                 if (block == null || block.IsDestroyed) continue;
-                if (ConveyorController.Instance.IsRangeEmptyForLane(
-                    mergeT - checkHalfSize, mergeT + checkHalfSize, block.LaneIndex))
+                int lane = block.LaneIndex;
+                bool gapNow      = ConveyorController.Instance.IsRangeEmptyForLane(
+                                        mergeT - checkHalfSize, mergeT + checkHalfSize, lane);
+                bool gapCycling  = ConveyorController.Instance.HasAnyDestroyedSlotInLane(lane);
+                if (gapNow || gapCycling)
                 {
-                    gapExists = true;
-                    break;
+                    Debug.Log($"[FAIL] CanBringMatchingColor '{name}': gap found (now={gapNow}, cycling={gapCycling}) lane={lane} → not deadlocked");
+                    return true;
                 }
             }
-            if (!gapExists) return false;
-
-            // Gap exists — check if any pending row has a matching color
-            foreach (var row in _rows)
-                if (slotColors.Contains(row.ColorType)) return true;
 
             return false;
         }

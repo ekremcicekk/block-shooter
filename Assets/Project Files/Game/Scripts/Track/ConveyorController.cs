@@ -395,6 +395,27 @@ namespace BlockShooter
         }
 
         /// <summary>
+        /// Returns true if any group on the main conveyor has a destroyed (empty) block slot
+        /// in the given lane. On a looping conveyor every such gap will eventually cycle back
+        /// to any branch merge point, so this is the correct "can the branch ever insert?" check.
+        /// </summary>
+        public bool HasAnyDestroyedSlotInLane(int laneIndex)
+        {
+            foreach (var entry in _groups)
+            {
+                var group = entry.Group;
+                if (group == null || laneIndex >= group.LaneCount) continue;
+                for (int r = 0; r < group.RowCount; r++)
+                {
+                    var block = group.GetBlock(r, laneIndex);
+                    if (block == null || !block.gameObject.activeSelf || block.IsDestroyed)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Returns the set of colors present on the main conveyor (groups managed by this controller only).
         /// Branch blocks that have not yet merged are excluded.
         /// </summary>
