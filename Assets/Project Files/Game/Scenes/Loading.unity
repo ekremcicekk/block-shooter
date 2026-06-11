@@ -128,6 +128,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1644661433}
+  - component: {fileID: 1644661434}
   m_Layer: 0
   m_Name: LoadingLoader
   m_TagString: Untagged
@@ -150,6 +151,27 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1644661434
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1644661431}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 079ad7bcaa2474e4dae7e86c0c681961, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  adConfiguration: {fileID: 11400000, guid: fe353f000b33874488625cc1b9dc72f3, type: 2}
+  iapSettings: {fileID: 11400000, guid: 531cf04fca1641448a195ba002390cf5, type: 2}
+  loadingDuration: 4
+  progressSlider: {fileID: 9004903576623619956}
+  progressImage: {fileID: 9004903576623619955}
+  progressText: {fileID: 0}
+  OnLoadingComplete:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &1714937023
 GameObject:
   m_ObjectHideFlags: 0
@@ -399,38 +421,40 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4390301465548216279, guid: 55cd564b787044f508890eb63748c439, type: 3}
-      propertyPath: m_AnchorMax.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4390301465548216279, guid: 55cd564b787044f508890eb63748c439, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4884916196071276193, guid: 55cd564b787044f508890eb63748c439, type: 3}
-      propertyPath: m_AnchorMax.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4884916196071276193, guid: 55cd564b787044f508890eb63748c439, type: 3}
-      propertyPath: m_AnchorMax.y
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4884916196071276193, guid: 55cd564b787044f508890eb63748c439, type: 3}
-      propertyPath: m_AnchorMin.x
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5074992320110822934, guid: 55cd564b787044f508890eb63748c439, type: 3}
       propertyPath: m_Name
       value: LoadingCanvas
       objectReference: {fileID: 0}
-    - target: {fileID: 8693031652997319435, guid: 55cd564b787044f508890eb63748c439, type: 3}
-      propertyPath: m_ScreenMatchMode
-      value: 1
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 55cd564b787044f508890eb63748c439, type: 3}
+--- !u!114 &9004903576623619955 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6074042676110261904, guid: 55cd564b787044f508890eb63748c439, type: 3}
+  m_PrefabInstance: {fileID: 9004903576623619954}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &9004903576623619956 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 2931818164276933731, guid: 55cd564b787044f508890eb63748c439, type: 3}
+  m_PrefabInstance: {fileID: 9004903576623619954}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67db9e8f0e2ae9c40bc1e2b64352a6b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

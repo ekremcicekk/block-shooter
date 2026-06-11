@@ -69,6 +69,6 @@ namespace BlockShooter
 
         public void RestartLevel()  => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         public void LoadNextLevel() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-        public void LoadMainMenu()  => SceneManager.LoadScene(0);
+        public void LoadMainMenu()  => SceneManager.LoadScene("Menu");
     }
 }
