@@ -201,21 +201,14 @@ namespace BlockShooter
 
             if (rowsBefore > 0 && _rows.Count == 0)
             {
-                Debug.Log($"[FAIL] BranchPath '{name}' fully merged → CheckFailCondition");
                 _frontRowAtMergePoint = false;
                 GameManager.Instance?.CheckFailCondition();
             }
             else if (_rows.Count > 0)
             {
-                // Fire once when the front row first reaches the merge stop point.
-                // At that moment the conveyor gap state is settled and we can reliably
-                // determine whether the branch can actually help resolve a deadlock.
                 bool atMergePoint = _rows[0].CurrentT >= _mergeStopT - 0.001f;
                 if (atMergePoint && !_frontRowAtMergePoint)
-                {
-                    Debug.Log($"[FAIL] BranchPath '{name}' front row reached merge point → CheckFailCondition");
                     GameManager.Instance?.CheckFailCondition();
-                }
                 _frontRowAtMergePoint = atMergePoint;
             }
         }

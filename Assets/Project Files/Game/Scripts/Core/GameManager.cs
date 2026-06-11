@@ -43,7 +43,6 @@ namespace BlockShooter
         {
             if (State != GameState.Playing) return;
             SetState(GameState.Win);
-
             StartCoroutine(TriggerWinDelayed());
         }
 
@@ -51,26 +50,17 @@ namespace BlockShooter
         {
             yield return new WaitForSecondsRealtime(WinDelaySeconds);
 
-            // Trigger LevelWin on active level root animator if present
             if (LevelManager.Instance != null && LevelManager.Instance.CurrentLevelRoot != null)
             {
                 var animator = LevelManager.Instance.CurrentLevelRoot.GetComponent<Animator>();
                 if (animator == null)
-                {
                     animator = LevelManager.Instance.CurrentLevelRoot.GetComponentInChildren<Animator>();
-                }
-
                 if (animator != null)
-                {
                     animator.SetTrigger("LevelWin");
-                }
             }
 
-            // Award level win coins
             if (config != null)
-            {
                 SaveManager.Coins += config.winRewardCoins;
-            }
 
             SaveManager.CurrentLevel++;
             OnLevelWin?.Invoke();
@@ -78,31 +68,19 @@ namespace BlockShooter
 
         public void TriggerFail()
         {
-            // Allow triggering fail if state is Paused (due to active revival popup check)
             if (State != GameState.Playing && State != GameState.Paused) return;
-            Debug.Log("[FAIL] *** TriggerFail called — game over ***");
             SetState(GameState.Fail);
             OnLevelFail?.Invoke();
         }
 
-        /// <summary>
-        /// Checks if there are any active conveyor blocks left in the scene.
-        /// If none, the level is won.
-        /// </summary>
         public void CheckWinCondition()
         {
             if (State != GameState.Playing) return;
 
             var blocks = FindObjectsByType<ConveyorBlock3D>(FindObjectsSortMode.None);
             foreach (var b in blocks)
-            {
-                if (b != null && !b.IsDestroyed)
-                {
-                    return; // At least one block is still alive
-                }
-            }
+                if (b != null && !b.IsDestroyed) return;
 
-            // All blocks are destroyed - Win!
             TriggerWin();
         }
 
@@ -114,63 +92,39 @@ namespace BlockShooter
                 HandleFailState();
         }
 
+        // ── Fail detection ────────────────────────────────────────────────────
+
         private bool IsDeadlocked()
         {
-            if (SlotSystem.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: SlotSystem null"); return false; }
-            if (ConveyorController.Instance == null) { Debug.Log("[FAIL] IsDeadlocked: ConveyorController null"); return false; }
+            if (SlotSystem.Instance == null || ConveyorController.Instance == null) return false;
 
-            // Projectiles in flight mean blocks are still being hit — conveyor state is unsettled.
-            // NotifyAllProjectilesLanded will re-run this check once the last projectile lands.
-            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0)
-            {
-                Debug.Log($"[FAIL] IsDeadlocked: {ProjectilePool.Instance.ActiveCount} projectile(s) in flight → defer");
-                return false;
-            }
+            // While projectiles are still in flight, conveyor state is changing.
+            // NotifyAllProjectilesLanded will call us again once all have landed.
+            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return false;
 
-            if (SlotSystem.Instance.HasEmptySlot)
-            {
-                Debug.Log($"[FAIL] IsDeadlocked: slots not full ({SlotSystem.Instance.GetSlottedBlocks().Count}/{SlotSystem.Instance.MaxSlots})");
-                return false;
-            }
+            // Deadlock requires every slot to be occupied
+            if (SlotSystem.Instance.HasEmptySlot) return false;
 
             var mainColors = ConveyorController.Instance.GetLiveColorSet();
-            if (mainColors.Count == 0) { Debug.Log("[FAIL] IsDeadlocked: main conveyor empty → win path"); return false; }
 
-            var slottedBlocks = SlotSystem.Instance.GetSlottedBlocks();
-            var activeSlotColors = new HashSet<BlockColorType>();
-            foreach (var b in slottedBlocks)
-                if (!b.IsDepleted) activeSlotColors.Add(b.ColorType);
+            // Empty conveyor is a win condition, not a deadlock
+            if (mainColors.Count == 0) return false;
 
-            // 1. Check main conveyor for a match
-            foreach (var color in activeSlotColors)
-            {
-                if (mainColors.Contains(color))
-                {
-                    Debug.Log($"[FAIL] IsDeadlocked: match on main conveyor ({color}) → not deadlocked");
-                    return false;
-                }
-            }
+            // Collect colors of non-depleted slotted shooters
+            var slotColors = new HashSet<BlockColorType>();
+            foreach (var b in SlotSystem.Instance.GetSlottedBlocks())
+                if (!b.IsDepleted) slotColors.Add(b.ColorType);
 
-            // 2. No match on main conveyor.
-            //    A branch prevents deadlock if it still has a row whose color matches a slot.
-            //    We do NOT check gap availability: the looping conveyor always opens mergeT
-            //    as groups pass by, so a gap will come. Only the color matters.
-            var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
-            foreach (var bp in branchPaths)
-            {
-                if (bp.IsFullyMerged) continue;
-                if (bp.HasMatchingColorInQueue(activeSlotColors))
-                {
-                    Debug.Log($"[FAIL] IsDeadlocked: branch '{bp.name}' has matching color in queue → not deadlocked");
-                    return false;
-                }
-            }
+            // Match found on main conveyor → not deadlocked
+            foreach (var color in slotColors)
+                if (mainColors.Contains(color)) return false;
 
-            var slotDesc = new System.Text.StringBuilder();
-            var convDesc = new System.Text.StringBuilder();
-            foreach (var b in slottedBlocks) slotDesc.Append(b.IsDepleted ? $"{b.ColorType}(dep) " : $"{b.ColorType} ");
-            foreach (var c in mainColors)    convDesc.Append($"{c} ");
-            Debug.LogWarning($"[FAIL] DEADLOCK DETECTED — Slots:[{slotDesc}] Conveyor:[{convDesc}]");
+            // Branch can resolve the deadlock if it still has a matching color queued.
+            // The looping conveyor always creates a mergeT gap as groups pass, so gap
+            // availability is irrelevant — only the color matters.
+            foreach (var bp in FindObjectsByType<BranchPath>(FindObjectsSortMode.None))
+                if (!bp.IsFullyMerged && bp.HasMatchingColorInQueue(slotColors)) return false;
+
             return true;
         }
 
@@ -180,21 +134,12 @@ namespace BlockShooter
             if (ShooterGrid.Instance != null && ShooterGrid.Instance.GetActiveBlocks().Count > 0) return false;
             if (SlotSystem.Instance != null && SlotSystem.Instance.GetSlottedBlocks().Count > 0) return false;
 
+            // All shooters are gone — fail only when conveyor / branch still has blocks
             if (ConveyorController.Instance != null && ConveyorController.Instance.GetLiveColorSet().Count > 0)
-            {
-                Debug.LogWarning("[FAIL] ALL SHOOTERS DEPLETED — main conveyor still has blocks");
                 return true;
-            }
 
-            var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
-            foreach (var bp in branchPaths)
-            {
-                if (!bp.IsFullyMerged)
-                {
-                    Debug.LogWarning("[FAIL] ALL SHOOTERS DEPLETED — branch still has blocks");
-                    return true;
-                }
-            }
+            foreach (var bp in FindObjectsByType<BranchPath>(FindObjectsSortMode.None))
+                if (!bp.IsFullyMerged) return true;
 
             return false;
         }

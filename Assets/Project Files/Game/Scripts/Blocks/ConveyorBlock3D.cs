@@ -115,10 +115,7 @@ namespace BlockShooter
             OnDestroyed?.Invoke(this);
 
             if (GameManager.Instance != null)
-            {
                 GameManager.Instance.CheckWinCondition();
-                GameManager.Instance.CheckFailCondition();
-            }
 
             transform.DOScale(Vector3.zero, 0.15f).SetEase(Ease.InBack)
                 .OnComplete(() => gameObject.SetActive(false));
