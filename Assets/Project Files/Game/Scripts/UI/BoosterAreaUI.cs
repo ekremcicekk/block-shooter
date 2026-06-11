@@ -267,7 +267,7 @@ namespace BlockShooter
             if (SaveManager.Coins >= cost)
             {
                 SaveManager.Coins -= cost;
-                SaveManager.AddBooster(type, 1);
+                SaveManager.AddBooster(type, 3);
 
                 // Update Coins HUD UI with animation
                 if (UIManager.Instance != null)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -60,6 +60,11 @@ namespace BlockShooter
         private Tween   _recoilTween;
         private Tween   _scaleTween;
         private Tween   _bodyScaleTween;
+        private Tween   _hoverTween;
+        private Tween   _hoverScaleTween;
+        public bool IsHovering { get; private set; }
+        private Vector3 _originalGridLocalPos;
+        private bool    _hasSavedOriginalPos;
 
         private static readonly int ColorProp    = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionProp = Shader.PropertyToID("_EmissionColor");
@@ -89,6 +94,7 @@ namespace BlockShooter
         {
             State         = BlockState.InGrid;
             _isAccessible = false;
+            _hasSavedOriginalPos = false;
             _visibleShotsLeft = UnityEngine.Random.Range(1, 3);
             _invisibleShotsLeft = 0;
             UpdateShotCountUI();
@@ -198,14 +204,20 @@ namespace BlockShooter
             // MoveShooter selection mode: pick any InGrid block
             if (BoosterManager.Instance != null && BoosterManager.Instance.IsAwaitingMoveShooterTarget)
             {
+                if (_isAccessible)
+                {
+                    // Ignore clicks on normally accessible blocks entirely during MoveShooter selection (no shake, no animations)
+                    return;
+                }
+
                 if (SlotSystem.Instance == null || !SlotSystem.Instance.HasEmptySlot)
                 {
                     transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
                     return;
                 }
 
-                BoosterManager.Instance.CompleteMoveShooter(this);
                 MoveToSlot();
+                BoosterManager.Instance.CompleteMoveShooter(this);
                 return;
             }
 
@@ -236,6 +248,12 @@ namespace BlockShooter
             State = BlockState.MovingToSlot;
             SetAccessible(false);
             if (shotCountText != null) shotCountText.gameObject.SetActive(true);
+
+            // Stop MoveShooter hover bobbing but DO NOT lock the block (remains visually open)
+            if (IsHovering)
+            {
+                StopMoveShooterHover(shouldRebindToLocked: false);
+            }
 
             // Immediately reveal mystery state when block starts moving to a slot
             if (_isMystery)
@@ -722,14 +740,39 @@ namespace BlockShooter
                 .SetEase(Ease.OutQuad)
                 .WaitForCompletion();
 
-            // 5. Trigger depletion
+            // 5. Trigger depletion or resume normal slot behavior
             _isPerformingSuperShooter = false;
-            Deplete();
+
+            if (_shotCount <= 0)
+            {
+                Deplete();
+            }
+            else
+            {
+                State = BlockState.InSlot;
+
+                if (bodyAnimator != null)
+                {
+                    bodyAnimator.enabled = true;
+                    bodyAnimator.SetTrigger("ShooterArrived");
+
+                    DOVirtual.DelayedCall(0.5f, () =>
+                    {
+                        if (State == BlockState.InSlot && !IsDepleted && !_isPerformingSuperShooter)
+                        {
+                            if (bodyAnimator != null) bodyAnimator.enabled = false;
+                        }
+                    });
+                }
+
+                TryStartGroupRoutine();
+                GameManager.Instance?.CheckFailCondition();
+            }
         }
 
         // ── Accessibility ─────────────────────────────────────────────────────
 
-        public void SetAccessible(bool accessible)
+        public void SetAccessible(bool accessible, bool triggerUnlockAnimation = true)
         {
             if (_isMystery) accessible = false;
             if (IsFrozen) accessible = false;
@@ -739,11 +782,74 @@ namespace BlockShooter
             if (accessibleIndicator != null)
                 accessibleIndicator.SetActive(accessible && State == BlockState.InGrid);
 
-            if (changed && accessible && State == BlockState.InGrid)
+            if (changed && accessible && State == BlockState.InGrid && triggerUnlockAnimation)
             {
                 if (bodyAnimator != null)
                 {
                     bodyAnimator.SetTrigger("ShooterUnlock");
+                }
+            }
+        }
+
+        public void StartMoveShooterHover()
+        {
+            IsHovering = true;
+
+            // Save the original local position on grid if not saved yet
+            if (!_hasSavedOriginalPos)
+            {
+                _originalGridLocalPos = transform.localPosition;
+                _hasSavedOriginalPos = true;
+            }
+
+            // Kill any previous hover tweens just in case
+            _hoverTween?.Kill();
+            _hoverScaleTween?.Kill();
+
+            // DO NOT disable animator so it can play "ShooterUnlock" animation
+            if (bodyAnimator != null)
+            {
+                bodyAnimator.enabled = true;
+                bodyAnimator.SetTrigger("ShooterUnlock");
+            }
+
+            // Punch scale and hover bobbing
+            transform.localScale = Vector3.one * 0.8f;
+            _hoverScaleTween = transform.DOScale(Vector3.one * 0.8f, 0.3f).SetEase(Ease.OutBack);
+
+            // Animate root transform instead of bodyMesh! Animator cannot override root localPosition.
+            _hoverTween = transform.DOLocalMoveY(_originalGridLocalPos.y + 0.35f, 0.45f)
+                .SetLoops(-1, LoopType.Yoyo)
+                .SetEase(Ease.InOutSine);
+        }
+
+        public void StopMoveShooterHover(bool shouldRebindToLocked = true)
+        {
+            IsHovering = false;
+
+            _hoverTween?.Kill();
+            _hoverScaleTween?.Kill();
+
+            // Restore original grid position on reset
+            if (_hasSavedOriginalPos)
+            {
+                transform.localPosition = _originalGridLocalPos;
+            }
+
+            if (bodyMesh != null)
+            {
+                bodyMesh.localPosition = Vector3.zero;
+            }
+
+            transform.localScale = Vector3.one * 0.8f;
+
+            if (bodyAnimator != null)
+            {
+                bodyAnimator.enabled = true;
+                if (shouldRebindToLocked)
+                {
+                    // Since this was a normally locked block that hovered, reset it back to locked state
+                    bodyAnimator.Rebind();
                 }
             }
         }

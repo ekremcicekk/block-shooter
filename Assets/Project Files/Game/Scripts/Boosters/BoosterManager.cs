@@ -75,9 +75,14 @@ namespace BlockShooter
             {
                 if (SlotSystem.Instance == null) return false;
                 bool hasNonShootingBlock = false;
+
+                var mainColors = ConveyorController.Instance != null 
+                    ? ConveyorController.Instance.GetLiveColorSet() 
+                    : new System.Collections.Generic.HashSet<BlockColorType>();
+
                 foreach (var b in SlotSystem.Instance.GetSlottedBlocks())
                 {
-                    if (b != null && !b.IsShooting)
+                    if (b != null && !b.IsShooting && mainColors.Contains(b.ColorType))
                     {
                         hasNonShootingBlock = true;
                         break;
@@ -91,7 +96,15 @@ namespace BlockShooter
                 if (ShooterGrid.Instance == null || !ShooterGrid.Instance.HasLockedBlocks()) return false;
             }
 
-            if (!SaveManager.UseBooster(type)) return false;
+            // Only consume ExtraSlot immediately. Others are consumed only on successful choice.
+            if (type == BoosterType.ExtraSlot)
+            {
+                if (!SaveManager.UseBooster(type)) return false;
+            }
+            else
+            {
+                if (SaveManager.GetBoosterCount(type) <= 0) return false;
+            }
 
             switch (type)
             {
@@ -121,11 +134,15 @@ namespace BlockShooter
             if (SlotSystem.Instance == null) return;
             var slotted = SlotSystem.Instance.GetSlottedBlocks();
             
-            // Filter candidates: only slotted blocks that are NOT currently shooting
+            var mainColors = ConveyorController.Instance != null 
+                ? ConveyorController.Instance.GetLiveColorSet() 
+                : new System.Collections.Generic.HashSet<BlockColorType>();
+
+            // Filter candidates: only slotted blocks that are NOT currently shooting and have matching colors on main conveyor
             var candidates = new System.Collections.Generic.List<ShooterBlock>();
             foreach (var b in slotted)
             {
-                if (b != null && !b.IsShooting)
+                if (b != null && !b.IsShooting && mainColors.Contains(b.ColorType))
                 {
                     candidates.Add(b);
                 }
@@ -135,7 +152,7 @@ namespace BlockShooter
 
             IsAwaitingSuperShooterTarget = true;
 
-            // Highlight ONLY the eligible candidate blocks (non-shooting) so player knows to tap one
+            // Highlight ONLY the eligible candidate blocks so player knows to tap one
             foreach (var b in candidates)
                 b.transform.DOPunchScale(Vector3.one * 0.2f, 0.4f, 4, 0.5f);
 
@@ -159,16 +176,22 @@ namespace BlockShooter
                         if (candidates.Contains(hit))
                         {
                             IsAwaitingSuperShooterTarget = false;
+                            SaveManager.UseBooster(BoosterType.SuperShooter); // Consume count here!
                             ResetSuperShooterCandidatesScale(candidates);
                             hit.StartSuperShooter();
+
+                            var area = FindFirstObjectByType<BoosterAreaUI>();
+                            if (area != null) area.RefreshUI();
                             yield break;
                         }
                         else if (hit.State == ShooterBlock.BlockState.InGrid)
                         {
-                            // Tapped a block still in the grid -> cancel selection and refund
+                            // Tapped a block still in the grid -> cancel selection, no refund needed
                             IsAwaitingSuperShooterTarget = false;
-                            SaveManager.AddBooster(BoosterType.SuperShooter, 1);
                             ResetSuperShooterCandidatesScale(candidates);
+
+                            var area = FindFirstObjectByType<BoosterAreaUI>();
+                            if (area != null) area.RefreshUI();
                             yield break;
                         }
                     }
@@ -179,9 +202,11 @@ namespace BlockShooter
             if (IsAwaitingSuperShooterTarget)
             {
                 IsAwaitingSuperShooterTarget = false;
-                SaveManager.AddBooster(BoosterType.SuperShooter, 1);
             }
             ResetSuperShooterCandidatesScale(candidates);
+
+            var areaUi = FindFirstObjectByType<BoosterAreaUI>();
+            if (areaUi != null) areaUi.RefreshUI();
         }
 
         private void ResetSuperShooterCandidatesScale(System.Collections.Generic.List<ShooterBlock> candidates)
@@ -200,11 +225,14 @@ namespace BlockShooter
         {
             if (!IsAwaitingSuperShooterTarget) return;
             IsAwaitingSuperShooterTarget = false;
-            SaveManager.AddBooster(BoosterType.SuperShooter, 1);
+            // No refund needed since it was not consumed yet!
             if (SlotSystem.Instance != null)
             {
                 ResetSuperShooterCandidatesScale(SlotSystem.Instance.GetSlottedBlocks());
             }
+
+            var area = FindFirstObjectByType<BoosterAreaUI>();
+            if (area != null) area.RefreshUI();
         }
 
         // ── MoveShooter ───────────────────────────────────────────────────────
@@ -221,46 +249,46 @@ namespace BlockShooter
 
             IsAwaitingMoveShooterTarget = true;
 
-            // Punch scale/highlight all currently locked blocks to suggest selection
+            // Manage indicators and hover bobbing based on true accessibility
             foreach (var b in ShooterGrid.Instance.GetActiveBlocks())
             {
-                if (b.State == ShooterBlock.BlockState.InGrid && !b.IsAccessible)
+                if (b.State == ShooterBlock.BlockState.InGrid)
                 {
-                    b.transform.DOPunchScale(Vector3.one * 0.15f, 0.4f, 4, 0.5f);
+                    if (!b.IsAccessible)
+                    {
+                        // Enable selection indicator and start hover for normally locked blocks
+                        if (b.accessibleIndicator != null) b.accessibleIndicator.SetActive(true);
+                        b.StartMoveShooterHover();
+                    }
+                    else
+                    {
+                        // Hide selection indicator for accessible blocks (they remain open visually, but no indicator)
+                        if (b.accessibleIndicator != null) b.accessibleIndicator.SetActive(false);
+                    }
                 }
             }
-
-            StartCoroutine(WaitForMoveShooterTarget());
-        }
-
-        private IEnumerator WaitForMoveShooterTarget()
-        {
-            float timeout = 8f;
-            float elapsed = 0f;
-
-            while (elapsed < timeout && IsAwaitingMoveShooterTarget)
-            {
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-
-            if (IsAwaitingMoveShooterTarget)
-            {
-                IsAwaitingMoveShooterTarget = false;
-                SaveManager.AddBooster(BoosterType.MoveShooter, 1);
-            }
-            ResetMoveShooterCandidatesScale();
         }
 
         private void ResetMoveShooterCandidatesScale()
         {
             if (ShooterGrid.Instance == null) return;
+
             foreach (var b in ShooterGrid.Instance.GetActiveBlocks())
             {
-                if (b != null && b.State == ShooterBlock.BlockState.InGrid && !b.IsAccessible)
+                if (b != null && b.State == ShooterBlock.BlockState.InGrid)
                 {
                     b.transform.DOKill(true);
-                    b.transform.localScale = Vector3.one;
+                    
+                    if (b.IsHovering)
+                    {
+                        b.StopMoveShooterHover(shouldRebindToLocked: true);
+                    }
+
+                    // Reset indicator to match the true accessibility state
+                    if (b.accessibleIndicator != null)
+                    {
+                        b.accessibleIndicator.SetActive(b.IsAccessible);
+                    }
                 }
             }
         }
@@ -269,14 +297,21 @@ namespace BlockShooter
         {
             if (!IsAwaitingMoveShooterTarget) return;
             IsAwaitingMoveShooterTarget = false;
-            SaveManager.AddBooster(BoosterType.MoveShooter, 1);
+            // No refund needed since it was not consumed yet!
             ResetMoveShooterCandidatesScale();
+
+            var area = FindFirstObjectByType<BoosterAreaUI>();
+            if (area != null) area.RefreshUI();
         }
 
         public void CompleteMoveShooter(ShooterBlock block)
         {
             IsAwaitingMoveShooterTarget = false;
+            SaveManager.UseBooster(BoosterType.MoveShooter); // Consume count here!
             ResetMoveShooterCandidatesScale();
+
+            var area = FindFirstObjectByType<BoosterAreaUI>();
+            if (area != null) area.RefreshUI();
         }
 
         private ShooterBlock RaycastBlock()
