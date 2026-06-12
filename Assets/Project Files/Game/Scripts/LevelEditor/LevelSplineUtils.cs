@@ -83,14 +83,58 @@ namespace BlockShooter.Editor
         public static void FlipHorizontally(
             List<Vector3> knots,
             List<Vector3> tangentsIn,
-            List<Vector3> tangentsOut)
+            List<Vector3> tangentsOut,
+            List<TangentMode> tangentModes)
         {
+            // 1. Flip X coordinates of all knots
             for (int i = 0; i < knots.Count; i++)
             {
-                knots[i] = new Vector3(-knots[i].x, 0f, knots[i].z);
-                if (i < tangentsIn.Count) tangentsIn[i] = new Vector3(-tangentsIn[i].x, 0f, tangentsIn[i].z);
-                if (i < tangentsOut.Count) tangentsOut[i] = new Vector3(-tangentsOut[i].x, 0f, tangentsOut[i].z);
+                knots[i] = new Vector3(-knots[i].x, knots[i].y, knots[i].z);
             }
+
+            // 2. Reverse knots to preserve conveyor flow direction (clockwise flow)
+            knots.Reverse();
+
+            // 3. Reverse and swap tangents (In becomes -Out mirrored, Out becomes -In mirrored)
+            var oldIn = new List<Vector3>(tangentsIn);
+            var oldOut = new List<Vector3>(tangentsOut);
+            
+            int N = knots.Count;
+            for (int i = 0; i < N; i++)
+            {
+                int opp = N - 1 - i;
+                
+                // Mirror X and negate the vector due to reverse flow direction:
+                // mirror_oldOut = (-x, y, z)
+                // -mirror_oldOut = (x, -y, -z)
+                Vector3 origOut = opp < oldOut.Count ? oldOut[opp] : Vector3.zero;
+                Vector3 origIn = opp < oldIn.Count ? oldIn[opp] : Vector3.zero;
+
+                if (i < tangentsIn.Count) 
+                    tangentsIn[i] = new Vector3(-origOut.x, origOut.y, origOut.z);
+                if (i < tangentsOut.Count) 
+                    tangentsOut[i] = new Vector3(-origIn.x, origIn.y, origIn.z);
+            }
+
+            // 4. Reverse tangent modes
+            tangentModes.Reverse();
+
+            // 5. Rotate all right by 1 to restore index 0 to the original first knot position
+            RotateRight(knots);
+            RotateRight(tangentsIn);
+            RotateRight(tangentsOut);
+            RotateRight(tangentModes);
+        }
+
+        private static void RotateRight<T>(List<T> list)
+        {
+            if (list.Count <= 1) return;
+            T last = list[list.Count - 1];
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                list[i] = list[i - 1];
+            }
+            list[0] = last;
         }
 
         public static Vector3 GetMouseGroundHit(Vector2 mousePos)

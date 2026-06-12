@@ -1550,7 +1550,7 @@ namespace BlockShooter.Editor
             Undo.RegisterCompleteObjectUndo(this, "Flip Spline Horizontally");
             EnsureTangentLists();
 
-            LevelSplineUtils.FlipHorizontally(_knots, _tangentsIn, _tangentsOut);
+            LevelSplineUtils.FlipHorizontally(_knots, _tangentsIn, _tangentsOut, _tangentModes);
 
             SyncPreviewSpline();
             SceneView.RepaintAll();
