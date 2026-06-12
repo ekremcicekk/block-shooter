@@ -213,7 +213,7 @@ Camera:
   far clip plane: 100
   field of view: 45
   orthographic: 1
-  orthographic size: 11
+  orthographic size: 10
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -537,12 +537,25 @@ MonoBehaviour:
     _targetId: extraslot
     _handOffset: {x: 150, y: -50, z: 0}
     _steps: []
-  - _level: 3
+  - _level: 15
+    _showOnce: 0
+    _tutorialRoot: {fileID: 1988682671}
+    _useSteps: 0
+    _targetId: mysterblock
+    _handOffset: {x: 0.8, y: 0, z: 0}
+    _steps:
+    - _stepRoot: {fileID: 2568637850377272841}
+      _targetId: movebooster
+      _handOffset: {x: 0, y: 0, z: 0}
+    - _stepRoot: {fileID: 2568637850377272840}
+      _targetId: 
+      _handOffset: {x: 0, y: 0, z: 0}
+  - _level: 22
     _showOnce: 0
     _tutorialRoot: {fileID: 1841191800}
     _useSteps: 1
-    _targetId: 
-    _handOffset: {x: 0, y: 0, z: 0}
+    _targetId: moveshooter
+    _handOffset: {x: 0.8, y: 0, z: 0}
     _steps:
     - _stepRoot: {fileID: 2568637850377272841}
       _targetId: movebooster
@@ -1017,6 +1030,11 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 8269563227682887782, guid: 45671a9874892ac4d9b6c986bf12cdbf, type: 3}
   m_PrefabInstance: {fileID: 2568637850377272838}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1988682671 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3353065311646731098, guid: 45671a9874892ac4d9b6c986bf12cdbf, type: 3}
+  m_PrefabInstance: {fileID: 2568637850377272838}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &2135566054
 GameObject:
   m_ObjectHideFlags: 0
@@ -1138,6 +1156,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2867391125080159224, guid: 45671a9874892ac4d9b6c986bf12cdbf, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3353065311646731098, guid: 45671a9874892ac4d9b6c986bf12cdbf, type: 3}
+      propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
