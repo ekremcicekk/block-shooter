@@ -19,6 +19,7 @@ MonoBehaviour:
   arrowPrefab: {fileID: 5382590712880826785, guid: 67e4f67177226804cb7a5efb43e82c93, type: 3}
   fireRangePrefab: {fileID: 926021276733090944, guid: 811b749e63bcb5142976d5f4f148bba8, type: 3}
   groundPrefab: {fileID: 4410554955158570461, guid: 2eae52573d036f847ad2dd78ff003d47, type: 3}
+  tunnelPrefab: {fileID: 8153232401869283110, guid: 9404150a4ad5aed43913c1c0a2e6964e, type: 3}
   laneCount: 5
   laneSpacing: 0.18
   rowSpacing: 0.16

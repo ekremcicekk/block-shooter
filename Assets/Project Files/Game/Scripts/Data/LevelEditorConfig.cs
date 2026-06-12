@@ -20,6 +20,7 @@ namespace BlockShooter
         public GameObject arrowPrefab;
         public GameObject fireRangePrefab;
         public GameObject groundPrefab;
+        public GameObject tunnelPrefab;
 
         [Header("Conveyor Defaults")]
         public int   laneCount        = 5;

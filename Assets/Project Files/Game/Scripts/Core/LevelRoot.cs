@@ -8,6 +8,15 @@ namespace BlockShooter
 {
     public enum GridCellType { Empty, ShooterBlock, Door, MysteryShooter, FreezeShooter }
 
+    public enum GridDirection { Down, Up, Right, Left }
+
+    [Serializable]
+    public class TunnelSequenceItem
+    {
+        public BlockColorType color = BlockColorType.Red;
+        public int count = 1;
+    }
+
     [Serializable]
     public class LevelGridCell
     {
@@ -17,6 +26,8 @@ namespace BlockShooter
         public int            shotCount = -1;
         public int            doorCount = 3;
         public int            freezeCount = 3;
+        public GridDirection  tunnelDirection = GridDirection.Down;
+        public List<TunnelSequenceItem> tunnelSequence = new();
     }
 
     [Serializable]

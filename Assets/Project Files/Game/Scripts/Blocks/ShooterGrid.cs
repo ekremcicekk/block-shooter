@@ -16,7 +16,7 @@ namespace BlockShooter
         public static ShooterGrid Instance { get; private set; }
 
         [Header("Prefabs")]
-        [Tooltip("Prefab used only when spawning blocks dynamically at runtime (e.g. from BlockDoor).")]
+        [Tooltip("Prefab used only when spawning blocks dynamically at runtime (e.g. from Tunnel).")]
         public ShooterBlock shooterBlockPrefab;
 
         private GameConfig _config;
@@ -39,7 +39,7 @@ namespace BlockShooter
         }
 
         /// <summary>
-        /// Scans pre-placed ShooterBlock and BlockDoor children and activates them.
+        /// Scans pre-placed ShooterBlock and Tunnel children and activates them.
         /// Called by LevelRoot.Initialize().
         /// </summary>
         public void Initialize()
@@ -62,8 +62,8 @@ namespace BlockShooter
                 block.transform.DOScale(Vector3.one * 0.8f, 0.3f).SetDelay(delay).SetEase(Ease.OutBack);
             }
 
-            foreach (var door in GetComponentsInChildren<BlockDoor>(true))
-                door.Initialize();
+            foreach (var tunnel in GetComponentsInChildren<Tunnel>(true))
+                tunnel.Initialize();
 
             RefreshAllAccessibility();
         }
@@ -115,11 +115,11 @@ namespace BlockShooter
             // 2. Mark active doors
             float cellSize = deck != null ? deck.cellSize : 1.2f;
             Vector3 origin = transform.position;
-            var doors = GetComponentsInChildren<BlockDoor>(false);
-            foreach (var door in doors)
+            var tunnels = GetComponentsInChildren<Tunnel>(false);
+            foreach (var tunnel in tunnels)
             {
-                int col = Mathf.RoundToInt((door.transform.position.x - origin.x) / cellSize);
-                int row = Mathf.RoundToInt((door.transform.position.z - origin.z) / cellSize);
+                int col = Mathf.RoundToInt((tunnel.transform.position.x - origin.x) / cellSize);
+                int row = Mathf.RoundToInt((tunnel.transform.position.z - origin.z) / cellSize);
                 if (col >= 0 && col < cols && row >= 0 && row < rows)
                 {
                     isBlocked[col, row] = true;
@@ -256,24 +256,23 @@ namespace BlockShooter
                 list.Remove(block);
         }
 
-        // ── Dynamic block spawn (from BlockDoor) ──────────────────────────────
+        // ── Dynamic block spawn (from Tunnel) ──────────────────────────────
 
-        public void AddBlock(Vector3 position, BlockColorType colorType)
+        public void AddBlock(Vector3 position, BlockColorType colorType, int shotCount, int col, int row, Vector3 startPosition)
         {
             if (shooterBlockPrefab == null) return;
 
-            const float cellSize = 1.2f;
-            Vector3 origin = transform.position;
-            int col = Mathf.RoundToInt((position.x - origin.x) / cellSize);
-            int row = Mathf.RoundToInt((position.z - origin.z) / cellSize);
-
-            ShooterBlock block = Instantiate(shooterBlockPrefab, position, Quaternion.identity, transform);
-            block.Initialize(colorType, 100, col, row);
+            ShooterBlock block = Instantiate(shooterBlockPrefab, startPosition, Quaternion.identity, transform);
+            block.Initialize(colorType, shotCount, col, row);
             RegisterBlock(block);
-            RefreshColumnAccessibility(col);
+            block.SetAccessible(false, triggerUnlockAnimation: false);
 
             block.transform.localScale = Vector3.zero;
-            block.transform.DOScale(Vector3.one * 0.8f, 0.35f).SetEase(Ease.OutBack);
+            block.transform.DOMove(position, 0.35f).SetEase(Ease.OutQuad);
+            block.transform.DOScale(Vector3.one * 0.8f, 0.35f).SetEase(Ease.OutBack).OnComplete(() =>
+            {
+                RefreshAllAccessibility();
+            });
         }
 
         // ── Queries ───────────────────────────────────────────────────────────

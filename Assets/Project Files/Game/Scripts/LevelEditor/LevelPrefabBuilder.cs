@@ -274,10 +274,53 @@ namespace EKStudio.Editor
                         }
                     case GridCellType.Door:
                         {
-                            var go = Go(sgGo.transform, nm); go.transform.localPosition = pos;
-                            var d = go.AddComponent<BlockDoor>();
-                            d.blockCount = cell.doorCount;
-                            d.spawnColors = new List<BlockColorType> { cell.color };
+                            GameObject go;
+                            if (cfg.tunnelPrefab != null)
+                            {
+                                go = (GameObject)PrefabUtility.InstantiatePrefab(cfg.tunnelPrefab, sgGo.transform);
+                                go.name = nm;
+                                go.transform.localPosition = pos;
+                            }
+                            else
+                            {
+                                go = Go(sgGo.transform, nm);
+                                go.transform.localPosition = pos;
+                            }
+
+                            var t = go.GetComponent<Tunnel>();
+                            if (t == null) t = go.AddComponent<Tunnel>();
+
+                            t.col = cell.col;
+                            t.row = cell.row;
+                            t.direction = cell.tunnelDirection;
+                            t.spawnSequence = cell.tunnelSequence != null 
+                                ? new List<TunnelSequenceItem>(cell.tunnelSequence) 
+                                : new List<TunnelSequenceItem>();
+                            t.totalBlockCount = cell.tunnelSequence != null ? cell.tunnelSequence.Count : 0;
+
+                            // Set rotation based on direction
+                            Vector3 lookDir = Vector3.back;
+                            switch (cell.tunnelDirection)
+                            {
+                                case GridDirection.Down: lookDir = Vector3.back; break;
+                                case GridDirection.Up: lookDir = Vector3.forward; break;
+                                case GridDirection.Left: lookDir = Vector3.left; break;
+                                case GridDirection.Right: lookDir = Vector3.right; break;
+                            }
+
+                            // Apply rotation to bodymesh transform using the script's reference
+                            Transform meshTrans = t.tunnelMesh != null ? t.tunnelMesh.transform : null;
+                            if (meshTrans != null)
+                            {
+                                meshTrans.localRotation = Quaternion.LookRotation(lookDir);
+                                go.transform.localRotation = Quaternion.identity;
+                            }
+                            else
+                            {
+                                go.transform.localRotation = Quaternion.LookRotation(lookDir);
+                            }
+
+                            PrefabUtility.RecordPrefabInstancePropertyModifications(go.transform);
                             break;
                         }
                 }

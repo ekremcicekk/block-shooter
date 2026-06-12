@@ -213,7 +213,7 @@ Camera:
   far clip plane: 100
   field of view: 45
   orthographic: 1
-  orthographic size: 10
+  orthographic size: 11
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -238,7 +238,7 @@ Transform:
   m_GameObject: {fileID: 186515673}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: -2.598076, z: -1.5}
+  m_LocalPosition: {x: 0, y: -3.0310888, z: -1.75}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -476,6 +476,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   config: {fileID: 11400000, guid: 98319b29f3d687d4a85f843e9547ed21, type: 2}
+--- !u!1 &783466794 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8709051674456063714, guid: 45671a9874892ac4d9b6c986bf12cdbf, type: 3}
+  m_PrefabInstance: {fileID: 2568637850377272838}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &790444178
 GameObject:
   m_ObjectHideFlags: 0
@@ -581,6 +586,22 @@ MonoBehaviour:
     _useSteps: 1
     _targetId: iceblock
     _handOffset: {x: 0.8, y: 0, z: 0}
+    _steps:
+    - _stepRoot: {fileID: 2568637850377272844}
+      _targetId: superpowerblock
+      _handOffset: {x: 0.8, y: 0, z: 0}
+    - _stepRoot: {fileID: 2568637850377272843}
+      _targetId: superpowerUI
+      _handOffset: {x: 150, y: -50, z: 0}
+    - _stepRoot: {fileID: 2568637850377272842}
+      _targetId: superpowerslot
+      _handOffset: {x: 0.8, y: 0, z: 0}
+  - _level: 35
+    _showOnce: 1
+    _tutorialRoot: {fileID: 783466794}
+    _useSteps: 0
+    _targetId: tunnelblock
+    _handOffset: {x: 0.5, y: -0.6, z: 0}
     _steps:
     - _stepRoot: {fileID: 2568637850377272844}
       _targetId: superpowerblock

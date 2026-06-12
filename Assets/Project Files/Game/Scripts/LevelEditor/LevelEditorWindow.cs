@@ -5,6 +5,7 @@ using System.Linq;
 using DG.Tweening;
 using UnityEditor;
 using UnityEngine;
+using UnityEditorInternal;
 using UnityEngine.Splines;
 using Unity.Mathematics;
 
@@ -55,6 +56,9 @@ namespace BlockShooter.Editor
         private GridCellType[,]   _type;
         private BlockColorType[,] _color;
         private int[,]            _shots, _doors, _freezeCount;
+        private GridDirection[,]  _tunnelDirections;
+        private List<TunnelSequenceItem>[,] _tunnelSequences;
+        private ReorderableList           _tunnelSeqReorderableList;
 
         [SerializeField] private List<LevelConveyorGroup> _groups = new();
         [SerializeField] private List<BranchPathData> _branches = new();
@@ -1772,14 +1776,28 @@ namespace BlockShooter.Editor
                 ? new Color(.58f,.60f,.65f)   // light gray for door
                 : PC(col);
 
+            string arrow = "";
+            if (t == GridCellType.Door && _tunnelDirections != null && c < _tunnelDirections.GetLength(0) && r < _tunnelDirections.GetLength(1))
+            {
+                var dir = _tunnelDirections[c, r];
+                arrow = dir switch
+                {
+                    GridDirection.Down => "↓",
+                    GridDirection.Up => "↑",
+                    GridDirection.Left => "←",
+                    GridDirection.Right => "→",
+                    _ => ""
+                };
+            }
+
             // Labels
             string lbl1 = t == GridCellType.Empty ? "+"
-                        : t == GridCellType.Door   ? "🚪"
+                        : t == GridCellType.Door   ? $"🌀{arrow}"
                         : t == GridCellType.MysteryShooter ? "❓"
                         : t == GridCellType.FreezeShooter ? "❄"
                         : col.ToString().Substring(0, 3).ToUpper();
             string lbl2 = t == GridCellType.Empty ? ""
-                        : t == GridCellType.Door   ? $"×{_doors[c,r]}"
+                        : t == GridCellType.Door   ? $"{_doors[c,r]}"
                         : t == GridCellType.FreezeShooter ? $"×{_freezeCount[c,r]}"
                         : $"×{_shots[c,r]}";
 
@@ -2269,10 +2287,24 @@ namespace BlockShooter.Editor
                 _color,
                 _shots,
                 _doors,
+                _tunnelDirections,
+                _tunnelSequences,
                 _groups,
                 _branches,
                 pal
             );
+
+            // Render Tunnel Validation Warnings
+            if (validation.tunnelWarnings != null && validation.tunnelWarnings.Count > 0)
+            {
+                GUILayout.Space(10);
+                Hdr("TUNNEL CONFIGURATION WARNINGS");
+                foreach (var warn in validation.tunnelWarnings)
+                {
+                    EditorGUILayout.HelpBox(warn, MessageType.Warning);
+                }
+                GUILayout.Space(10);
+            }
 
             // 3. Render Validation Info
             bool hasAnyData = false;
@@ -2547,8 +2579,68 @@ namespace BlockShooter.Editor
             // ── Door ──────────────────────────────────────────────────────────
             else if (isDoor)
             {
-                GUILayout.Label("Blocks from door:", EditorStyles.miniLabel);
-                _doors[c, r] = EditorGUILayout.IntSlider(_doors[c, r], 1, 15);
+                GUILayout.Label("Tunnel Settings", EditorStyles.boldLabel);
+                _tunnelDirections[c, r] = (GridDirection)EditorGUILayout.EnumPopup("Direction", _tunnelDirections[c, r]);
+
+                GUILayout.Space(6);
+
+                var seqList = _tunnelSequences[c, r];
+                if (seqList == null)
+                {
+                    seqList = new List<TunnelSequenceItem>();
+                    _tunnelSequences[c, r] = seqList;
+                }
+
+                // Initialize or update ReorderableList wrapper
+                if (_tunnelSeqReorderableList == null || _tunnelSeqReorderableList.list != seqList)
+                {
+                    _tunnelSeqReorderableList = new ReorderableList(seqList, typeof(TunnelSequenceItem), true, true, true, true);
+                    
+                    _tunnelSeqReorderableList.drawHeaderCallback = (Rect rect) => {
+                        EditorGUI.LabelField(rect, "Sequence (Drag to Reorder) | Color / Shots", EditorStyles.miniBoldLabel);
+                    };
+
+                    _tunnelSeqReorderableList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) => {
+                        if (index >= seqList.Count) return;
+                        var item = seqList[index];
+                        rect.y += 2;
+                        float w = rect.width;
+
+                        // Fixed active colors popup mapping correctly
+                        item.color = LevelEditorColorUtility.DrawColorPopup(
+                            _gameCfg, 
+                            new Rect(rect.x, rect.y, w - 100, EditorGUIUtility.singleLineHeight), 
+                            item.color
+                        );
+
+                        // Enter Shot Count (was item.count)
+                        item.count = Mathf.Max(1, EditorGUI.IntField(
+                            new Rect(rect.x + w - 90, rect.y, 70, EditorGUIUtility.singleLineHeight), 
+                            item.count
+                        ));
+                    };
+
+                    _tunnelSeqReorderableList.onChangedCallback = (ReorderableList list) => {
+                        _isDirty = true;
+                    };
+
+                    _tunnelSeqReorderableList.onAddCallback = (ReorderableList list) => {
+                        var listData = (List<TunnelSequenceItem>)list.list;
+                        listData.Add(new TunnelSequenceItem { color = BlockColorType.Red, count = 100 });
+                        _isDirty = true;
+                    };
+
+                    _tunnelSeqReorderableList.onRemoveCallback = (ReorderableList list) => {
+                        ReorderableList.defaultBehaviours.DoRemoveButton(list);
+                        _isDirty = true;
+                    };
+                }
+
+                _tunnelSeqReorderableList.DoLayoutList();
+
+                // Total blocks in tunnel is the sequence items count!
+                int totalCount = seqList.Count;
+                _doors[c, r] = totalCount;
 
                 GUILayout.Space(8);
 
@@ -2718,6 +2810,7 @@ namespace BlockShooter.Editor
 
             // Null arrays so InitGrid() creates a fully fresh grid (no cross-level bleed)
             _type = null; _color = null; _shots = null; _doors = null; _freezeCount = null;
+            _tunnelDirections = null; _tunnelSequences = null;
             InitGrid();
             foreach (var cell in lr.cells)
             {
@@ -2728,6 +2821,10 @@ namespace BlockShooter.Editor
                 _shots[cell.col, cell.row] = cell.shotCount <= 0 ? 100 : cell.shotCount;
                 _doors[cell.col, cell.row] = cell.doorCount;
                 _freezeCount[cell.col, cell.row] = cell.freezeCount <= 0 ? 50 : cell.freezeCount;
+                _tunnelDirections[cell.col, cell.row] = cell.tunnelDirection;
+                _tunnelSequences[cell.col, cell.row] = cell.tunnelSequence != null 
+                    ? new List<TunnelSequenceItem>(cell.tunnelSequence) 
+                    : new List<TunnelSequenceItem>();
             }
 
             _groups.Clear();
@@ -3038,15 +3135,19 @@ namespace BlockShooter.Editor
             lr.splineTangentsOut  = new List<Vector3>(_tangentsOut);
             lr.splineTangentModes = _tangentModes.Select(m => (int)m).ToList();
 
-            lr.cells.Clear();
-            for (int c = 0; c < _gridCols; c++)
-            for (int r = 0; r < _gridRows; r++)
-                lr.cells.Add(new LevelGridCell
-                {
-                    col=c, row=r, type=_type[c,r], color=_color[c,r],
-                    shotCount=_shots[c,r], doorCount=_doors[c,r],
-                    freezeCount=_freezeCount[c,r]
-                });
+             lr.cells.Clear();
+             for (int c = 0; c < _gridCols; c++)
+             for (int r = 0; r < _gridRows; r++)
+                 lr.cells.Add(new LevelGridCell
+                 {
+                     col=c, row=r, type=_type[c,r], color=_color[c,r],
+                     shotCount=_shots[c,r], doorCount=_doors[c,r],
+                     freezeCount=_freezeCount[c,r],
+                     tunnelDirection=_tunnelDirections[c,r],
+                     tunnelSequence=_tunnelSequences[c,r] != null 
+                         ? new List<TunnelSequenceItem>(_tunnelSequences[c,r]) 
+                         : new List<TunnelSequenceItem>()
+                 });
 
             lr.groups.Clear();
             foreach (var g in _groups)
@@ -3137,17 +3238,28 @@ namespace BlockShooter.Editor
             _gridCols = Mathf.Clamp(_gridCols, 1, MaxCols);
             _gridRows = Mathf.Clamp(_gridRows, 1, MaxRows);
             var pt=_type; var pc=_color; var ps=_shots; var pd=_doors; var pf=_freezeCount;
+            var ptd=_tunnelDirections; var pts=_tunnelSequences;
+
             _type  = new GridCellType  [_gridCols, _gridRows];
             _color = new BlockColorType[_gridCols, _gridRows];
             _shots = new int           [_gridCols, _gridRows];
             _doors = new int           [_gridCols, _gridRows];
             _freezeCount = new int     [_gridCols, _gridRows];
+            _tunnelDirections = new GridDirection[_gridCols, _gridRows];
+            _tunnelSequences = new List<TunnelSequenceItem>[_gridCols, _gridRows];
+
             for (int c=0;c<_gridCols;c++) for (int r=0;r<_gridRows;r++)
             {
                 _shots[c,r]=100; _doors[c,r]=5; _freezeCount[c,r]=50;
+                _tunnelDirections[c,r] = GridDirection.Down;
+                _tunnelSequences[c,r] = new List<TunnelSequenceItem>();
+
                 if (pt==null||c>=pt.GetLength(0)||r>=pt.GetLength(1)) continue;
                 _type[c,r]=pt[c,r]; _color[c,r]=pc[c,r]; _shots[c,r]=ps[c,r]; _doors[c,r]=pd[c,r];
                 if (pf!=null && c<pf.GetLength(0) && r<pf.GetLength(1)) _freezeCount[c,r]=pf[c,r];
+                if (ptd!=null && c<ptd.GetLength(0) && r<ptd.GetLength(1)) _tunnelDirections[c,r]=ptd[c,r];
+                if (pts!=null && c<pts.GetLength(0) && r<pts.GetLength(1))
+                    _tunnelSequences[c,r] = pts[c,r] != null ? new List<TunnelSequenceItem>(pts[c,r]) : new List<TunnelSequenceItem>();
             }
         }
 
