@@ -41,6 +41,7 @@ namespace BlockShooter
             public BlockGroup OriginalGroup;
             public BlockGroup MergedGroup;
             public bool[] MergedLanes;
+            public float LastPositionedT;
         }
 
         public void Initialize()
@@ -115,7 +116,8 @@ namespace BlockShooter
                             RowSpacing = rowSpacing,
                             OriginalGroup = group,
                             MergedGroup = null,
-                            MergedLanes = new bool[5]
+                            MergedLanes = new bool[5],
+                            LastPositionedT = -1f
                         });
                         globalRowIndex++;
                     }
@@ -170,10 +172,21 @@ namespace BlockShooter
                     }
                 }
 
-                entry.CurrentT = Mathf.Min(entry.CurrentT + delta, maxT);
-                _rows[i] = entry;
+                float nextT = Mathf.Min(entry.CurrentT + delta, maxT);
 
-                PlaceRowAtT(entry);
+                // Optimization: skip spline calculation & transform repositioning if T has not changed.
+                if (Mathf.Abs(nextT - entry.LastPositionedT) > 0.0001f)
+                {
+                    entry.CurrentT = nextT;
+                    entry.LastPositionedT = nextT;
+                    _rows[i] = entry;
+                    PlaceRowAtT(entry);
+                }
+                else
+                {
+                    entry.CurrentT = nextT;
+                    _rows[i] = entry;
+                }
             }
 
             // Check and merge blocks for all rows that have reached the stop point or are already merging

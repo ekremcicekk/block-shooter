@@ -44,23 +44,33 @@ namespace BlockShooter
 
         public Material GetMaterial(BlockColorType colorType)
         {
+            Material mat = null;
             if (colors != null)
             {
                 var def = colors.Find(x => x.colorType == colorType);
                 if (def != null && def.material != null)
-                    return def.material;
+                    mat = def.material;
             }
 
-            return colorType switch
+            if (mat == null)
             {
-                BlockColorType.Red    => redMaterial,
-                BlockColorType.Blue   => blueMaterial,
-                BlockColorType.Green  => greenMaterial,
-                BlockColorType.Yellow => yellowMaterial,
-                BlockColorType.Purple => purpleMaterial,
-                BlockColorType.Orange => orangeMaterial,
-                _ => null
-            };
+                mat = colorType switch
+                {
+                    BlockColorType.Red    => redMaterial,
+                    BlockColorType.Blue   => blueMaterial,
+                    BlockColorType.Green  => greenMaterial,
+                    BlockColorType.Yellow => yellowMaterial,
+                    BlockColorType.Purple => purpleMaterial,
+                    BlockColorType.Orange => orangeMaterial,
+                    _ => null
+                };
+            }
+
+            if (mat != null)
+            {
+                mat.enableInstancing = true;
+            }
+            return mat;
         }
 
         public Color GetColor(BlockColorType colorType)

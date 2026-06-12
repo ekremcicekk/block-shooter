@@ -90,20 +90,28 @@ namespace BlockShooter
 
         private Material GetColorMaterial(BlockColorType color)
         {
+            Material mat = null;
             if (GameManager.Instance != null && GameManager.Instance.config != null)
             {
-                return GameManager.Instance.config.GetMaterial(color);
+                mat = GameManager.Instance.config.GetMaterial(color);
             }
 #if UNITY_EDITOR
-            var guids = UnityEditor.AssetDatabase.FindAssets("t:GameConfig");
-            if (guids.Length > 0)
+            else
             {
-                var cfg = UnityEditor.AssetDatabase.LoadAssetAtPath<GameConfig>(
-                    UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]));
-                return cfg?.GetMaterial(color);
+                var guids = UnityEditor.AssetDatabase.FindAssets("t:GameConfig");
+                if (guids.Length > 0)
+                {
+                    var cfg = UnityEditor.AssetDatabase.LoadAssetAtPath<GameConfig>(
+                        UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]));
+                    mat = cfg?.GetMaterial(color);
+                }
             }
 #endif
-            return null;
+            if (mat != null)
+            {
+                mat.enableInstancing = true;
+            }
+            return mat;
         }
 
         public void SpawnBlocksRuntime()

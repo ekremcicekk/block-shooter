@@ -272,6 +272,15 @@ namespace BlockShooter
                     Quaternion targetRot = rot;
                     block.transform.position = targetPos + block.transitionOffset;
                     block.transform.rotation = targetRot * block.transitionRotOffset;
+
+                    // Centralized FireRange Entry Check: avoids individual block Update() overhead.
+                    if (!block.IsDestroyed && !block.HasEnteredFireRange && FireRange.Instance != null)
+                    {
+                        if (FireRange.Instance.GetBounds().Contains(block.transform.position))
+                        {
+                            FireRange.Instance.RegisterBlockManually(block);
+                        }
+                    }
                 }
             }
 

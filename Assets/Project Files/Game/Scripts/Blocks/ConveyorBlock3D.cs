@@ -121,17 +121,6 @@ namespace BlockShooter
                 .OnComplete(() => gameObject.SetActive(false));
         }
 
-        private void Update()
-        {
-            if (!_isDestroyed && !HasEnteredFireRange && FireRange.Instance != null)
-            {
-                if (FireRange.Instance.GetBounds().Contains(transform.position))
-                {
-                    FireRange.Instance.RegisterBlockManually(this);
-                }
-            }
-        }
-
         private void OnDisable()
         {
             DOTween.Kill(transform);

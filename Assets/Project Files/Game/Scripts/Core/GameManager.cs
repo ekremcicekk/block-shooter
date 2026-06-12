@@ -30,6 +30,9 @@ namespace BlockShooter
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+
+            // Lock target frame rate to 60 FPS for smooth performance and to prevent stuttering
+            Application.targetFrameRate = 60;
         }
 
         private void Start()
