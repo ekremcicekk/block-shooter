@@ -213,7 +213,7 @@ Camera:
   far clip plane: 100
   field of view: 45
   orthographic: 1
-  orthographic size: 11
+  orthographic size: 10
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -238,7 +238,7 @@ Transform:
   m_GameObject: {fileID: 186515673}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: -3.0310888, z: -1.75}
+  m_LocalPosition: {x: 0, y: -2.1650634, z: -1.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -553,6 +553,19 @@ MonoBehaviour:
     _showOnce: 0
     _tutorialRoot: {fileID: 1841191800}
     _useSteps: 1
+    _targetId: moveshooter
+    _handOffset: {x: 0.8, y: 0, z: 0}
+    _steps:
+    - _stepRoot: {fileID: 2568637850377272841}
+      _targetId: moveboosterUI
+      _handOffset: {x: 150, y: -50, z: 0}
+    - _stepRoot: {fileID: 2568637850377272840}
+      _targetId: moveshooterblock
+      _handOffset: {x: 0.8, y: 0, z: 0}
+  - _level: 25
+    _showOnce: 0
+    _tutorialRoot: {fileID: 1841191800}
+    _useSteps: 0
     _targetId: moveshooter
     _handOffset: {x: 0.8, y: 0, z: 0}
     _steps:
