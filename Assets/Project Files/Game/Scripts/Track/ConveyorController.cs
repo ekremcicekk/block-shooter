@@ -32,6 +32,7 @@ namespace BlockShooter
         private float _splineWorldLength;
         private float _baseSpeed = 1.5f;
         private bool  _isFrozen;
+        private float _travelT = 0f;
 
         private readonly List<GroupEntry> _groups = new();
         private readonly List<ArrowMarker> _arrows = new();
@@ -149,6 +150,7 @@ namespace BlockShooter
             if (_splineWorldLength <= 0f) return;
 
             float delta = (speed / _splineWorldLength) * Time.deltaTime;
+            _travelT = (_travelT + delta) % 1f;
 
             for (int i = 0; i < _groups.Count; i++)
             {
@@ -222,6 +224,29 @@ namespace BlockShooter
         public void SetSpeedMultiplier(float multiplier)
         {
             speed = _baseSpeed * multiplier;
+        }
+
+        public float GetAlignedT(float targetT, float rowSpacing)
+        {
+            if (_splineWorldLength <= 0f) return targetT;
+
+            float dT = rowSpacing / _splineWorldLength;
+            if (dT <= 0f) return targetT;
+
+            // Express targetT relative to _travelT
+            float relativeT = targetT - _travelT;
+            
+            // Wrap to [0, 1) range
+            relativeT = (relativeT % 1f + 1f) % 1f;
+
+            // Find nearest slot index
+            float slotIndex = Mathf.Round(relativeT / dT);
+            
+            // Reconstruct aligned T
+            float alignedT = (_travelT + slotIndex * dT) % 1f;
+            alignedT = (alignedT + 1f) % 1f;
+            
+            return alignedT;
         }
 
         public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType)

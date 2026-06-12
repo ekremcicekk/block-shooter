@@ -274,20 +274,23 @@ namespace BlockShooter
                 // Only start merging if the row has reached the merge stop point
                 if (row.CurrentT < _mergeStopT - 0.001f) return;
 
-                // Check if the conveyor is clear for the lanes that have active blocks in our row
-                float checkHalfSize = row.RowSpacing / ConveyorController.Instance.SplineWorldLength;
+                // Find the nearest aligned slot on the main conveyor grid
+                float alignedMergeT = ConveyorController.Instance.GetAlignedT(mergeT, row.RowSpacing);
+
+                // Check if the conveyor is clear for the lanes that have active blocks in our row around the aligned slot
+                float checkHalfSize = (row.RowSpacing * 0.5f) / ConveyorController.Instance.SplineWorldLength;
                 bool canMerge = true;
                 foreach (var block in row.Blocks)
                 {
                     if (block == null || block.IsDestroyed) continue;
-                    if (!ConveyorController.Instance.IsRangeEmptyForLane(mergeT - checkHalfSize, mergeT + checkHalfSize, block.LaneIndex))
+                    if (!ConveyorController.Instance.IsRangeEmptyForLane(alignedMergeT - checkHalfSize, alignedMergeT + checkHalfSize, block.LaneIndex))
                     {
                         canMerge = false;
                         break;
                     }
                 }
 
-                if (!canMerge) return; // wait until the conveyor is clear
+                if (!canMerge) return; // wait until the aligned conveyor slot is clear
 
 
                 // Create the MergedGroup immediately to start the merging state
@@ -301,7 +304,7 @@ namespace BlockShooter
                 newGroup.Initialize();
 
                 row.MergedGroup = newGroup;
-                ConveyorController.Instance.InsertGroupAt(newGroup, mergeT);
+                ConveyorController.Instance.InsertGroupAt(newGroup, alignedMergeT);
             }
 
             // Now that MergedGroup is created, we are in the merging state.
