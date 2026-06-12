@@ -248,6 +248,19 @@ namespace BlockShooter
             return result;
         }
 
+        public Transform GetSlotTransform(ShooterBlock block)
+        {
+            for (int i = 0; i < _occupied.Count; i++)
+            {
+                if (_occupied[i] == block)
+                {
+                    return i < _slotTransforms.Count ? _slotTransforms[i] : null;
+                }
+            }
+            return null;
+        }
+
+
         // ── Private ───────────────────────────────────────────────────────────
 
         private void SetIndicatorVisible(int idx, bool visible)

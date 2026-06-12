@@ -142,7 +142,41 @@ namespace BlockShooter
             var candidates = new System.Collections.Generic.List<ShooterBlock>();
             foreach (var b in slotted)
             {
-                if (b != null && !b.IsShooting && mainColors.Contains(b.ColorType))
+                bool isTutorialTarget = false;
+                if (global::BlockShooter.TutorialManager.Instance != null && global::BlockShooter.TutorialManager.Instance.IsRunning)
+                {
+                    var activeTarget = global::BlockShooter.TutorialManager.Instance.ActiveTarget;
+                    if (activeTarget != null)
+                    {
+                        if (activeTarget.Matches(b.transform))
+                        {
+                            isTutorialTarget = true;
+                        }
+                        else
+                        {
+                            var slotTransform = SlotSystem.Instance.GetSlotTransform(b);
+                            if (slotTransform != null && activeTarget.Matches(slotTransform))
+                            {
+                                isTutorialTarget = true;
+                            }
+                        }
+
+                        if (!isTutorialTarget)
+                        {
+                            var bTargets = b.GetComponentsInChildren<TutorialTarget>();
+                            foreach (var t in bTargets)
+                            {
+                                if (t != null && string.Equals(t.TargetId, activeTarget.TargetId, System.StringComparison.OrdinalIgnoreCase))
+                                {
+                                    isTutorialTarget = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (b != null && !b.IsShooting && (isTutorialTarget || mainColors.Contains(b.ColorType)))
                 {
                     candidates.Add(b);
                 }
@@ -173,6 +207,43 @@ namespace BlockShooter
                     var hit = RaycastBlock();
                     if (hit != null)
                     {
+                        // Validate click with tutorial manager if running
+                        if (global::BlockShooter.TutorialManager.Instance != null && global::BlockShooter.TutorialManager.Instance.IsRunning)
+                        {
+                            TutorialTarget matchedTarget = null;
+                            var activeTarget = global::BlockShooter.TutorialManager.Instance.ActiveTarget;
+                            if (activeTarget != null)
+                            {
+                                var hitTargets = hit.GetComponentsInChildren<TutorialTarget>();
+                                foreach (var t in hitTargets)
+                                {
+                                    if (t != null && string.Equals(t.TargetId, activeTarget.TargetId, System.StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        matchedTarget = t;
+                                        break;
+                                    }
+                                }
+                                if (matchedTarget == null)
+                                {
+                                    var hitParentTargets = hit.GetComponentsInParent<TutorialTarget>();
+                                    foreach (var t in hitParentTargets)
+                                    {
+                                        if (t != null && string.Equals(t.TargetId, activeTarget.TargetId, System.StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            matchedTarget = t;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (global::BlockShooter.TutorialManager.Instance.TryHandleTargetClick(matchedTarget, hit.transform))
+                            {
+                                // Wrong target: block click and continue waiting
+                                continue;
+                            }
+                        }
+
                         if (candidates.Contains(hit))
                         {
                             IsAwaitingSuperShooterTarget = false;
@@ -318,7 +389,7 @@ namespace BlockShooter
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit, 100f))
-                return hit.collider.GetComponent<ShooterBlock>();
+                return hit.collider.GetComponentInParent<ShooterBlock>();
             return null;
         }
 

@@ -523,21 +523,21 @@ MonoBehaviour:
   _canvasController: {fileID: 909960663}
   _tutorials:
   - _level: 1
-    _showOnce: 0
+    _showOnce: 1
     _tutorialRoot: {fileID: 2568637850377272839}
     _useSteps: 0
     _targetId: firstclick
     _handOffset: {x: 0.8, y: 0, z: 0}
     _steps: []
   - _level: 12
-    _showOnce: 0
+    _showOnce: 1
     _tutorialRoot: {fileID: 352744860}
     _useSteps: 0
     _targetId: extraslot
     _handOffset: {x: 150, y: -50, z: 0}
     _steps: []
   - _level: 15
-    _showOnce: 0
+    _showOnce: 1
     _tutorialRoot: {fileID: 1988682671}
     _useSteps: 0
     _targetId: mysterblock
@@ -550,7 +550,7 @@ MonoBehaviour:
       _targetId: 
       _handOffset: {x: 0, y: 0, z: 0}
   - _level: 22
-    _showOnce: 0
+    _showOnce: 1
     _tutorialRoot: {fileID: 1841191800}
     _useSteps: 1
     _targetId: moveshooter
@@ -563,8 +563,8 @@ MonoBehaviour:
       _targetId: moveshooterblock
       _handOffset: {x: 0.8, y: 0, z: 0}
   - _level: 25
-    _showOnce: 0
-    _tutorialRoot: {fileID: 1841191800}
+    _showOnce: 1
+    _tutorialRoot: {fileID: 1556488776}
     _useSteps: 0
     _targetId: iceblock
     _handOffset: {x: 0.8, y: 0, z: 0}
@@ -576,7 +576,7 @@ MonoBehaviour:
       _targetId: moveshooterblock
       _handOffset: {x: 0.8, y: 0, z: 0}
   - _level: 32
-    _showOnce: 0
+    _showOnce: 1
     _tutorialRoot: {fileID: 2568637850377272845}
     _useSteps: 1
     _targetId: iceblock
@@ -862,6 +862,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1800220082}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1556488776 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6889700989714927303, guid: 45671a9874892ac4d9b6c986bf12cdbf, type: 3}
+  m_PrefabInstance: {fileID: 2568637850377272838}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1677898172
 GameObject:
   m_ObjectHideFlags: 0

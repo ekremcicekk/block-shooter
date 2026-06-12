@@ -184,7 +184,7 @@ namespace BlockShooter
             }
         }
 
-        public bool TryHandleTargetClick(TutorialTarget clickedTarget)
+        public bool TryHandleTargetClick(TutorialTarget clickedTarget, Transform clickedTransform = null)
         {
             if (!_isRunning)
             {
@@ -194,6 +194,87 @@ namespace BlockShooter
             if (_activeTutorial == null)
             {
                 return false;
+            }
+
+            // 1. Check if the clicked transform has any matching TutorialTarget by ID (including children/parents)
+            string activeTargetId = GetActiveTargetId();
+            if (clickedTransform != null && !string.IsNullOrWhiteSpace(activeTargetId))
+            {
+                var targets = clickedTransform.GetComponentsInChildren<TutorialTarget>();
+                foreach (var t in targets)
+                {
+                    if (t != null && string.Equals(t.TargetId, activeTargetId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (_activeTutorial.UseSteps) AdvanceStep();
+                        else CompleteActiveTutorial();
+                        return false; // Correct target!
+                    }
+                }
+                
+                var parentTargets = clickedTransform.GetComponentsInParent<TutorialTarget>();
+                foreach (var t in parentTargets)
+                {
+                    if (t != null && string.Equals(t.TargetId, activeTargetId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (_activeTutorial.UseSteps) AdvanceStep();
+                        else CompleteActiveTutorial();
+                        return false; // Correct target!
+                    }
+                }
+
+                // If in slot, also check slot transform's targets
+                var block = clickedTransform.GetComponentInParent<ShooterBlock>();
+                if (block != null && block.State == ShooterBlock.BlockState.InSlot && SlotSystem.Instance != null)
+                {
+                    var slotTransform = SlotSystem.Instance.GetSlotTransform(block);
+                    if (slotTransform != null)
+                    {
+                        var slotTargets = slotTransform.GetComponentsInChildren<TutorialTarget>();
+                        foreach (var t in slotTargets)
+                        {
+                            if (t != null && string.Equals(t.TargetId, activeTargetId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (_activeTutorial.UseSteps) AdvanceStep();
+                                else CompleteActiveTutorial();
+                                return false; // Correct target!
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback matching by Transform to support targets where TutorialTarget is on a parent/placeholder and _worldTarget points here.
+            if (_activeTarget != null && clickedTransform != null)
+            {
+                if (_activeTarget.WorldTarget == clickedTransform || 
+                    clickedTransform.IsChildOf(_activeTarget.WorldTarget) || 
+                    _activeTarget.WorldTarget.IsChildOf(clickedTransform) ||
+                    _activeTarget.transform == clickedTransform ||
+                    clickedTransform.IsChildOf(_activeTarget.transform))
+                {
+                    if (_activeTutorial.UseSteps)
+                    {
+                        AdvanceStep();
+                    }
+                    else
+                    {
+                        CompleteActiveTutorial();
+                    }
+                    return false; // Correct target!
+                }
+
+                // Slot transform fallback check
+                var block = clickedTransform.GetComponentInParent<ShooterBlock>();
+                if (block != null && block.State == ShooterBlock.BlockState.InSlot && SlotSystem.Instance != null)
+                {
+                    var slotTransform = SlotSystem.Instance.GetSlotTransform(block);
+                    if (slotTransform != null && (_activeTarget.transform == slotTransform || slotTransform.IsChildOf(_activeTarget.transform) || _activeTarget.transform.IsChildOf(slotTransform)))
+                    {
+                        if (_activeTutorial.UseSteps) AdvanceStep();
+                        else CompleteActiveTutorial();
+                        return false; // Correct target!
+                    }
+                }
             }
 
             if (_activeTutorial.UseSteps)
@@ -231,6 +312,7 @@ namespace BlockShooter
 
             return true;
         }
+
 
         public void CompleteActiveStep()
         {

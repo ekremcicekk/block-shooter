@@ -172,13 +172,21 @@ namespace BlockShooter
         private void OnMouseDown()
         {
             if (!GameManager.Instance.IsPlaying) return;
-            if (State != BlockState.InGrid) return;
 
-            TutorialTarget target = tutorialTarget != null ? tutorialTarget : GetComponent<TutorialTarget>();
-            if (global::BlockShooter.TutorialManager.Instance != null && global::BlockShooter.TutorialManager.Instance.TryHandleTargetClick(target))
+            // During SuperShooter selection, BoosterManager intercepts the click and validates the tutorial target.
+            if (BoosterManager.Instance != null && BoosterManager.Instance.IsAwaitingSuperShooterTarget)
             {
                 return;
             }
+
+            TutorialTarget target = tutorialTarget != null ? tutorialTarget : GetComponent<TutorialTarget>();
+            if (global::BlockShooter.TutorialManager.Instance != null && global::BlockShooter.TutorialManager.Instance.TryHandleTargetClick(target, transform))
+            {
+                return;
+            }
+
+            if (State != BlockState.InGrid) return;
+
 
             if (IsFrozen)
             {
