@@ -28,6 +28,10 @@ namespace BlockShooter
         [HideInInspector] public Vector3 transitionOffset = Vector3.zero;
         [HideInInspector] public Quaternion transitionRotOffset = Quaternion.identity;
 
+        [HideInInspector] public Vector3 jumpStartPos;
+        [HideInInspector] public Quaternion jumpStartRot;
+        [HideInInspector] public float jumpProgress = 1f;
+
         // Serialized so the Level Editor can bake row/lane into the prefab hierarchy.
         [SerializeField] private int _rowIndex;
         [SerializeField] private int _laneIndex;

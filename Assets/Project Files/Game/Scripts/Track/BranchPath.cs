@@ -402,51 +402,27 @@ namespace BlockShooter
             // Force update Conveyor positions so target position is updated
             ConveyorController.Instance.ForceUpdateGroupPosition(row.MergedGroup);
 
-            Vector3 targetWorldPos = block.transform.position;
-            Quaternion targetWorldRot = block.transform.rotation;
+            // Setup jump start positions
+            block.jumpStartPos = prevPosition;
+            block.jumpStartRot = prevRotation;
+            block.jumpProgress = 0f;
 
-            block.transitionOffset = prevPosition - targetWorldPos;
-            block.transitionRotOffset = Quaternion.Inverse(targetWorldRot) * prevRotation;
-
-            // Immediately set the position and rotation back to the transition starting state
-            // to prevent 1-frame visual flicker
+            // Immediately set the position and rotation back to prevent 1-frame visual flicker
             block.transform.position = prevPosition;
             block.transform.rotation = prevRotation;
 
-            // Get MergedGroup reference to a local variable to use inside lambda expressions,
-            // as ref parameters like 'row' cannot be captured by closures.
-            var mergedGroup = row.MergedGroup;
-
-            float duration = 0.16f; // Snappy jump transition duration (0.16s for a clean arc)
-            float jumpHeight = 0.35f; // Higher peak height to jump clearly over the outer wall (0.35m)
-            Vector3 startOffset = block.transitionOffset;
-            Quaternion initialRotOffset = block.transitionRotOffset;
+            // Sequential wave delay: lanes jump one by one from left to right (lane 0 to 4)
+            float delay = lane * 0.04f;
+            float duration = 0.22f; // Snappy but smooth jump duration
 
             // Clean up any existing tweens on this block to avoid collisions
             DOTween.Kill(block);
 
-            // Jump tween for position offset (uses Ease.OutQuad for quick leap and smooth landing)
-            DOTween.To(tVal => {
-                if (block == null || mergedGroup == null) return;
-                
-                // Interpolate X and Z offsets linearly to 0
-                float x = Mathf.Lerp(startOffset.x, 0f, tVal);
-                float z = Mathf.Lerp(startOffset.z, 0f, tVal);
-                
-                // Parabolic vertical arc added to the Y offset
-                float yNormal = Mathf.Lerp(startOffset.y, 0f, tVal);
-                float arc = Mathf.Sin(tVal * Mathf.PI) * jumpHeight;
-                float y = yNormal + arc;
-                
-                block.transitionOffset = new Vector3(x, y, z);
-            }, 0f, 1f, duration).SetEase(Ease.OutQuad).SetId(block);
-
-            // Slerp tween for rotation offset (uses Ease.OutQuad to match position snappiness)
-            DOTween.To(tVal => {
-                if (block == null) return;
-                block.transitionRotOffset = Quaternion.Slerp(initialRotOffset, Quaternion.identity, tVal);
-            }, 0f, 1f, duration).SetEase(Ease.OutQuad).SetId(block);
-
+            // Animate jumpProgress from 0 to 1
+            DOTween.To(() => block.jumpProgress, x => block.jumpProgress = x, 1f, duration)
+                .SetDelay(delay)
+                .SetEase(Ease.OutQuad)
+                .SetId(block);
         }
 
         private float GetMainTrackLaneSpacing()

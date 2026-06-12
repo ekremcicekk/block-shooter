@@ -295,8 +295,20 @@ namespace BlockShooter
                     float xOff = (lane - (group.LaneCount - 1) * 0.5f) * group.LaneSpacing;
                     Vector3 targetPos = worldPos + right * xOff;
                     Quaternion targetRot = rot;
-                    block.transform.position = targetPos + block.transitionOffset;
-                    block.transform.rotation = targetRot * block.transitionRotOffset;
+
+                    if (block.jumpProgress < 0.999f)
+                    {
+                        float tVal = block.jumpProgress;
+                        float jumpHeight = 0.35f;
+                        float arc = Mathf.Sin(tVal * Mathf.PI) * jumpHeight;
+                        block.transform.position = Vector3.Lerp(block.jumpStartPos, targetPos, tVal) + Vector3.up * arc;
+                        block.transform.rotation = Quaternion.Slerp(block.jumpStartRot, targetRot, tVal);
+                    }
+                    else
+                    {
+                        block.transform.position = targetPos;
+                        block.transform.rotation = targetRot;
+                    }
 
                     // Centralized FireRange Entry Check: avoids individual block Update() overhead.
                     if (!block.IsDestroyed && !block.HasEnteredFireRange && FireRange.Instance != null)
