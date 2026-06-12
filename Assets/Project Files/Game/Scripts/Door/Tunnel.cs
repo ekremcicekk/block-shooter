@@ -20,6 +20,8 @@ namespace BlockShooter
         [HideInInspector]
         public int col, row;
 
+        public bool HasBlocksRemaining => _isActive && _remainingBlocks > 0;
+
         private int _remainingBlocks;
         private List<TunnelSequenceItem> _runtimeSequence = new();
         private bool _isActive = true;

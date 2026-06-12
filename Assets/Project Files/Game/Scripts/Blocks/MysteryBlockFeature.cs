@@ -19,7 +19,19 @@ namespace BlockShooter
         [Tooltip("Optional particle system to play when revealed")]
         public ParticleSystem revealParticle;
 
+        [Header("Mystery Animator")]
+        [Tooltip("Animator for the mystery visual (e.g. Myster object)")]
+        public Animator animator;
+
         private ShooterBlock _block;
+
+        public void PlayShake()
+        {
+            if (animator != null)
+            {
+                animator.SetTrigger("ShooterShake");
+            }
+        }
 
         private void Awake()
         {
@@ -48,7 +60,9 @@ namespace BlockShooter
 
             bool isMystery = _block.isMystery;
             if (mysteryVisual != null) mysteryVisual.SetActive(isMystery);
-            if (baseVisual != null) baseVisual.SetActive(!isMystery);
+
+            bool shouldShowBase = !isMystery && !_block.IsFrozen;
+            if (baseVisual != null) baseVisual.SetActive(shouldShowBase);
         }
 
         public void Reveal()
@@ -57,7 +71,9 @@ namespace BlockShooter
             _block.isMystery = false;
 
             if (mysteryVisual != null) mysteryVisual.SetActive(false);
-            if (baseVisual != null) baseVisual.SetActive(true);
+
+            bool shouldShowBase = !_block.IsFrozen;
+            if (baseVisual != null) baseVisual.SetActive(shouldShowBase);
 
             _block.RevealFromFeature();
 

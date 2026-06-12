@@ -146,7 +146,7 @@ namespace BlockShooter
             if (feature != null)
             {
                 if (feature.mysteryVisual != null) feature.mysteryVisual.SetActive(isMystery);
-                if (feature.baseVisual != null) feature.baseVisual.SetActive(!isMystery);
+                if (feature.baseVisual != null) feature.baseVisual.SetActive(!isMystery && !IsFrozen);
             }
 
             if (!isMystery)
@@ -190,13 +190,10 @@ namespace BlockShooter
 
             if (IsFrozen)
             {
-                if (bodyAnimator != null)
+                var freezeFeature = GetComponent<FreezeBlockFeature>();
+                if (freezeFeature != null && freezeFeature.animator != null)
                 {
-                    bodyAnimator.SetTrigger("ShooterShake");
-                }
-                else
-                {
-                    transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                    freezeFeature.PlayShake();
                 }
                 return;
             }
@@ -231,13 +228,26 @@ namespace BlockShooter
 
             if (!_isAccessible)
             {
-                if (bodyAnimator != null)
+                if (_isMystery)
+                {
+                    var mysteryFeature = GetComponent<MysteryBlockFeature>();
+                    if (mysteryFeature != null && mysteryFeature.animator != null)
+                    {
+                        mysteryFeature.PlayShake();
+                        return;
+                    }
+                }
+
+                if (bodyAnimator != null && bodyAnimator.isActiveAndEnabled)
                 {
                     bodyAnimator.SetTrigger("ShooterShake");
                 }
                 else
                 {
-                    transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 3, 0.5f);
+                    transform.DOKill();
+                    transform.localScale = Vector3.one * 0.8f;
+                    transform.DOPunchRotation(new Vector3(0f, 15f, 0f), 0.4f, 12, 1f);
+                    transform.DOPunchScale(Vector3.one * 0.08f, 0.4f, 8, 1f);
                 }
                 return;
             }

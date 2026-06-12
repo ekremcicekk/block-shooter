@@ -25,7 +25,19 @@ namespace BlockShooter
         public bool isFrozen = true;
         public int freezeCount = 3;
 
+        [Header("Freeze Animator")]
+        [Tooltip("Animator for the freeze visual (e.g. Freeze object)")]
+        public Animator animator;
+
         private ShooterBlock _block;
+
+        public void PlayShake()
+        {
+            if (animator != null)
+            {
+                animator.SetTrigger("ShooterShake");
+            }
+        }
 
         private void Awake()
         {
@@ -75,7 +87,11 @@ namespace BlockShooter
         public void SyncVisualStates()
         {
             if (freezeVisual != null) freezeVisual.SetActive(isFrozen);
-            if (baseVisual != null) baseVisual.SetActive(!isFrozen);
+            
+            bool isMystery = _block != null && _block.isMystery;
+            bool shouldShowBase = !isFrozen && !isMystery;
+            if (baseVisual != null) baseVisual.SetActive(shouldShowBase);
+            
             UpdateTextUI();
         }
 
@@ -98,7 +114,11 @@ namespace BlockShooter
             }
 
             if (freezeVisual != null) freezeVisual.SetActive(isFrozen);
-            if (baseVisual != null) baseVisual.SetActive(!isFrozen);
+            
+            bool isMystery = _block != null && _block.isMystery;
+            bool shouldShowBase = !isFrozen && !isMystery;
+            if (baseVisual != null) baseVisual.SetActive(shouldShowBase);
+            
             UpdateTextUI();
         }
 
@@ -120,7 +140,10 @@ namespace BlockShooter
             isFrozen = false;
 
             if (freezeVisual != null) freezeVisual.SetActive(false);
-            if (baseVisual != null) baseVisual.SetActive(true);
+            
+            bool isMystery = _block != null && _block.isMystery;
+            bool shouldShowBase = !isMystery;
+            if (baseVisual != null) baseVisual.SetActive(shouldShowBase);
 
             if (_block != null)
             {

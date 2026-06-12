@@ -112,17 +112,31 @@ namespace BlockShooter
                 }
             }
 
-            // 2. Mark active doors
-            float cellSize = deck != null ? deck.cellSize : 1.2f;
-            Vector3 origin = transform.position;
+            // 2. Mark active doors (tunnels)
             var tunnels = GetComponentsInChildren<Tunnel>(false);
             foreach (var tunnel in tunnels)
             {
-                int col = Mathf.RoundToInt((tunnel.transform.position.x - origin.x) / cellSize);
-                int row = Mathf.RoundToInt((tunnel.transform.position.z - origin.z) / cellSize);
-                if (col >= 0 && col < cols && row >= 0 && row < rows)
+                if (tunnel.col >= 0 && tunnel.col < cols && tunnel.row >= 0 && tunnel.row < rows)
                 {
-                    isBlocked[col, row] = true;
+                    isBlocked[tunnel.col, tunnel.row] = true;
+                }
+
+                // If the tunnel has blocks remaining to spawn, treat the target cell in front of it as blocked.
+                if (tunnel.HasBlocksRemaining)
+                {
+                    int spawnCol = tunnel.col;
+                    int spawnRow = tunnel.row;
+                    switch (tunnel.direction)
+                    {
+                        case GridDirection.Down: spawnRow--; break;
+                        case GridDirection.Up: spawnRow++; break;
+                        case GridDirection.Left: spawnCol--; break;
+                        case GridDirection.Right: spawnCol++; break;
+                    }
+                    if (spawnCol >= 0 && spawnCol < cols && spawnRow >= 0 && spawnRow < rows)
+                    {
+                        isBlocked[spawnCol, spawnRow] = true;
+                    }
                 }
             }
 
