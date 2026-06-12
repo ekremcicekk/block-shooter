@@ -25,6 +25,8 @@ namespace BlockShooter
         private float _failCheckTimer = 0f;
         private const float FailCheckInterval = 0.1f;
         private bool _isDeadlockActive = false;
+        private string _lastDeadlockLog = "";
+        private string _lastDepleteLog = "";
 
         private void Awake()
         {
@@ -157,7 +159,11 @@ namespace BlockShooter
             yield return new WaitForSeconds(1.5f);
 
             // Re-verify after delay to ensure status didn't change (e.g. from a booster)
-            if (State == GameState.Playing && (IsDeadlocked() || AreAllShootersDepleted()))
+            bool isDeadlocked = IsDeadlocked();
+            bool isAllDepleted = AreAllShootersDepleted();
+            Debug.Log($"[FailCheck-DelayedRoutine] Re-verifying fail state: isDeadlocked={isDeadlocked}, isAllDepleted={isAllDepleted}");
+
+            if (State == GameState.Playing && (isDeadlocked || isAllDepleted))
             {
                 Debug.Log("[FailCheck] Fail sequence completed. Triggering fail state.");
                 HandleFailState();
@@ -173,7 +179,11 @@ namespace BlockShooter
             if (SlotSystem.Instance == null || ConveyorController.Instance == null) return false;
 
             // While projectiles are still in flight, the conveyor state is changing.
-            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return false;
+            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0)
+            {
+                _lastDeadlockLog = ""; // clear cache
+                return false;
+            }
 
             // Step 1: Check if player can shoot from slots
             var slotColors = new HashSet<BlockColorType>();
@@ -186,7 +196,11 @@ namespace BlockShooter
             var mainColors = ConveyorController.Instance.GetLiveColorSet();
 
             // Empty main conveyor is a win state, not a deadlock
-            if (mainColors.Count == 0) return false;
+            if (mainColors.Count == 0)
+            {
+                _lastDeadlockLog = ""; // clear cache
+                return false;
+            }
 
             bool canShoot = false;
             foreach (var color in slotColors)
@@ -216,11 +230,16 @@ namespace BlockShooter
             bool canPull = hasEmptySlot && hasAccessibleShooter;
 
             // If we can shoot from slots, or pull from the grid, we are not deadlocked
-            if (canShoot || canPull) return false;
+            if (canShoot || canPull)
+            {
+                _lastDeadlockLog = ""; // clear cache when player has valid moves
+                return false;
+            }
 
             // Step 3: Check branch merge potential
             // If the player cannot shoot or pull, but there are unmerged branches,
-            // we are only safe if those branch blocks can actually merge into the conveyor.
+            // we are only safe if those branch blocks can actually merge into the conveyor
+            // AND they carry a color that would actually resolve the deadlock (matching a slot color).
             // If the conveyor is completely full, branches are blocked and cannot merge.
             bool hasUnmergedBranches = false;
             var branchPaths = FindObjectsByType<BranchPath>(FindObjectsSortMode.None);
@@ -233,45 +252,112 @@ namespace BlockShooter
                 }
             }
 
+            bool branchCanSave = false;
             if (hasUnmergedBranches)
             {
-                float requiredSpacing = 0.2f;
+                // Find if there is any branch that can save us (has matching color in queue)
                 foreach (var bp in branchPaths)
                 {
-                    if (!bp.IsFullyMerged)
+                    if (!bp.IsFullyMerged && bp.HasMatchingColorInQueue(slotColors))
                     {
-                        var groups = bp.GetComponentsInChildren<BlockGroup>(true);
-                        if (groups != null && groups.Length > 0)
-                        {
-                            requiredSpacing = groups[0].rowSpacing;
-                            break;
-                        }
+                        branchCanSave = true;
+                        break;
                     }
                 }
+            }
 
-                // If the conveyor is not full, branch blocks will eventually merge, so we are not deadlocked yet
-                if (!ConveyorController.Instance.IsConveyorFull(requiredSpacing))
+            string newLog = $"slotColorsCount={slotColors.Count}, mainColorsCount={mainColors.Count}, canShoot={canShoot}, hasEmptySlot={hasEmptySlot}, hasAccessible={hasAccessibleShooter}, canPull={canPull}, hasUnmergedBranches={hasUnmergedBranches}, branchCanSave={branchCanSave}";
+            
+            if (newLog != _lastDeadlockLog)
+            {
+                _lastDeadlockLog = newLog;
+                Debug.Log($"[FailCheck-IsDeadlocked] No normal moves available! Checking branches: hasUnmergedBranches={hasUnmergedBranches}, branchCanSave={branchCanSave}");
+                Debug.Log($"[FailCheck-IsDeadlocked] Details: slotColors=[{string.Join(",", slotColors)}], mainColors=[{string.Join(",", mainColors)}]");
+            }
+
+            if (hasUnmergedBranches)
+            {
+                if (branchCanSave)
                 {
-                    return false;
+                    float requiredSpacing = 0.2f;
+                    foreach (var bp in branchPaths)
+                    {
+                        if (!bp.IsFullyMerged)
+                        {
+                            var groups = bp.GetComponentsInChildren<BlockGroup>(true);
+                            if (groups != null && groups.Length > 0)
+                            {
+                                requiredSpacing = groups[0].rowSpacing;
+                                break;
+                            }
+                        }
+                    }
+
+                    bool isConveyorFull = ConveyorController.Instance.IsConveyorFull(requiredSpacing);
+                    
+                    if (newLog + $", isConveyorFull={isConveyorFull}" != _lastDeadlockLog)
+                    {
+                        _lastDeadlockLog = newLog + $", isConveyorFull={isConveyorFull}";
+                        Debug.Log($"[FailCheck-IsDeadlocked] Savior branch exists. Checking merge availability: isConveyorFull={isConveyorFull}");
+                    }
+
+                    // If the conveyor is not full, branch blocks will eventually merge, so we are not deadlocked yet
+                    if (!isConveyorFull)
+                    {
+                        return false;
+                    }
                 }
             }
 
             // No possible moves, and no new blocks can merge -> Deadlock
+            if (_lastDeadlockLog != "TrueDeadlock")
+            {
+                _lastDeadlockLog = "TrueDeadlock";
+                Debug.Log("[FailCheck-IsDeadlocked] TRUE: Deadlock confirmed! No valid moves, slot colors do not match conveyor/branches, and/or conveyor is full.");
+            }
             return true;
         }
 
         private bool AreAllShootersDepleted()
         {
-            if (ProjectilePool.Instance != null && ProjectilePool.Instance.ActiveCount > 0) return false;
-            if (ShooterGrid.Instance != null && ShooterGrid.Instance.GetActiveBlocks().Count > 0) return false;
-            if (SlotSystem.Instance != null && SlotSystem.Instance.GetSlottedBlocks().Count > 0) return false;
+            int activeProj = ProjectilePool.Instance != null ? ProjectilePool.Instance.ActiveCount : 0;
+            int activeGrid = ShooterGrid.Instance != null ? ShooterGrid.Instance.GetActiveBlocks().Count : 0;
+            int activeSlot = SlotSystem.Instance != null ? SlotSystem.Instance.GetSlottedBlocks().Count : 0;
+
+            if (activeProj > 0 || activeGrid > 0 || activeSlot > 0)
+            {
+                _lastDepleteLog = ""; // clear cache
+                return false;
+            }
 
             // All shooters are gone — fail only when conveyor / branch still has blocks
-            if (ConveyorController.Instance != null && ConveyorController.Instance.GetLiveColorSet().Count > 0)
-                return true;
-
+            int mainColorsCount = ConveyorController.Instance != null ? ConveyorController.Instance.GetLiveColorSet().Count : 0;
+            bool branchHasBlocks = false;
             foreach (var bp in FindObjectsByType<BranchPath>(FindObjectsSortMode.None))
-                if (!bp.IsFullyMerged) return true;
+            {
+                if (!bp.IsFullyMerged)
+                {
+                    branchHasBlocks = true;
+                    break;
+                }
+            }
+
+            string newLog = $"projs={activeProj}, grid={activeGrid}, slots={activeSlot}, mainColorsCount={mainColorsCount}, branchHasBlocks={branchHasBlocks}";
+            if (newLog != _lastDepleteLog)
+            {
+                _lastDepleteLog = newLog;
+                Debug.Log($"[FailCheck-AreAllShootersDepleted] Shooters depleted. Blocks remaining check: mainColorsCount={mainColorsCount}, branchHasBlocks={branchHasBlocks}");
+            }
+
+            if (mainColorsCount > 0 || branchHasBlocks)
+            {
+                if (_lastDepleteLog != "TrueDepletion")
+                {
+                    _lastDepleteLog = "TrueDepletion";
+                    Debug.Log("[FailCheck-AreAllShootersDepleted] TRUE: All shooters depleted and blocks remain!");
+                }
+                return true;
+            }
 
             return false;
         }

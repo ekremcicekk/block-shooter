@@ -428,6 +428,46 @@ namespace BlockShooter
             return true;
         }
 
+        public string GetBlockingBlockForLane(float startT, float endT, int laneIndex)
+        {
+            startT = (startT % 1f + 1f) % 1f;
+            endT = (endT % 1f + 1f) % 1f;
+
+            foreach (var entry in _groups)
+            {
+                var group = entry.Group;
+                if (group == null || !group.gameObject.activeInHierarchy) continue;
+
+                float head = entry.HeadT;
+                float tail = entry.TailT;
+
+                if (group.IsEmpty)
+                {
+                    if (Overlays(startT, endT, head, tail))
+                    {
+                        return $"EmptyGroup:{group.name} [head={head:F3}, tail={tail:F3}]";
+                    }
+                    continue;
+                }
+
+                float groupTLength = group.SplineLength / _splineWorldLength;
+
+                for (int row = 0; row < group.RowCount; row++)
+                {
+                    var block = group.GetBlock(row, laneIndex);
+                    if (block == null || !block.gameObject.activeSelf || block.IsDestroyed) continue;
+
+                    float rowT = (head + (float)(group.RowCount - 1 - row) / group.RowCount * groupTLength) % 1f;
+
+                    if (IsTInRange(rowT, startT, endT))
+                    {
+                        return $"Block:{block.name} under Group:{group.name} [row={row}, lane={laneIndex}, rowT={rowT:F3}]";
+                    }
+                }
+            }
+            return null;
+        }
+
         private bool IsTInRange(float t, float start, float end)
         {
             if (start <= end)
@@ -488,11 +528,11 @@ namespace BlockShooter
 
             float requiredT = requiredSpacing / _splineWorldLength;
 
-            // Collect active non-empty groups
+            // Collect active groups (including empty ones, as they represent active merging slots that reserve space)
             var sorted = new List<GroupEntry>();
             foreach (var entry in _groups)
             {
-                if (entry.Group != null && !entry.Group.IsEmpty)
+                if (entry.Group != null)
                 {
                     sorted.Add(entry);
                 }
@@ -506,18 +546,49 @@ namespace BlockShooter
             // Check gaps between consecutive groups (including wrap-around)
             for (int i = 0; i < sorted.Count; i++)
             {
+                float currentHead = sorted[i].HeadT;
                 float currentTail = sorted[i].TailT;
                 float nextHead = sorted[(i + 1) % sorted.Count].HeadT;
 
-                float gap;
-                if (nextHead >= currentTail)
+                float gap = 0f;
+                if (i < sorted.Count - 1)
                 {
-                    gap = nextHead - currentTail;
+                    if (nextHead >= currentTail)
+                    {
+                        gap = nextHead - currentTail;
+                    }
+                    else
+                    {
+                        gap = 0f; // Overlapping
+                    }
                 }
                 else
                 {
-                    // Gap wraps around the end and start of the spline loop
-                    gap = (1f - currentTail) + nextHead;
+                    // Last group wrapping around to the first group
+                    if (currentTail < currentHead)
+                    {
+                        // The last group itself wraps around the 1.0 boundary
+                        if (nextHead >= currentTail)
+                        {
+                            gap = nextHead - currentTail;
+                        }
+                        else
+                        {
+                            gap = 0f; // Overlapping
+                        }
+                    }
+                    else
+                    {
+                        // The last group does not wrap around, so the gap wraps around 1.0
+                        if (nextHead >= currentTail)
+                        {
+                            gap = nextHead - currentTail;
+                        }
+                        else
+                        {
+                            gap = (1f - currentTail) + nextHead;
+                        }
+                    }
                 }
 
                 if (gap >= requiredT)

@@ -22,7 +22,19 @@ namespace BlockShooter
         public bool HasMatchingColorInQueue(HashSet<BlockColorType> slotColors)
         {
             foreach (var row in _rows)
-                if (slotColors.Contains(row.ColorType)) return true;
+            {
+                bool hasActiveBlock = false;
+                foreach (var b in row.Blocks)
+                {
+                    if (b != null && !b.IsDestroyed)
+                    {
+                        hasActiveBlock = true;
+                        break;
+                    }
+                }
+                if (hasActiveBlock && slotColors.Contains(row.ColorType))
+                    return true;
+            }
             return false;
         }
 
@@ -42,6 +54,7 @@ namespace BlockShooter
             public BlockGroup MergedGroup;
             public bool[] MergedLanes;
             public float LastPositionedT;
+            public string LastMergeBlockLog;
         }
 
         public void Initialize()
@@ -117,7 +130,8 @@ namespace BlockShooter
                             OriginalGroup = group,
                             MergedGroup = null,
                             MergedLanes = new bool[5],
-                            LastPositionedT = -1f
+                            LastPositionedT = -1f,
+                            LastMergeBlockLog = ""
                         });
                         globalRowIndex++;
                     }
@@ -280,17 +294,34 @@ namespace BlockShooter
                 // Check if the conveyor is clear for the lanes that have active blocks in our row around the aligned slot
                 float checkHalfSize = (row.RowSpacing * 0.5f) / ConveyorController.Instance.SplineWorldLength;
                 bool canMerge = true;
+                string blockerInfo = null;
                 foreach (var block in row.Blocks)
                 {
                     if (block == null || block.IsDestroyed) continue;
-                    if (!ConveyorController.Instance.IsRangeEmptyForLane(alignedMergeT - checkHalfSize, alignedMergeT + checkHalfSize, block.LaneIndex))
+                    blockerInfo = ConveyorController.Instance.GetBlockingBlockForLane(alignedMergeT - checkHalfSize, alignedMergeT + checkHalfSize, block.LaneIndex);
+                    if (blockerInfo != null)
                     {
                         canMerge = false;
                         break;
                     }
                 }
 
-                if (!canMerge) return; // wait until the aligned conveyor slot is clear
+                if (!canMerge)
+                {
+                    string newLog = $"blocked";
+                    if (newLog != row.LastMergeBlockLog)
+                    {
+                        row.LastMergeBlockLog = newLog;
+                        Debug.Log($"[BranchPath-MergeBlocked] Merge blocked on branch '{name}' for row color {row.ColorType} at alignedMergeT={alignedMergeT:F3}. Blocker detail: {blockerInfo}");
+                    }
+                    return; // wait until the aligned conveyor slot is clear
+                }
+
+                if (row.LastMergeBlockLog != "")
+                {
+                    row.LastMergeBlockLog = "";
+                    Debug.Log($"[BranchPath-MergeBlocked] Branch '{name}' merge block RESOLVED for row color {row.ColorType}.");
+                }
 
 
                 // Create the MergedGroup immediately to start the merging state
