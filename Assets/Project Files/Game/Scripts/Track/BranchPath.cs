@@ -66,7 +66,7 @@ namespace BlockShooter
             float firstRowSpacing = 0.18f; // fallback
             var blockGroups = GetComponentsInChildren<BlockGroup>(true);
             var groupList = new List<BlockGroup>(blockGroups);
-            groupList.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.Ordinal));
+            groupList.Sort((a, b) => a.transform.GetSiblingIndex().CompareTo(b.transform.GetSiblingIndex()));
             if (groupList.Count > 0)
             {
                 firstRowSpacing = groupList[0].rowSpacing;

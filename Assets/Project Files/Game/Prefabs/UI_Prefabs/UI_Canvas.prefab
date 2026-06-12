@@ -29071,7 +29071,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 04bd9f3e302fc224994946f639294adb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _targetId: movebooster
+  _targetId: moveboosterUI
   _uiTarget: {fileID: 4658807961818765612}
   _worldTarget: {fileID: 4658807961818765612}
   _highlightObject: {fileID: 0}

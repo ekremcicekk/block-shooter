@@ -2089,19 +2089,19 @@ namespace BlockShooter.Editor
             // Calculate capacity
             float mainLen = GetMainSplineLength();
             float rowSpacing = _cfg != null ? _cfg.rowSpacing : 0.18f;
-            int maxMainRows = Mathf.Max(0, Mathf.FloorToInt(mainLen / rowSpacing));
+            float maxMainRowsFloat = mainLen / rowSpacing;
             int assignedMainRows = _groups.Sum(g => g.rowCount);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            if (assignedMainRows > maxMainRows)
+            if (assignedMainRows > maxMainRowsFloat)
             {
                 GUI.color = new Color(1f, 0.3f, 0.3f);
-                GUILayout.Label($"⚠️ CAPACITY WARNING: {assignedMainRows} / {maxMainRows} Rows assigned! (Exceeds capacity by {assignedMainRows - maxMainRows} rows, overlap will occur)", EditorStyles.boldLabel);
+                GUILayout.Label($"⚠️ CAPACITY WARNING: {assignedMainRows} / {maxMainRowsFloat:F2} Rows assigned! (Exceeds capacity by {(assignedMainRows - maxMainRowsFloat):F2} rows, overlap will occur)", EditorStyles.boldLabel);
                 GUI.color = Color.white;
             }
             else
             {
-                GUILayout.Label($"Conveyor Capacity: {assignedMainRows} / {maxMainRows} Rows ({(maxMainRows > 0 ? (assignedMainRows * 100 / maxMainRows) : 0)}% used)", EditorStyles.miniLabel);
+                GUILayout.Label($"Conveyor Capacity: {assignedMainRows} / {maxMainRowsFloat:F2} Rows ({(maxMainRowsFloat > 0f ? (assignedMainRows * 100f / maxMainRowsFloat) : 0f):F1}% used)", EditorStyles.miniLabel);
             }
             EditorGUILayout.EndVertical();
             GUILayout.Space(4);
@@ -3225,19 +3225,19 @@ namespace BlockShooter.Editor
 
                 float branchLen = GetBranchSplineLength(b);
                 float rowSpacingBranch = _cfg != null ? _cfg.rowSpacing : 0.18f;
-                int maxBranchRows = Mathf.Max(0, Mathf.FloorToInt(branchLen / rowSpacingBranch));
+                float maxBranchRowsFloat = branchLen / rowSpacingBranch;
                 int assignedBranchRows = b.groups.Sum(g => g.rowCount);
 
                 EditorGUILayout.BeginHorizontal();
-                if (assignedBranchRows > maxBranchRows)
+                if (assignedBranchRows > maxBranchRowsFloat)
                 {
                     GUI.color = new Color(1f, 0.3f, 0.3f);
-                    GUILayout.Label($"⚠️ OVERLAP WARNING: {assignedBranchRows} / {maxBranchRows} Rows assigned!", EditorStyles.boldLabel);
+                    GUILayout.Label($"⚠️ OVERLAP WARNING: {assignedBranchRows} / {maxBranchRowsFloat:F2} Rows assigned! (Exceeds capacity by {(assignedBranchRows - maxBranchRowsFloat):F2} rows)", EditorStyles.boldLabel);
                     GUI.color = Color.white;
                 }
                 else
                 {
-                    GUILayout.Label($"Branch Capacity: {assignedBranchRows} / {maxBranchRows} Rows ({(maxBranchRows > 0 ? (assignedBranchRows * 100 / maxBranchRows) : 0)}% used)", EditorStyles.miniLabel);
+                    GUILayout.Label($"Branch Capacity: {assignedBranchRows} / {maxBranchRowsFloat:F2} Rows ({(maxBranchRowsFloat > 0f ? (assignedBranchRows * 100f / maxBranchRowsFloat) : 0f):F1}% used)", EditorStyles.miniLabel);
                 }
                 EditorGUILayout.EndHorizontal();
 

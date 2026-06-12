@@ -61,6 +61,10 @@ MonoBehaviour:
     displayName: Brown
     editorColor: {r: 0.4716981, g: 0.17577429, b: 0.17577429, a: 1}
     material: {fileID: 2100000, guid: a254032c67c8f9f4d9172d4ecb9eb506, type: 2}
+  - colorType: 13
+    displayName: LightPink
+    editorColor: {r: 0.90800005, g: 0.57930404, b: 0.76770294, a: 1}
+    material: {fileID: 2100000, guid: 58fa281f7eb6b2e4cb299f13246a779d, type: 2}
   redMaterial: {fileID: 2100000, guid: 33257ab040a58eb4bbcd20bc6f183a1a, type: 2}
   blueMaterial: {fileID: 2100000, guid: a881a86269c331e4485780f92ae9cf12, type: 2}
   greenMaterial: {fileID: 2100000, guid: 18f9dd7617a8de54da7342ef6fbf37bf, type: 2}
