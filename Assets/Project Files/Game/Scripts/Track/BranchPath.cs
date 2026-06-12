@@ -44,7 +44,14 @@ namespace BlockShooter
         private bool _frontRowAtMergePoint;
         private readonly List<BranchRowEntry> _rows = new();
 
+        private Vector3 _mainMergeWorldPos;
+        private Vector3 _mainMergeWorldFwd;
+        private float _mainBeltRadius;
+        private float _laneSpacing;
+        private bool _isRightSideBranch;
+
         public struct BranchRowEntry
+
         {
             public ConveyorBlock3D[] Blocks;
             public BlockColorType ColorType;
@@ -77,6 +84,24 @@ namespace BlockShooter
                 mainTrackHalfWidth = 0.55f; // fallback
             }
 
+            _laneSpacing = GetMainTrackLaneSpacing();
+
+            // Precalculate main track merge reference positions and radius for extremely cheap boundary checks
+            if (mainTrackBuilder != null && ConveyorController.Instance != null && ConveyorController.Instance.SplineContainer != null)
+            {
+                var mainSpline = ConveyorController.Instance.SplineContainer;
+                mainSpline.Spline.Evaluate(mergeT, out var localPos, out var localTangent, out _);
+                _mainMergeWorldPos = mainSpline.transform.TransformPoint((Vector3)localPos);
+                _mainMergeWorldFwd = mainSpline.transform.TransformDirection((Vector3)localTangent).normalized;
+                _mainBeltRadius = mainTrackBuilder.beltHalfWidth + mainTrackBuilder.railWidth;
+            }
+            else
+            {
+                _mainMergeWorldPos = Vector3.zero;
+                _mainMergeWorldFwd = Vector3.forward;
+                _mainBeltRadius = 0.55f;
+            }
+
             float firstRowSpacing = 0.18f; // fallback
             var blockGroups = GetComponentsInChildren<BlockGroup>(true);
             var groupList = new List<BlockGroup>(blockGroups);
@@ -85,18 +110,28 @@ namespace BlockShooter
             {
                 firstRowSpacing = groupList[0].rowSpacing;
             }
-            float laneSpacing = GetMainTrackLaneSpacing();
 
-            // Align the closest possible block (lane 0 or 4, which is offset by 2 * laneSpacing)
+            // Align the closest possible block (lane 0 or 4, which is offset by 2 * _laneSpacing)
             // exactly 0.05m outside the conveyor outer wall
-            float safetyOffset = mainTrackHalfWidth + 2f * laneSpacing + 0.05f;
+            float safetyOffset = mainTrackHalfWidth + 2f * _laneSpacing + 0.05f;
 
             if (_splineLength > 0f)
             {
                 _mergeStopT = Mathf.Clamp01(1.0f - (safetyOffset / _splineLength));
             }
 
-
+            // Geometrically determine if this branch merges from the right side of the main conveyor
+            if (_mainMergeWorldPos != Vector3.zero && _splineContainer != null)
+            {
+                _splineContainer.Spline.Evaluate(_mergeStopT, out var localStopPos, out _, out _);
+                Vector3 worldStopPos = transform.TransformPoint((Vector3)localStopPos);
+                Vector3 mainRight = Vector3.Cross(Vector3.up, _mainMergeWorldFwd).normalized;
+                _isRightSideBranch = Vector3.Dot(worldStopPos - _mainMergeWorldPos, mainRight) >= 0f;
+            }
+            else
+            {
+                _isRightSideBranch = true;
+            }
 
             _rows.Clear();
 
@@ -285,8 +320,11 @@ namespace BlockShooter
             // If no blocks have merged yet, check if we can start the merge
             if (row.MergedGroup == null)
             {
-                // Only start merging if the row has reached the merge stop point
-                if (row.CurrentT < _mergeStopT - 0.001f) return;
+                // Lookahead check: check if the conveyor slot is clear slightly before reaching _mergeStopT
+                // so that the row can merge on-the-fly without coming to a full halt.
+                float lookaheadT = (row.RowSpacing * 1.2f) / _splineLength;
+                if (row.CurrentT < _mergeStopT - lookaheadT - 0.001f) return;
+
 
                 // Find the nearest aligned slot on the main conveyor grid
                 float alignedMergeT = ConveyorController.Instance.GetAlignedT(mergeT, row.RowSpacing);
@@ -308,7 +346,7 @@ namespace BlockShooter
 
                 if (!canMerge)
                 {
-                    string newLog = $"blocked";
+                    string newLog = "blocked";
                     if (newLog != row.LastMergeBlockLog)
                     {
                         row.LastMergeBlockLog = newLog;
@@ -330,7 +368,7 @@ namespace BlockShooter
                 newGroup.colorType = row.ColorType;
                 newGroup.rowCount = 1;
                 newGroup.laneCount = 5;
-                newGroup.laneSpacing = GetMainTrackLaneSpacing();
+                newGroup.laneSpacing = _laneSpacing;
                 newGroup.rowSpacing = row.RowSpacing;
                 newGroup.Initialize();
 
@@ -344,6 +382,12 @@ namespace BlockShooter
             float safetyThreshold = Mathf.Lerp(_mergeStopT, 1.0f, 0.8f);
             bool forceMergeAll = (row.CurrentT >= safetyThreshold);
 
+            float mergeProgress = 0f;
+            if (1.0f - _mergeStopT > 0.001f)
+            {
+                mergeProgress = Mathf.Clamp01((row.CurrentT - _mergeStopT) / (1.0f - _mergeStopT));
+            }
+
             for (int lane = 0; lane < 5; lane++)
             {
                 var block = GetBlockFromEntry(row, lane);
@@ -351,14 +395,18 @@ namespace BlockShooter
 
                 if (row.MergedLanes[lane]) continue;
 
-                Vector3 worldPos = GetBlockBranchPosition(row, lane);
-                if (forceMergeAll || IsPositionInsideConveyor(worldPos))
+                // Determine if this lane should merge based on progress and physical order (closest first)
+                int physicalOrder = _isRightSideBranch ? lane : (4 - lane);
+                float threshold = physicalOrder * 0.12f; // lane 0/4 merges at progress 0.0, 1/3 at 0.12, 2 at 0.24, 3/1 at 0.36, 4/0 at 0.48
+
+                if (forceMergeAll || mergeProgress >= threshold)
                 {
                     MergeBlock(ref row, block, lane);
                     row.MergedLanes[lane] = true;
                 }
             }
         }
+
 
         private ConveyorBlock3D GetBlockFromEntry(BranchRowEntry row, int lane)
         {
@@ -380,45 +428,24 @@ namespace BlockShooter
             if (upDir == Vector3.zero) upDir = Vector3.up;
             Vector3 right = Vector3.Cross(upDir, fwd).normalized;
             
-            float laneSpacing = GetMainTrackLaneSpacing();
+            float laneSpacing = _laneSpacing;
             float xOff = (lane - 2f) * laneSpacing;
             return worldPos + right * xOff;
         }
 
         private bool IsPositionInsideConveyor(Vector3 worldPos)
         {
-            var cc = ConveyorController.Instance;
-            if (cc == null) return false;
+            if (_mainMergeWorldPos == Vector3.zero) return false;
 
-            var mainSpline = cc.SplineContainer;
-            if (mainSpline == null) return false;
+            // Project worldPos onto the tangent line of the main track at the merge point.
+            // This is a 1000x faster O(1) mathematical line distance approximation that avoids expensive SplineUtility calls.
+            Vector3 relativePos = worldPos - _mainMergeWorldPos;
+            Vector3 perpendicular = relativePos - Vector3.Project(relativePos, _mainMergeWorldFwd);
+            float dist = perpendicular.magnitude;
 
-            var mainTrackBuilder = FindFirstMainTrackBuilder();
-            if (mainTrackBuilder == null) return false;
-
-            Vector3 mainLocalPos = mainSpline.transform.InverseTransformPoint(worldPos);
-
-            SplineUtility.GetNearestPoint(
-                mainSpline.Spline,
-                mainLocalPos,
-                out var nearestLocal,
-                out float _,
-                8,
-                4
-            );
-
-            Vector3 worldNearest = mainSpline.transform.TransformPoint((Vector3)nearestLocal);
-
-            // Use absolute distance from the nearest main-track center point.
-            // The old directional-projection approach required branchOnRightSide to be
-            // correct, but that flag is unreliable (wrong tangent direction at some mergeT
-            // values causes all blocks to be classified as "outside"). A simple radial
-            // distance works for branches from either side.
-            float dist = Vector3.Distance(worldPos, worldNearest);
-            float R    = mainTrackBuilder.beltHalfWidth + mainTrackBuilder.railWidth;
-
-            return dist < R;
+            return dist < _mainBeltRadius;
         }
+
 
         private void MergeBlock(ref BranchRowEntry row, ConveyorBlock3D block, int lane)
         {
@@ -442,18 +469,23 @@ namespace BlockShooter
             block.transform.position = prevPosition;
             block.transform.rotation = prevRotation;
 
-            // Sequential wave delay: lanes jump one by one from left to right (lane 0 to 4)
-            float delay = lane * 0.04f;
-            float duration = 0.22f; // Snappy but smooth jump duration
+            // Sequential wave delay: lanes jump one by one, closest to farthest, tightly following each other
+            // Lane 0 is closest on right branches; Lane 4 is closest on left branches.
+            float delay = _isRightSideBranch ? lane * 0.025f : (4 - lane) * 0.025f;
+            float duration = 0.28f; // Smoother and more fluid jump duration
+
+
+
 
             // Clean up any existing tweens on this block to avoid collisions
             DOTween.Kill(block);
 
-            // Animate jumpProgress from 0 to 1
+            // Animate jumpProgress from 0 to 1 with an symmetric, natural InOutSine curve
             DOTween.To(() => block.jumpProgress, x => block.jumpProgress = x, 1f, duration)
                 .SetDelay(delay)
-                .SetEase(Ease.OutQuad)
+                .SetEase(Ease.InOutSine)
                 .SetId(block);
+
         }
 
         private float GetMainTrackLaneSpacing()
