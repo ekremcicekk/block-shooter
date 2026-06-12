@@ -44822,6 +44822,7 @@ GameObject:
   - component: {fileID: 5631074826100257277}
   - component: {fileID: 7725020694711187570}
   - component: {fileID: 940621300774901243}
+  - component: {fileID: 8209304068683578554}
   m_Layer: 0
   m_Name: Booster_SuperShooter
   m_TagString: Untagged
@@ -44948,7 +44949,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   boosterType: 1
-  tutorialTarget: {fileID: 0}
+  tutorialTarget: {fileID: 8209304068683578554}
   mainButton: {fileID: 7725020694711187570}
   lockGroup: {fileID: 8971493748270189430}
   lockLvlText: {fileID: 1551961266167916188}
@@ -44960,6 +44961,22 @@ MonoBehaviour:
   buyPanel: {fileID: 3643744472393346641}
   buyWithCoinsButton: {fileID: 6182476739528357987}
   buyPriceText: {fileID: 6129578963119000417}
+--- !u!114 &8209304068683578554
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8616781708590610051}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04bd9f3e302fc224994946f639294adb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _targetId: superpowerUI
+  _uiTarget: {fileID: 4337331774378376106}
+  _worldTarget: {fileID: 4337331774378376106}
+  _highlightObject: {fileID: 0}
 --- !u!1 &8650157813688652405
 GameObject:
   m_ObjectHideFlags: 0
