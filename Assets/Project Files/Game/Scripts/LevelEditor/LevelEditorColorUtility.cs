@@ -21,16 +21,16 @@ namespace BlockShooter.Editor
         {
             if (gameCfg != null && gameCfg.colors != null && gameCfg.colors.Count > 0)
             {
-                var list = new List<(BlockColorType, Color, string)>();
+                var list = new List<(BlockColorType t, Color c, string n)>();
                 foreach (var def in gameCfg.colors)
                 {
                     if (def == null) continue;
                     list.Add((def.colorType, gameCfg.GetColor(def.colorType), def.displayName));
                 }
-                return list.ToArray();
+                return list.OrderBy(x => x.n).ToArray();
             }
 
-            return new[]
+            var fallback = new[]
             {
                 (BlockColorType.Red,    new Color(.90f,.20f,.20f), "Red"   ),
                 (BlockColorType.Blue,   new Color(.20f,.50f,.90f), "Blue"  ),
@@ -39,6 +39,7 @@ namespace BlockShooter.Editor
                 (BlockColorType.Purple, new Color(.60f,.20f,.90f), "Purple"),
                 (BlockColorType.Orange, new Color(1.00f,.55f,.10f),"Orange"),
             };
+            return fallback.OrderBy(x => x.Item3).ToArray();
         }
 
         public static BlockColorType DrawColorPopup(GameConfig gameCfg, BlockColorType selected, params GUILayoutOption[] options)
