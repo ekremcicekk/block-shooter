@@ -527,7 +527,8 @@ namespace BlockShooter.Editor
             GUI.backgroundColor = Color.white;
             GUILayout.Space(3);
 
-            _listScroll = EditorGUILayout.BeginScrollView(_listScroll, GUILayout.ExpandHeight(true));
+            float scrollHeight = Mathf.Max(50f, position.height - 110f);
+            _listScroll = EditorGUILayout.BeginScrollView(_listScroll, GUILayout.Height(scrollHeight));
             if (_levelList != null)
             {
                 _levelList.DoLayoutList();
