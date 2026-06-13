@@ -51,6 +51,18 @@ namespace BlockShooter
             public Quaternion PrefabLocalRot; // applied on top of spline tangent
         }
 
+        // ── Deterministic Slot Grid ──────────────────────────────────────────────
+        // Every row on the main conveyor occupies a tracked slot. Slots move with
+        // the belt each frame. When all lanes in a row are destroyed, the slot is
+        // freed. Branch paths merge blocks into free slots — no rounding, no gaps.
+        private struct ConveyorSlot
+        {
+            public float RowT;        // Current spline T of this row (updated every frame)
+            public bool  IsOccupied;  // false = all lanes destroyed (or never filled) → branch can use this slot
+            public int   LiveLanes;   // Bitmask of lanes still alive (bits 0-4). 0 = fully free.
+        }
+        private readonly List<ConveyorSlot> _slots = new();
+
         private void Awake()
         {
             if (!Application.isPlaying) return;
@@ -84,6 +96,8 @@ namespace BlockShooter
             _splineWorldLength = SplineUtility.CalculateLength(
                 _splineContainer.Spline, transform.localToWorldMatrix);
 
+            _slots.Clear();
+
             var blockGroups = GetComponentsInChildren<BlockGroup>(true);
             float currentT = 0f;
             foreach (var group in blockGroups)
@@ -92,6 +106,42 @@ namespace BlockShooter
                 if (group.GetComponentInParent<BranchPath>() != null) continue;
 
                 group.Initialize();
+
+                // Register a slot for each row in this group before calling AddGroup,
+                // so headT matches exactly what AddGroup will use.
+                float groupTLength = _splineWorldLength > 0f ? group.SplineLength / _splineWorldLength : 0f;
+                for (int r = 0; r < group.RowCount; r++)
+                {
+                    // Mirror the same formula used in PlaceGroupAtT so positions are identical.
+                    float rowT = (currentT + (float)(group.RowCount - 1 - r) / group.RowCount * groupTLength) % 1f;
+
+                    // Compute live-lane bitmask: every lane that has a non-null, non-destroyed block.
+                    int liveMask = 0;
+                    for (int l = 0; l < group.LaneCount && l < 5; l++)
+                    {
+                        var blk = group.GetBlock(r, l);
+                        if (blk != null && !blk.IsDestroyed)
+                            liveMask |= (1 << l);
+                    }
+
+                    _slots.Add(new ConveyorSlot
+                    {
+                        RowT       = rowT,
+                        LiveLanes  = liveMask,
+                        IsOccupied = liveMask != 0
+                    });
+
+                    // Hook into block destroy events to keep the slot live-mask up to date.
+                    int slotIdx = _slots.Count - 1;
+                    for (int l = 0; l < group.LaneCount && l < 5; l++)
+                    {
+                        var blk = group.GetBlock(r, l);
+                        if (blk == null || blk.IsDestroyed) continue;
+                        int capturedLane = l;
+                        blk.OnDestroyed += (_) => ClearSlotLane(slotIdx, capturedLane);
+                    }
+                }
+
                 AddGroup(group, currentT);
                 currentT += WorldLengthToT(group.SplineLength);
                 if (currentT >= 1f) currentT -= 1f;
@@ -162,6 +212,14 @@ namespace BlockShooter
                 _groups[i]  = entry;
 
                 PlaceGroupAtT(entry.Group, entry.HeadT);
+            }
+
+            // Advance all tracked slots with the belt — frame-perfect, no drift.
+            for (int i = 0; i < _slots.Count; i++)
+            {
+                var s = _slots[i];
+                s.RowT = (s.RowT + delta) % 1f;
+                _slots[i] = s;
             }
 
             for (int i = 0; i < _arrows.Count; i++)
@@ -258,6 +316,166 @@ namespace BlockShooter
             
             return alignedT;
         }
+
+        // ── Deterministic Slot Grid API ──────────────────────────────────────────
+
+        /// <summary>
+        /// Finds the T of the nearest free (unoccupied) slot at or behind targetT,
+        /// going in the conveyor's forward direction. The caller receives the exact
+        /// real-time T of an existing slot — no rounding or grid snapping occurs.
+        /// Returns -1 if no free slot is found within maxSearchDistance (in T units).
+        /// </summary>
+        public float FindNearestFreeSlotT(float targetT, float maxSearchDistanceT = 0.5f)
+        {
+            if (_slots.Count == 0) return -1f;
+
+            float bestDist = float.MaxValue;
+            float bestT    = -1f;
+
+            foreach (var slot in _slots)
+            {
+                if (slot.IsOccupied) continue;
+
+                // Forward-arc distance: how far BEHIND targetT is this free slot?
+                // We measure "behind" as the slot being in the direction the conveyor came FROM.
+                // On a loop [0,1), behind targetT means the slot is at T < targetT
+                // (accounting for wrap-around). We prefer the closest one.
+                float dist = (targetT - slot.RowT + 1f) % 1f;
+                // dist == 0 means exact match; dist close to 1 means it is just ahead (wrap)
+                // We want the smallest positive dist (i.e., slot is at or behind targetT).
+                if (dist > maxSearchDistanceT) continue; // too far behind, skip
+
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestT    = slot.RowT;
+                }
+            }
+            return bestT;
+        }
+
+        /// <summary>
+        /// Returns the free slot nearest to targetT (in either direction, closest wins).
+        /// Used by branches to pick the optimal insertion point independent of direction.
+        /// Returns -1 if none found within maxSearchDistanceT.
+        /// </summary>
+        public float FindClosestFreeSlotT(float targetT, float maxSearchDistanceT = 0.5f)
+        {
+            if (_slots.Count == 0) return -1f;
+
+            float bestDist = float.MaxValue;
+            float bestT    = -1f;
+
+            foreach (var slot in _slots)
+            {
+                if (slot.IsOccupied) continue;
+
+                // Circular distance in either direction
+                float diff = Mathf.Abs(slot.RowT - targetT);
+                float dist = Mathf.Min(diff, 1f - diff);
+                if (dist > maxSearchDistanceT) continue;
+
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestT    = slot.RowT;
+                }
+            }
+            return bestT;
+        }
+
+        /// <summary>
+        /// Marks the slot nearest to slotT as occupied so no other branch targets it
+        /// in the same frame. Call this immediately after InsertGroupAt.
+        /// </summary>
+        public int ClaimNearestSlot(float slotT, float tolerance)
+        {
+            float bestDist = float.MaxValue;
+            int   bestIdx  = -1;
+            for (int i = 0; i < _slots.Count; i++)
+            {
+                if (_slots[i].IsOccupied) continue;
+                float diff = Mathf.Abs(_slots[i].RowT - slotT);
+                float dist = Mathf.Min(diff, 1f - diff);
+                if (dist < bestDist && dist <= tolerance)
+                {
+                    bestDist = dist;
+                    bestIdx  = i;
+                }
+            }
+            if (bestIdx >= 0)
+            {
+                var s = _slots[bestIdx];
+                s.IsOccupied = true;
+                _slots[bestIdx] = s;
+            }
+            return bestIdx;
+        }
+
+        public void RegisterBlockToSlot(int slotIdx, int lane, ConveyorBlock3D block)
+        {
+            if (slotIdx < 0 || slotIdx >= _slots.Count) return;
+            if (block == null || block.IsDestroyed) return;
+
+            var s = _slots[slotIdx];
+            s.LiveLanes |= (1 << lane);
+            s.IsOccupied = true;
+            _slots[slotIdx] = s;
+
+            block.OnDestroyed += (_) => ClearSlotLane(slotIdx, lane);
+        }
+
+        /// <summary>
+        /// Called by the block-destroy event hook. Clears a lane bit in the slot at slotIdx.
+        /// When all lanes are cleared, marks the slot free for future branch placement.
+        /// </summary>
+        private void ClearSlotLane(int slotIdx, int lane)
+        {
+            if (slotIdx < 0 || slotIdx >= _slots.Count) return;
+            var s = _slots[slotIdx];
+            s.LiveLanes &= ~(1 << lane);
+            s.IsOccupied = s.LiveLanes != 0;
+            _slots[slotIdx] = s;
+        }
+
+        /// <summary>
+        /// Finds the T of the nearest free slot whose WORLD POSITION is within
+        /// maxWorldDistMeters of mergeWorldPos. This is geometrically exact and
+        /// independent of spline parameterization — no T-value arithmetic, no
+        /// rounding. Use this in branch merge checks instead of T-distance comparisons.
+        ///
+        /// Returns -1 if no free slot is close enough to the merge point right now.
+        /// The branch should simply wait and retry next frame; the belt will bring
+        /// the next slot into range.
+        /// </summary>
+        public float FindClosestFreeSlotNearWorldPos(Vector3 mergeWorldPos, float maxWorldDistMeters)
+        {
+            if (_slots.Count == 0 || _splineContainer == null) return -1f;
+
+            float bestDistSq = maxWorldDistMeters * maxWorldDistMeters;
+            float bestT      = -1f;
+
+            foreach (var slot in _slots)
+            {
+                if (slot.IsOccupied) continue;
+
+                // Evaluate the spline at this slot's current T to get its world position.
+                _splineContainer.Spline.Evaluate(slot.RowT, out var localPos, out _, out _);
+                Vector3 worldPos = transform.TransformPoint((Vector3)localPos);
+
+                float distSq = (worldPos - mergeWorldPos).sqrMagnitude;
+                if (distSq < bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    bestT      = slot.RowT;
+                }
+            }
+            return bestT;
+        }
+
+
+
+
 
         public List<ConveyorBlock3D> GetOrderedBlocks(BlockColorType colorType)
         {

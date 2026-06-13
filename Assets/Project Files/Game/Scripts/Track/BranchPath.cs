@@ -43,10 +43,6 @@ namespace BlockShooter
         private float _mergeStopT = 0.95f; // T value where blocks stop (outer wall of main conveyor)
         private bool _frontRowAtMergePoint;
         private readonly List<BranchRowEntry> _rows = new();
-        // Tracks the last group inserted from this branch onto the main conveyor.
-        // Used for deterministic consecutive row placement: nextT = GetGroupHeadT(last) - dT.
-        private BlockGroup _lastInsertedGroup;
-        private bool _hasLastInserted;
 
         private Vector3 _mainMergeWorldPos;
         private Vector3 _mainMergeWorldFwd;
@@ -55,7 +51,6 @@ namespace BlockShooter
         private bool _isRightSideBranch;
 
         public struct BranchRowEntry
-
         {
             public ConveyorBlock3D[] Blocks;
             public BlockColorType ColorType;
@@ -66,6 +61,7 @@ namespace BlockShooter
             public bool[] MergedLanes;
             public float LastPositionedT;
             public string LastMergeBlockLog;
+            public int SlotIndex;
         }
 
         public void Initialize()
@@ -137,8 +133,6 @@ namespace BlockShooter
                 _isRightSideBranch = true;
             }
 
-            _lastInsertedGroup = null;
-            _hasLastInserted = false;
             _rows.Clear();
 
             int globalRowIndex = 0;
@@ -172,7 +166,8 @@ namespace BlockShooter
                             MergedGroup = null,
                             MergedLanes = new bool[5],
                             LastPositionedT = -1f,
-                            LastMergeBlockLog = ""
+                            LastMergeBlockLog = "",
+                            SlotIndex = -1
                         });
                         globalRowIndex++;
                     }
@@ -323,7 +318,7 @@ namespace BlockShooter
         {
             if (row.MergedLanes == null) row.MergedLanes = new bool[5];
 
-            // If no blocks have merged yet, find where to insert on the main conveyor
+            // If no group has been assigned yet, find a free slot on the main conveyor
             if (row.MergedGroup == null)
             {
                 // Lookahead: begin merge check before fully reaching _mergeStopT for smooth on-the-fly flow
@@ -333,76 +328,31 @@ namespace BlockShooter
                 float conveyorLength = ConveyorController.Instance.SplineWorldLength;
                 if (conveyorLength <= 0f) return;
 
+                // ── DETERMINISTIC SLOT PLACEMENT (World-Space) ─────────────────────────
+                // We search for free slots using WORLD-SPACE distance from the merge point,
+                // not T-value arithmetic. T-distances are unreliable on non-uniform splines
+                // (equal dT can mean very different world distances at different spline sections).
+                //
+                // _mainMergeWorldPos is the world position of mergeT on the main conveyor,
+                // pre-computed in Initialize() — no runtime spline eval needed on the branch side.
+                //
+                // Search radius = 1.5 * rowSpacing meters: wide enough to catch a slot passing
+                // through within the current frame's movement, narrow enough to never grab a
+                // slot that is far away on the belt.
                 float dT = row.RowSpacing / conveyorLength;
-                float alignedMergeT = 0f;
-                bool alignedToLast = false;
+                float searchRadiusMeters = row.RowSpacing * 1.5f;
+                float slotT = ConveyorController.Instance.FindClosestFreeSlotNearWorldPos(
+                    _mainMergeWorldPos, searchRadiusMeters);
 
-                // --- DETERMINISTIC CONSECUTIVE PLACEMENT ---
-                // Query the CURRENT real-time position of the last inserted group directly from
-                // ConveyorController. This is frame-independent: no simulated position, no deltaTime.
-                // nextT = currentHeadT - dT is mathematically exact regardless of speed or FPS.
-                if (_hasLastInserted && _lastInsertedGroup != null)
+
+                if (slotT < 0f)
                 {
-                    float currentLastT = ConveyorController.Instance.GetGroupHeadT(_lastInsertedGroup);
-
-                    if (currentLastT < 0f)
-                    {
-                        // Last group was destroyed by the player — reset and pick independent slot
-                        _hasLastInserted = false;
-                        _lastInsertedGroup = null;
-                    }
-                    else
-                    {
-                        // Guard: if the last group has travelled more than 4 row-spacings past mergeT,
-                        // the gap between it and mergeT is large enough that we should pick an
-                        // independent free slot near mergeT rather than chain behind a distant group.
-                        float distFromMerge = (currentLastT - mergeT + 1f) % 1f;
-                        if (distFromMerge > 4f * dT)
-                        {
-                            _hasLastInserted = false;
-                            _lastInsertedGroup = null;
-                        }
-                        else
-                        {
-                            // Place exactly 1 slot spacing behind the last group's current position.
-                            // This is the only line that matters for gap prevention.
-                            alignedMergeT = (currentLastT - dT + 1f) % 1f;
-                            alignedToLast = true;
-                        }
-                    }
-                }
-
-                if (!alignedToLast)
-                {
-                    // First row or after a gap: pick the nearest grid-aligned free slot
-                    float remainingDist = Mathf.Max(0f, (_mergeStopT - row.CurrentT) * _splineLength);
-                    float conveyorDeltaT = remainingDist / conveyorLength;
-                    float adjustedMergeT = mergeT - conveyorDeltaT;
-                    alignedMergeT = ConveyorController.Instance.GetAlignedT(adjustedMergeT, row.RowSpacing);
-                }
-
-                // Blocker check: is the target slot occupied?
-                // When chaining behind the last group, ignore it (it's dT ahead — no overlap possible)
-                float checkHalfSize = (row.RowSpacing * 0.5f) / conveyorLength;
-                bool canMerge = true;
-                string blockerInfo = null;
-                BlockGroup ignoreGroup = alignedToLast ? _lastInsertedGroup : null;
-                foreach (var block in row.Blocks)
-                {
-                    if (block == null || block.IsDestroyed) continue;
-                    blockerInfo = ConveyorController.Instance.GetBlockingBlockForLane(
-                        alignedMergeT - checkHalfSize, alignedMergeT + checkHalfSize,
-                        block.LaneIndex, ignoreGroup);
-                    if (blockerInfo != null) { canMerge = false; break; }
-                }
-
-                if (!canMerge)
-                {
-                    string newLog = "blocked";
+                    // No free slot available yet; wait.
+                    string newLog = "no-free-slot";
                     if (newLog != row.LastMergeBlockLog)
                     {
                         row.LastMergeBlockLog = newLog;
-                        Debug.Log($"[BranchPath-MergeBlocked] Merge blocked on branch '{name}' for row color {row.ColorType} at alignedMergeT={alignedMergeT:F3}. Blocker detail: {blockerInfo}");
+                        Debug.Log($"[BranchPath] Branch '{name}' waiting: no free slot near mergeT={mergeT:F3}.");
                     }
                     return;
                 }
@@ -410,10 +360,13 @@ namespace BlockShooter
                 if (row.LastMergeBlockLog != "")
                 {
                     row.LastMergeBlockLog = "";
-                    Debug.Log($"[BranchPath-MergeBlocked] Branch '{name}' merge block RESOLVED for row color {row.ColorType}.");
+                    Debug.Log($"[BranchPath] Branch '{name}' found free slot at T={slotT:F3} (mergeT={mergeT:F3}).");
                 }
 
-                // Insert group on main conveyor at the computed slot
+                // Claim the slot immediately so no other branch targets the same slot this frame.
+                row.SlotIndex = ConveyorController.Instance.ClaimNearestSlot(slotT, tolerance: dT * 0.5f);
+
+                // Insert group on main conveyor at the exact slot T position.
                 GameObject tempGo = new GameObject("MergedRowGroup");
                 var newGroup = tempGo.AddComponent<BlockGroup>();
                 newGroup.colorType = row.ColorType;
@@ -424,9 +377,7 @@ namespace BlockShooter
                 newGroup.Initialize();
 
                 row.MergedGroup = newGroup;
-                _lastInsertedGroup = newGroup;
-                _hasLastInserted = true;
-                ConveyorController.Instance.InsertGroupAt(newGroup, alignedMergeT);
+                ConveyorController.Instance.InsertGroupAt(newGroup, slotT);
             }
 
             // Merge all active blocks immediately in the same frame — snappy cascade wave animations
@@ -489,6 +440,11 @@ namespace BlockShooter
             block.transform.SetParent(row.MergedGroup.transform, true);
             block.SetGroupIndex(0, lane);
             row.MergedGroup.RegisterMergedBlock(block, lane);
+
+            if (row.SlotIndex >= 0)
+            {
+                ConveyorController.Instance.RegisterBlockToSlot(row.SlotIndex, lane, block);
+            }
 
             // Force update Conveyor positions so target position is updated
             ConveyorController.Instance.ForceUpdateGroupPosition(row.MergedGroup);
