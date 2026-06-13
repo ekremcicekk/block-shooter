@@ -460,17 +460,25 @@ namespace BlockShooter
 
             // Sequential wave delay: lanes jump one by one, closest to farthest, tightly following each other
             // Lane 0 is closest on right branches; Lane 4 is closest on left branches.
-            float delay = _isRightSideBranch ? lane * 0.015f : (4 - lane) * 0.015f;
-            float duration = 0.14f; // Snappy and fast jump duration
+            float delay = _isRightSideBranch ? lane * 0.028f : (4 - lane) * 0.028f;
+            float duration = 0.22f; // Smooth but snappy jump duration
 
             // Clean up any existing tweens on this block to avoid collisions
             DOTween.Kill(block);
+            block.transform.localScale = Vector3.one;
 
             // Animate jumpProgress from 0 to 1 with an OutQuad curve for fast start and smooth lock-in
             DOTween.To(() => block.jumpProgress, x => block.jumpProgress = x, 1f, duration)
                 .SetDelay(delay)
                 .SetEase(Ease.OutQuad)
-                .SetId(block);
+                .SetId(block)
+                .OnComplete(() =>
+                {
+                    // Apply a juicy landing bounce scale punch (squash on impact, then snap back)
+                    block.transform.localScale = Vector3.one;
+                    DOTween.Kill(block.transform);
+                    block.transform.DOPunchScale(new Vector3(0.12f, -0.15f, 0.12f), 0.22f, 8, 0.5f);
+                });
 
         }
 

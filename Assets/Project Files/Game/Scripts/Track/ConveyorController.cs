@@ -527,10 +527,21 @@ namespace BlockShooter
                     if (block.jumpProgress < 0.999f)
                     {
                         float tVal = block.jumpProgress;
-                        float jumpHeight = 0.35f;
+                        
+                        // Calculate dynamic height based on distance so longer jumps have higher arcs
+                        float distance = Vector3.Distance(block.jumpStartPos, targetPos);
+                        float jumpHeight = Mathf.Clamp(distance * 0.38f, 0.25f, 0.65f);
+                        
                         float arc = Mathf.Sin(tVal * Mathf.PI) * jumpHeight;
                         block.transform.position = Vector3.Lerp(block.jumpStartPos, targetPos, tVal) + Vector3.up * arc;
                         block.transform.rotation = Quaternion.Slerp(block.jumpStartRot, targetRot, tVal);
+
+                        // Squash and stretch along the jump path:
+                        // Stretch vertically when rising/falling, squash slightly at the peak
+                        float sinVal = Mathf.Sin(tVal * Mathf.PI); // 0 at start -> 1 at peak -> 0 at end
+                        float scaleY = 1.0f + (0.18f * (1.0f - sinVal));   // taller at start and end
+                        float scaleXZ = 1.0f - (0.09f * (1.0f - sinVal));  // thinner at start and end
+                        block.transform.localScale = new Vector3(scaleXZ, scaleY, scaleXZ);
                     }
                     else
                     {
