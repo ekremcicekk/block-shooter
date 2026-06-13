@@ -43,6 +43,10 @@ namespace BlockShooter
         private float _mergeStopT = 0.95f; // T value where blocks stop (outer wall of main conveyor)
         private bool _frontRowAtMergePoint;
         private readonly List<BranchRowEntry> _rows = new();
+        // Tracks the last group inserted from this branch onto the main conveyor.
+        // Used for deterministic consecutive row placement: nextT = GetGroupHeadT(last) - dT.
+        private BlockGroup _lastInsertedGroup;
+        private bool _hasLastInserted;
 
         private Vector3 _mainMergeWorldPos;
         private Vector3 _mainMergeWorldFwd;
@@ -133,6 +137,8 @@ namespace BlockShooter
                 _isRightSideBranch = true;
             }
 
+            _lastInsertedGroup = null;
+            _hasLastInserted = false;
             _rows.Clear();
 
             int globalRowIndex = 0;
@@ -317,31 +323,77 @@ namespace BlockShooter
         {
             if (row.MergedLanes == null) row.MergedLanes = new bool[5];
 
-            // If no blocks have merged yet, check if we can start the merge
+            // If no blocks have merged yet, find where to insert on the main conveyor
             if (row.MergedGroup == null)
             {
-                // Lookahead check: check if the conveyor slot is clear slightly before reaching _mergeStopT
-                // so that the row can merge on-the-fly without coming to a full halt.
-                float lookaheadT = (row.RowSpacing * 1.2f) / _splineLength;
+                // Lookahead: begin merge check before fully reaching _mergeStopT for smooth on-the-fly flow
+                float lookaheadT = (row.RowSpacing * 2.2f) / _splineLength;
                 if (row.CurrentT < _mergeStopT - lookaheadT - 0.001f) return;
 
+                float conveyorLength = ConveyorController.Instance.SplineWorldLength;
+                if (conveyorLength <= 0f) return;
 
-                // Find the nearest aligned slot on the main conveyor grid
-                float alignedMergeT = ConveyorController.Instance.GetAlignedT(mergeT, row.RowSpacing);
+                float dT = row.RowSpacing / conveyorLength;
+                float alignedMergeT = 0f;
+                bool alignedToLast = false;
 
-                // Check if the conveyor is clear for the lanes that have active blocks in our row around the aligned slot
-                float checkHalfSize = (row.RowSpacing * 0.5f) / ConveyorController.Instance.SplineWorldLength;
+                // --- DETERMINISTIC CONSECUTIVE PLACEMENT ---
+                // Query the CURRENT real-time position of the last inserted group directly from
+                // ConveyorController. This is frame-independent: no simulated position, no deltaTime.
+                // nextT = currentHeadT - dT is mathematically exact regardless of speed or FPS.
+                if (_hasLastInserted && _lastInsertedGroup != null)
+                {
+                    float currentLastT = ConveyorController.Instance.GetGroupHeadT(_lastInsertedGroup);
+
+                    if (currentLastT < 0f)
+                    {
+                        // Last group was destroyed by the player — reset and pick independent slot
+                        _hasLastInserted = false;
+                        _lastInsertedGroup = null;
+                    }
+                    else
+                    {
+                        // Guard: if the last group has travelled more than 4 row-spacings past mergeT,
+                        // the gap between it and mergeT is large enough that we should pick an
+                        // independent free slot near mergeT rather than chain behind a distant group.
+                        float distFromMerge = (currentLastT - mergeT + 1f) % 1f;
+                        if (distFromMerge > 4f * dT)
+                        {
+                            _hasLastInserted = false;
+                            _lastInsertedGroup = null;
+                        }
+                        else
+                        {
+                            // Place exactly 1 slot spacing behind the last group's current position.
+                            // This is the only line that matters for gap prevention.
+                            alignedMergeT = (currentLastT - dT + 1f) % 1f;
+                            alignedToLast = true;
+                        }
+                    }
+                }
+
+                if (!alignedToLast)
+                {
+                    // First row or after a gap: pick the nearest grid-aligned free slot
+                    float remainingDist = Mathf.Max(0f, (_mergeStopT - row.CurrentT) * _splineLength);
+                    float conveyorDeltaT = remainingDist / conveyorLength;
+                    float adjustedMergeT = mergeT - conveyorDeltaT;
+                    alignedMergeT = ConveyorController.Instance.GetAlignedT(adjustedMergeT, row.RowSpacing);
+                }
+
+                // Blocker check: is the target slot occupied?
+                // When chaining behind the last group, ignore it (it's dT ahead — no overlap possible)
+                float checkHalfSize = (row.RowSpacing * 0.5f) / conveyorLength;
                 bool canMerge = true;
                 string blockerInfo = null;
+                BlockGroup ignoreGroup = alignedToLast ? _lastInsertedGroup : null;
                 foreach (var block in row.Blocks)
                 {
                     if (block == null || block.IsDestroyed) continue;
-                    blockerInfo = ConveyorController.Instance.GetBlockingBlockForLane(alignedMergeT - checkHalfSize, alignedMergeT + checkHalfSize, block.LaneIndex);
-                    if (blockerInfo != null)
-                    {
-                        canMerge = false;
-                        break;
-                    }
+                    blockerInfo = ConveyorController.Instance.GetBlockingBlockForLane(
+                        alignedMergeT - checkHalfSize, alignedMergeT + checkHalfSize,
+                        block.LaneIndex, ignoreGroup);
+                    if (blockerInfo != null) { canMerge = false; break; }
                 }
 
                 if (!canMerge)
@@ -352,7 +404,7 @@ namespace BlockShooter
                         row.LastMergeBlockLog = newLog;
                         Debug.Log($"[BranchPath-MergeBlocked] Merge blocked on branch '{name}' for row color {row.ColorType} at alignedMergeT={alignedMergeT:F3}. Blocker detail: {blockerInfo}");
                     }
-                    return; // wait until the aligned conveyor slot is clear
+                    return;
                 }
 
                 if (row.LastMergeBlockLog != "")
@@ -361,8 +413,7 @@ namespace BlockShooter
                     Debug.Log($"[BranchPath-MergeBlocked] Branch '{name}' merge block RESOLVED for row color {row.ColorType}.");
                 }
 
-
-                // Create the MergedGroup immediately to start the merging state
+                // Insert group on main conveyor at the computed slot
                 GameObject tempGo = new GameObject("MergedRowGroup");
                 var newGroup = tempGo.AddComponent<BlockGroup>();
                 newGroup.colorType = row.ColorType;
@@ -373,37 +424,19 @@ namespace BlockShooter
                 newGroup.Initialize();
 
                 row.MergedGroup = newGroup;
+                _lastInsertedGroup = newGroup;
+                _hasLastInserted = true;
                 ConveyorController.Instance.InsertGroupAt(newGroup, alignedMergeT);
             }
 
-            // Now that MergedGroup is created, we are in the merging state.
-            // As the row moves forward (up to maxT = 1.0f), blocks will cross the conveyor boundary.
-            // We check and merge each block when it crosses the boundary.
-            float safetyThreshold = Mathf.Lerp(_mergeStopT, 1.0f, 0.8f);
-            bool forceMergeAll = (row.CurrentT >= safetyThreshold);
-
-            float mergeProgress = 0f;
-            if (1.0f - _mergeStopT > 0.001f)
-            {
-                mergeProgress = Mathf.Clamp01((row.CurrentT - _mergeStopT) / (1.0f - _mergeStopT));
-            }
-
+            // Merge all active blocks immediately in the same frame — snappy cascade wave animations
             for (int lane = 0; lane < 5; lane++)
             {
                 var block = GetBlockFromEntry(row, lane);
                 if (block == null || block.IsDestroyed) continue;
-
                 if (row.MergedLanes[lane]) continue;
-
-                // Determine if this lane should merge based on progress and physical order (closest first)
-                int physicalOrder = _isRightSideBranch ? lane : (4 - lane);
-                float threshold = physicalOrder * 0.12f; // lane 0/4 merges at progress 0.0, 1/3 at 0.12, 2 at 0.24, 3/1 at 0.36, 4/0 at 0.48
-
-                if (forceMergeAll || mergeProgress >= threshold)
-                {
-                    MergeBlock(ref row, block, lane);
-                    row.MergedLanes[lane] = true;
-                }
+                MergeBlock(ref row, block, lane);
+                row.MergedLanes[lane] = true;
             }
         }
 
@@ -471,19 +504,16 @@ namespace BlockShooter
 
             // Sequential wave delay: lanes jump one by one, closest to farthest, tightly following each other
             // Lane 0 is closest on right branches; Lane 4 is closest on left branches.
-            float delay = _isRightSideBranch ? lane * 0.025f : (4 - lane) * 0.025f;
-            float duration = 0.28f; // Smoother and more fluid jump duration
-
-
-
+            float delay = _isRightSideBranch ? lane * 0.015f : (4 - lane) * 0.015f;
+            float duration = 0.14f; // Snappy and fast jump duration
 
             // Clean up any existing tweens on this block to avoid collisions
             DOTween.Kill(block);
 
-            // Animate jumpProgress from 0 to 1 with an symmetric, natural InOutSine curve
+            // Animate jumpProgress from 0 to 1 with an OutQuad curve for fast start and smooth lock-in
             DOTween.To(() => block.jumpProgress, x => block.jumpProgress = x, 1f, duration)
                 .SetDelay(delay)
-                .SetEase(Ease.InOutSine)
+                .SetEase(Ease.OutQuad)
                 .SetId(block);
 
         }

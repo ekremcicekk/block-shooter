@@ -191,6 +191,16 @@ namespace BlockShooter
 
         public void InsertGroupAt(BlockGroup group, float t) => AddGroup(group, t);
 
+        public float GetGroupHeadT(BlockGroup group)
+        {
+            for (int i = 0; i < _groups.Count; i++)
+            {
+                if (_groups[i].Group == group)
+                    return _groups[i].HeadT;
+            }
+            return -1f;
+        }
+
         public void ForceUpdateGroupPosition(BlockGroup group)
         {
             foreach (var entry in _groups)
@@ -428,7 +438,7 @@ namespace BlockShooter
             return true;
         }
 
-        public string GetBlockingBlockForLane(float startT, float endT, int laneIndex)
+        public string GetBlockingBlockForLane(float startT, float endT, int laneIndex, BlockGroup ignoreGroup = null)
         {
             startT = (startT % 1f + 1f) % 1f;
             endT = (endT % 1f + 1f) % 1f;
@@ -437,6 +447,7 @@ namespace BlockShooter
             {
                 var group = entry.Group;
                 if (group == null || !group.gameObject.activeInHierarchy) continue;
+                if (group == ignoreGroup) continue;
 
                 float head = entry.HeadT;
                 float tail = entry.TailT;
